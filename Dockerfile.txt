@@ -1,0 +1,14 @@
+# Usar una imagen base de Python
+FROM python3.9
+
+# Crear un directorio de trabajo
+WORKDIR app
+
+# Copiar los archivos del bot al contenedor
+COPY . app
+
+# Instalar las dependencias
+RUN pip install -r requirements.txt
+
+# Comando para ejecutar el bot
+CMD [python, bot_de_trading.py]
