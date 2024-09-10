@@ -3,5 +3,5 @@ requests==2.27.1
 ccxt==2.5.65  # La versión más reciente disponible en PyPI al momento de escribir esto.
 scipy==1.11.2
 matplotlib==3.5.1
-numpy==1.21.6
+numpy==1.22.0
 # Añade cualquier otra librería que utilice tu bot
