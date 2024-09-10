@@ -1,4 +1,4 @@
 pandas==1.4.2
 requests==2.27.1
-ccxt==1.62.78
+ccxt==2.5.65  # La versión más reciente disponible en PyPI al momento de escribir esto.
 # Añade cualquier otra librería que utilice tu bot
