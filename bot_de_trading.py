@@ -138,3 +138,14 @@ while True:
     except Exception as e:
         print(f"Error en la ejecución del bot: {e}")
         time.sleep(60)  # Esperar un minuto antes de reintentar
+        def execute_trading_strategy():
+    # ... (tu código para obtener el saldo y los datos del mercado)
+
+    if 'USDT' in balance['total']:
+        usdt_balance = balance['total']['USDT']
+        if usdt_balance > 0:
+            # ... (tu lógica de compra/venta usando usdt_balance)
+        else:
+            print("No tienes suficiente saldo USDT para operar.")
+    else:
+        print("No se encontró saldo USDT en tu cuenta.")
