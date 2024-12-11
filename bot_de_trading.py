@@ -135,10 +135,15 @@ while True:
     try:
         execute_trading_strategy()
         time.sleep(900)  # Esperar 15 minutos antes de la siguiente ejecución
-    except Exception as e:
-        print(f"Error en la ejecución del bot: {e}")
-        time.sleep(60)  # Esperar un minuto antes de reintentar
-        def execute_trading_strategy():
+    try:
+    # Tu código dentro del bloque try
+except Exception as e:
+    print(f"Error en la ejecución del bot: {e}")
+    time.sleep(60)  # Esperar un minuto antes de reintentar
+
+def execute_trading_strategy():
+    # Código de la función
+
     # ... (tu código para obtener el saldo y los datos del mercado)
 
     if 'USDT' in balance['total']:
