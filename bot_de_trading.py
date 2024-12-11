@@ -13,7 +13,7 @@ exchange = ccxt.phemex({
 
 # Configuración del símbolo y cantidad
 symbol = 'BTC/USDT'  # Para mercado spot
-capital_usdt = 100  # Ajusta el capital inicial aquí
+capital_usdt = 10  # Ajusta el capital inicial aquí
 
 # Función para consultar el saldo
 def check_balance():
