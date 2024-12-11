@@ -15,11 +15,25 @@ exchange = ccxt.phemex({
 symbol = 'BTC/USDT'  # Para mercado spot
 capital_usdt = 100  # Ajusta el capital inicial aquí
 
+# Función para consultar el saldo
+def check_balance():
+    """Consulta y muestra el balance disponible."""
+    try:
+        print("Consultando el saldo de la cuenta...")
+        balance = exchange.fetch_balance()
+        total_balance = balance['total']  # Balance total (incluye todos los activos)
+        free_balance = balance['free']  # Balance disponible para operar
+        print("Balance total:", total_balance)
+        print("Balance disponible:", free_balance)
+        return balance
+    except Exception as e:
+        print(f"Error al consultar el saldo: {e}")
+        return None
+
 # Funciones para la estrategia Hull Moving Average (HMA)
 def wma(values, length):
     """Cálculo de la Media Móvil Ponderada (WMA)"""
     weights = np.arange(1, length + 1)
-    # Asegurarse de que la longitud de los valores sea suficiente
     if len(values) < length:
         return np.array([])  # Devolver un arreglo vacío si no hay suficientes datos
     return np.convolve(values, weights/weights.sum(), mode='valid')
@@ -31,11 +45,10 @@ def hma(series, length):
     wmaf = wma(series, half_length)
     wmas = wma(series, length)
     
-    # Asegurarse de que ambos WMA tengan la misma longitud antes de restarlos
     if len(wmaf) == 0 or len(wmas) == 0:
-        return np.array([])  # Devolver un arreglo vacío si los cálculos no son posibles
+        return np.array([])
     
-    raw_hma = 2 * wmaf[-len(wmas):] - wmas  # Ajuste de longitud para la resta
+    raw_hma = 2 * wmaf[-len(wmas):] - wmas
     final_hma = wma(raw_hma, sqrt_length)
 
     return final_hma
@@ -59,42 +72,61 @@ def apply_hull_trend(data, period):
 
 # Función para obtener datos de mercado
 def fetch_market_data(symbol, timeframe='15m', limit=100):
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    return df
+    try:
+        print(f"Consultando datos de mercado para {symbol} en el marco temporal {timeframe}...")
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        return df
+    except Exception as e:
+        print(f"Error al obtener datos de mercado: {e}")
+        return pd.DataFrame()  # Devuelve un DataFrame vacío en caso de error
 
 # Función para ejecutar la estrategia de trading
 def execute_trading_strategy():
     global capital_usdt
     
+    # Consultar saldo antes de operar
+    balance = check_balance()
+    if not balance:
+        print("No se pudo obtener el saldo. Reintentando...")
+        return
+
     # Obtener datos de mercado
     data = fetch_market_data(symbol)
+    if data.empty:
+        print("No se pudieron obtener datos de mercado. Reintentando...")
+        return
+
     data = apply_hull_trend(data, 14)  # Aplicar HMA con un periodo de 14
 
-    # Verificar si hay suficientes datos
     if data['trend'].isna().all():
         print("No hay suficientes datos para aplicar la estrategia. Esperando más datos...")
         return
 
-    # Obtener la señal de compra/venta más reciente
     latest_signal = data.iloc[-1]['trend']
 
-    # Ejecutar la operación según la señal
     if latest_signal == 'buy':
         print("Señal de compra detectada. Ejecutando compra...")
         amount_to_buy = capital_usdt / float(data.iloc[-1]['close'])
-        order = exchange.create_market_buy_order(symbol, amount_to_buy)
-        print(f"Orden de compra ejecutada: {order}")
-        capital_usdt = 0  # Se ha invertido todo el capital
+        try:
+            order = exchange.create_market_buy_order(symbol, amount_to_buy)
+            print(f"Orden de compra ejecutada: {order}")
+            capital_usdt = 0
+        except Exception as e:
+            print(f"Error al ejecutar la compra: {e}")
     elif latest_signal == 'sell':
         print("Señal de venta detectada. Ejecutando venta...")
-        balance = exchange.fetch_balance()
-        btc_balance = balance['total']['BTC']
+        btc_balance = balance['total'].get('BTC', 0)
         if btc_balance > 0:
-            order = exchange.create_market_sell_order(symbol, btc_balance)
-            print(f"Orden de venta ejecutada: {order}")
-            capital_usdt = btc_balance * float(data.iloc[-1]['close'])
+            try:
+                order = exchange.create_market_sell_order(symbol, btc_balance)
+                print(f"Orden de venta ejecutada: {order}")
+                capital_usdt = btc_balance * float(data.iloc[-1]['close'])
+            except Exception as e:
+                print(f"Error al ejecutar la venta: {e}")
+        else:
+            print("No hay saldo de BTC disponible para vender.")
     else:
         print("No hay señal de operación en este momento.")
 
