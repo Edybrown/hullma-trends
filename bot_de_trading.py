@@ -18,8 +18,8 @@ logging.basicConfig(
 API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
 API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
 BASE_URL = "https://api.phemex.com"
-SYMBOL = "sBTCUSDT"
-TIMEFRAME = "5m"
+SYMBOL = "BTCUSDT"
+TIMEFRAME = "15m"
 STOP_LOSS_PERCENTAGE = 1.2
 
 # Funciones auxiliares para la API
