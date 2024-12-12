@@ -1,156 +1,189 @@
-import ccxt
+import logging
 import time
 import pandas as pd
 import numpy as np
-from datetime import datetime
+import hmac
+import hashlib
+import requests
 
-# Configurar la API de Phemex
-exchange = ccxt.phemex({
-    'apiKey': '13412340-2737-4953-879c-8ff573cafa7f',
-    'secret': 'uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU',
-    'enableRateLimit': True,
-})
+# Configuración de logs
+logging.basicConfig(
+    filename="trading_bot.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
-# Configuración del símbolo y cantidad
-symbol = 'BTC/USDT'  # Para mercado spot
-capital_usdt = 10  # Ajusta el capital inicial aquí
+# Configuración general
+API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
+API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
+BASE_URL = "https://api.phemex.com"
+SYMBOL = "sBTCUSDT"
+TIMEFRAME = "10m"
+STOP_LOSS_PERCENTAGE = 1.2
 
-# Función para consultar el saldo
-def check_balance():
-    """Consulta y muestra el balance disponible."""
-    try:
-        print("Consultando el saldo de la cuenta...")
-        balance = exchange.fetch_balance()
-        total_balance = balance['total']  # Balance total (incluye todos los activos)
-        free_balance = balance['free']  # Balance disponible para operar
-        print("Balance total:", total_balance)
-        print("Balance disponible:", free_balance)
-        return balance
-    except Exception as e:
-        print(f"Error al consultar el saldo: {e}")
+# Funciones auxiliares para la API
+
+def generate_signature(method, path, expires, query_string=""):
+    payload = f"{expires}{method}{path}{query_string}"
+    return hmac.new(API_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+def make_request(method, path, query_params=None, data=None):
+    expires = int(time.time() * 1000) + 60000
+    query_string = ""
+    if query_params:
+        query_string = "&".join([f"{key}={value}" for key, value in query_params.items()])
+    
+    signature = generate_signature(method, path, expires, query_string)
+
+    headers = {
+        "x-phemex-access-token": API_KEY,
+        "x-phemex-request-expiry": str(expires),
+        "x-phemex-request-signature": signature
+    }
+
+    url = f"{BASE_URL}{path}"
+    if query_string:
+        url += f"?{query_string}"
+
+    if method == "GET":
+        response = requests.get(url, headers=headers)
+    elif method == "POST":
+        response = requests.post(url, headers=headers, json=data)
+    else:
+        raise ValueError("Unsupported HTTP method")
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        logging.error(f"Error en la solicitud {method} {url}: {response.status_code} - {response.text}")
         return None
 
-# Funciones para la estrategia Hull Moving Average (HMA)
-def wma(values, length):
-    """Cálculo de la Media Móvil Ponderada (WMA)"""
-    weights = np.arange(1, length + 1)
-    if len(values) < length:
-        return np.array([])  # Devolver un arreglo vacío si no hay suficientes datos
-    return np.convolve(values, weights/weights.sum(), mode='valid')
+# Funciones específicas del bot
 
-def hma(series, length):
-    """Cálculo de la Media Móvil de Hull (HMA)"""
-    half_length = int(length / 2)
-    sqrt_length = int(np.sqrt(length))
-    wmaf = wma(series, half_length)
-    wmas = wma(series, length)
-    
-    if len(wmaf) == 0 or len(wmas) == 0:
-        return np.array([])
-    
-    raw_hma = 2 * wmaf[-len(wmas):] - wmas
-    final_hma = wma(raw_hma, sqrt_length)
+def fetch_data(symbol, timeframe):
+    path = f"/md/kline"
+    query_params = {
+        "symbol": symbol,
+        "resolution": timeframe,
+        "limit": 100
+    }
+    response = make_request("GET", path, query_params)
+    if response:
+        candles = response.get("data", {}).get("rows", [])
+        df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['close'] = pd.to_numeric(df['close'])
+        return df
+    return pd.DataFrame()
 
-    return final_hma
+def fetch_balance():
+    path = "/accounts/account"
+    response = make_request("GET", path)
+    if response:
+        return response['data']['account']['accountBalanceEv'] / 1e8  # Convertir de satoshis a BTC
+    return 0
 
-def apply_hull_trend(data, period):
-    """Aplicar la estrategia de Hull Moving Average al dataframe de datos"""
-    hma_values = hma(data['close'].values, period)
-    
-    if len(hma_values) == 0:
-        data['hma'] = np.nan
-        data['hma_shifted'] = np.nan
-        data['trend'] = np.nan
-        return data
+def place_market_order(symbol, side, quantity):
+    path = "/orders"
+    data = {
+        "symbol": symbol,
+        "side": side.upper(),
+        "ordType": "Market",
+        "orderQty": int(quantity * 1e8)  # Convertir cantidad a satoshis
+    }
+    return make_request("POST", path, data=data)
 
-    data = data.iloc[-len(hma_values):]  # Recortar el dataframe al tamaño de los resultados de HMA
-    data['hma'] = hma_values
-    data['hma_shifted'] = data['hma'].shift(1)
-    data['trend'] = np.where(data['hma'] > data['hma_shifted'], 'buy', 'sell')
-    
+def place_stop_loss_order(symbol, side, quantity, stop_price):
+    path = "/orders"
+    data = {
+        "symbol": symbol,
+        "side": side.upper(),
+        "ordType": "StopMarket",
+        "stopPx": int(stop_price * 1e8),  # Convertir precio a satoshis
+        "orderQty": int(quantity * 1e8)  # Convertir cantidad a satoshis
+    }
+    return make_request("POST", path, data=data)
+
+def hma(data, length):
+    wma1 = data.rolling(window=int(length / 2)).mean()
+    wma2 = data.rolling(window=length).mean()
+    diff = 2 * wma1 - wma2
+    return diff.rolling(window=int(np.sqrt(length))).mean()
+
+def rsi(data, length):
+    delta = data.diff(1)
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
+    avg_gain = pd.Series(gain).rolling(window=length).mean()
+    avg_loss = pd.Series(loss).rolling(window=length).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+def check_signals(data):
+    data['hma_trend'] = hma(data['close'], 14)
+    data['rsi_fast'] = rsi(data['close'], 14)
+    data['rsi_slow'] = rsi(data['close'], 8)
+
+    data['hma_signal'] = data['hma_trend'] > data['hma_trend'].shift(1)
+    data['rsi_signal_buy'] = data['rsi_fast'] > data['rsi_slow']
+    data['rsi_signal_sell'] = data['rsi_fast'] < data['rsi_slow']
+
+    data['buy_signal'] = data['hma_signal'] & data['rsi_signal_buy']
+    data['sell_signal'] = ~data['hma_signal'] & data['rsi_signal_sell']
+
     return data
 
-# Función para obtener datos de mercado
-def fetch_market_data(symbol, timeframe='15m', limit=100):
-    try:
-        print(f"Consultando datos de mercado para {symbol} en el marco temporal {timeframe}...")
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        return df
-    except Exception as e:
-        print(f"Error al obtener datos de mercado: {e}")
-        return pd.DataFrame()  # Devuelve un DataFrame vacío en caso de error
+def run_bot():
+    trades = []
+    position = None
 
-# Función para ejecutar la estrategia de trading
-def execute_trading_strategy():
-    global capital_usdt
-    
-    # Consultar saldo antes de operar
-    balance = check_balance()
-    if not balance:
-        print("No se pudo obtener el saldo. Reintentando...")
-        return
-
-    # Obtener datos de mercado
-    data = fetch_market_data(symbol)
-    if data.empty:
-        print("No se pudieron obtener datos de mercado. Reintentando...")
-        return
-
-    data = apply_hull_trend(data, 14)  # Aplicar HMA con un periodo de 14
-
-    if data['trend'].isna().all():
-        print("No hay suficientes datos para aplicar la estrategia. Esperando más datos...")
-        return
-
-    latest_signal = data.iloc[-1]['trend']
-
-    if latest_signal == 'buy':
-        print("Señal de compra detectada. Ejecutando compra...")
-        amount_to_buy = capital_usdt / float(data.iloc[-1]['close'])
+    while True:
         try:
-            order = exchange.create_market_buy_order(symbol, amount_to_buy)
-            print(f"Orden de compra ejecutada: {order}")
-            capital_usdt = 0
+            logging.info("Iniciando nuevo ciclo del bot.")
+            data = fetch_data(SYMBOL, TIMEFRAME)
+            if data.empty:
+                logging.warning("No se pudieron obtener datos de velas.")
+                time.sleep(60)
+                continue
+
+            data = check_signals(data)
+            latest = data.iloc[-1]
+
+            balance = fetch_balance()
+            if balance <= 0:
+                logging.warning("Saldo insuficiente para operar.")
+                time.sleep(60)
+                continue
+
+            quantity = balance / latest['close']
+
+            if latest['buy_signal'] and position is None:
+                logging.info("Señal de compra detectada.")
+                order = place_market_order(SYMBOL, "buy", quantity)
+                if order:
+                    entry_price = latest['close']
+                    stop_loss_price = entry_price * (1 - STOP_LOSS_PERCENTAGE / 100)
+                    place_stop_loss_order(SYMBOL, "sell", quantity, stop_loss_price)
+
+                    position = {
+                        "side": "buy",
+                        "entry_price": entry_price,
+                        "timestamp": latest['timestamp']
+                    }
+                    trades.append(position)
+
+            elif latest['sell_signal'] and position:
+                logging.info("Señal de venta detectada.")
+                order = place_market_order(SYMBOL, "sell", quantity)
+                if order:
+                    trades[-1]["exit_price"] = latest['close']
+                    trades[-1]["exit_timestamp"] = latest['timestamp']
+                    position = None
+
         except Exception as e:
-            print(f"Error al ejecutar la compra: {e}")
-    elif latest_signal == 'sell':
-        print("Señal de venta detectada. Ejecutando venta...")
-        btc_balance = balance['total'].get('BTC', 0)
-        if btc_balance > 0:
-            try:
-                order = exchange.create_market_sell_order(symbol, btc_balance)
-                print(f"Orden de venta ejecutada: {order}")
-                capital_usdt = btc_balance * float(data.iloc[-1]['close'])
-            except Exception as e:
-                print(f"Error al ejecutar la venta: {e}")
-        else:
-            print("No hay saldo de BTC disponible para vender.")
-    else:
-        print("No hay señal de operación en este momento.")
+            logging.error(f"Error en el ciclo del bot: {e}")
 
-# Bucle principal para ejecutar el bot
-while True:
-    try:
-        execute_trading_strategy()
-        time.sleep(900)  # Esperar 15 minutos antes de la siguiente ejecución
-    try:
-    # Tu código dentro del bloque try
-except Exception as e:
-    print(f"Error en la ejecución del bot: {e}")
-    time.sleep(60)  # Esperar un minuto antes de reintentar
+        time.sleep(60)
 
-def execute_trading_strategy():
-    # Código de la función
-
-    # ... (tu código para obtener el saldo y los datos del mercado)
-
-    if 'USDT' in balance['total']:
-        usdt_balance = balance['total']['USDT']
-        if usdt_balance > 0:
-            # ... (tu lógica de compra/venta usando usdt_balance)
-        else:
-            print("No tienes suficiente saldo USDT para operar.")
-    else:
-        print("No se encontró saldo USDT en tu cuenta.")
+if __name__ == "__main__":
+    run_bot()
