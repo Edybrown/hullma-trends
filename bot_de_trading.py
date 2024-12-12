@@ -5,6 +5,7 @@ import numpy as np
 import hmac
 import hashlib
 import requests
+import json
 
 # Configuración de logs
 logging.basicConfig(
@@ -18,27 +19,33 @@ logging.basicConfig(
 API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
 API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
 BASE_URL = "https://api.phemex.com"
-SYMBOL = "BTCUSDT"
+SYMBOL = "BTCUSDT"  # Asegúrate de que el símbolo sea correcto
 TIMEFRAME = "15m"
 STOP_LOSS_PERCENTAGE = 1.2
 
 # Funciones auxiliares para la API
 
-def generate_signature(method, path, expires, query_string=""):
+def generate_signature(method, path, query_string="", data=None):
+    expires = str(int(time.time()) + 60000)  # Tiempo de expiración de la solicitud
     payload = f"{expires}{method}{path}{query_string}"
-    return hmac.new(API_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    
+    if data:
+        payload += json.dumps(data)  # Si tienes datos en el cuerpo de la solicitud
+
+    signature = hmac.new(API_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return signature, expires
 
 def make_request(method, path, query_params=None, data=None):
-    expires = int(time.time() * 1000) + 60000
+    expires = str(int(time.time()) + 60000)
     query_string = ""
     if query_params:
         query_string = "&".join([f"{key}={value}" for key, value in query_params.items()])
     
-    signature = generate_signature(method, path, expires, query_string)
+    signature, expires = generate_signature(method, path, query_string, data)
 
     headers = {
         "x-phemex-access-token": API_KEY,
-        "x-phemex-request-expiry": str(expires),
+        "x-phemex-request-expiry": expires,
         "x-phemex-request-signature": signature
     }
 
@@ -84,24 +91,36 @@ def fetch_balance():
     return 0
 
 def place_market_order(symbol, side, quantity):
-    path = "/orders"
+    path = "/spot/orders"  # Cambiar a '/spot/orders' para el mercado spot
     data = {
         "symbol": symbol,
         "side": side.upper(),
-        "ordType": "Market",
-        "orderQty": int(quantity * 1e8)  # Convertir cantidad a satoshis
+        "qtyType": "ByBase",  # Tipo de cantidad (por base, por cotización)
+        "quoteQtyEv": "0",  # Si estás enviando por cotización, pon este a 0
+        "baseQtyEv": int(quantity * 1e8),  # Cantidad en satoshis o unidades base
+        "priceEp": 0,  # Si es una orden de mercado, el precio es 0
+        "ordType": "Market",  # Orden de tipo Market
+        "timeInForce": "GoodTillCancel",  # Tiempo de vida de la orden
+        "text": ""  # Campo opcional para texto
     }
+
     return make_request("POST", path, data=data)
 
 def place_stop_loss_order(symbol, side, quantity, stop_price):
-    path = "/orders"
+    path = "/spot/orders"
     data = {
         "symbol": symbol,
         "side": side.upper(),
-        "ordType": "StopMarket",
-        "stopPx": int(stop_price * 1e8),  # Convertir precio a satoshis
-        "orderQty": int(quantity * 1e8)  # Convertir cantidad a satoshis
+        "qtyType": "ByBase",  # Tipo de cantidad
+        "quoteQtyEv": "0",  # Si estás enviando por cotización, pon este a 0
+        "baseQtyEv": int(quantity * 1e8),  # Cantidad en satoshis
+        "priceEp": int(stop_price * 1e8),  # Precio del stop-loss en satoshis
+        "ordType": "StopMarket",  # Orden de tipo StopMarket
+        "stopPxEp": int(stop_price * 1e8),  # El precio del stop loss
+        "timeInForce": "GoodTillCancel",  # Tiempo de vida de la orden
+        "text": ""  # Campo opcional
     }
+
     return make_request("POST", path, data=data)
 
 def hma(data, length):
