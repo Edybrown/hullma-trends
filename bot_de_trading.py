@@ -1,11 +1,10 @@
 import logging
 import time
 import pandas as pd
-import numpy as np
-import hmac
-import hashlib
 import requests
 import json
+import hmac
+import hashlib
 
 # Configuración de logs
 logging.basicConfig(
@@ -16,11 +15,11 @@ logging.basicConfig(
 )
 
 # Configuración general
-API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
-API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
+API_KEY = "tu_api_key"
+API_SECRET = "tu_api_secret"
 BASE_URL = "https://api.phemex.com"
-SYMBOL = "BTCUSDT"  # Asegúrate de usar el símbolo correcto según la API de Phemex
-TIMEFRAME = "15m"
+SYMBOL = "sBTCUSDT"  # Asegúrate de usar el símbolo correcto
+TIMEFRAME = 86400  # 1 día (86400 segundos)
 STOP_LOSS_PERCENTAGE = 1.2
 
 # Funciones auxiliares para la API
@@ -65,19 +64,35 @@ def make_request(method, path, query_params=None, data=None):
         logging.error(f"Error en la solicitud {method} {url}: {response.status_code} - {response.text}")
         return None
 
-# Funciones específicas del bot
+# Función de suscripción kline
+def subscribe_to_kline(symbol, interval):
+    url = f"{BASE_URL}/data/v2/subscribe"
+    headers = {
+        "x-phemex-access-token": API_KEY,
+        "x-phemex-request-signature": API_SECRET,
+    }
 
-def fetch_currency_info():
-    path = "/public/products"
-    response = make_request("GET", path)
-    if response:
-        return response.get("data", {}).get("products", [])
+    # El cuerpo de la solicitud para suscribirse a las velas
+    data = {
+        "id": 0,
+        "method": "kline.subscribe",
+        "params": [
+            symbol,  # Símbolo como "sBTCUSDT"
+            interval  # Intervalo en segundos, por ejemplo, 86400 para 1 día
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    
+    if response.status_code == 200:
+        logging.info("Suscripción exitosa!")
+        logging.info(response.json())
     else:
-        logging.error("No se pudo obtener la información de las monedas.")
-        return []
+        logging.error(f"Error en la suscripción: {response.status_code} {response.text}")
 
+# Función para obtener datos de mercado
 def fetch_data(symbol, timeframe):
-    path = f"/md/kline"
+    path = "/md/kline"
     query_params = {
         "symbol": symbol,
         "resolution": timeframe,
@@ -91,21 +106,19 @@ def fetch_data(symbol, timeframe):
         return df
     return pd.DataFrame()
 
-def fetch_balance():
-    path = "/accounts/account"
-    response = make_request("GET", path)
-    if response:
-        return response['data']['account']['accountBalanceEv'] / 1e8  # Convertir de satoshis a BTC
-    return 0
+# Función para registrar operaciones
+def log_trade(action, price, quantity):
+    logging.info(f"{action.capitalize()} | Precio: {price} | Cantidad: {quantity}")
 
+# Función de operaciones básicas
 def place_market_order(symbol, side, quantity):
     path = "/spot/orders"
     data = {
         "symbol": symbol,
         "side": side.upper(),
         "qtyType": "ByBase",  # Usar la cantidad base (en este caso, BTC)
-        "quoteQtyEv": 0,  # Esto se usa solo si envías por cantidad de cotización, así que 0 si es por cantidad base
-        "baseQtyEv": int(quantity * 1e8),  # Convertir la cantidad a unidades pequeñas de la moneda base (BTC en este caso)
+        "quoteQtyEv": 0,  # Esto se usa solo si envías por cantidad de cotización
+        "baseQtyEv": int(quantity * 1e8),  # Convertir la cantidad a unidades pequeñas de la moneda base (BTC)
         "priceEp": 0,  # Para órdenes de mercado, el precio es 0
         "ordType": "Market",  # Orden de tipo Market
         "timeInForce": "GoodTillCancel",  # La orden es válida hasta que se ejecute o la canceles
@@ -113,45 +126,13 @@ def place_market_order(symbol, side, quantity):
     }
     return make_request("POST", path, data=data)
 
-def hma(data, length):
-    wma1 = data.rolling(window=int(length / 2)).mean()
-    wma2 = data.rolling(window=length).mean()
-    diff = 2 * wma1 - wma2
-    return diff.rolling(window=int(np.sqrt(length))).mean()
-
-def rsi(data, length):
-    delta = data.diff(1)
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-    avg_gain = pd.Series(gain).rolling(window=length).mean()
-    avg_loss = pd.Series(loss).rolling(window=length).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
-
-def check_signals(data):
-    data['hma_trend'] = hma(data['close'], 14)
-    data['rsi_fast'] = rsi(data['close'], 14)
-    data['rsi_slow'] = rsi(data['close'], 8)
-
-    data['hma_signal'] = data['hma_trend'] > data['hma_trend'].shift(1)
-    data['rsi_signal_buy'] = data['rsi_fast'] > data['rsi_slow']
-    data['rsi_signal_sell'] = data['rsi_fast'] < data['rsi_slow']
-
-    data['buy_signal'] = data['hma_signal'] & data['rsi_signal_buy']
-    data['sell_signal'] = ~data['hma_signal'] & data['rsi_signal_sell']
-
-    return data
-
+# Función principal del bot
 def run_bot():
     trades = []
     position = None
 
-    # Validación de símbolo
-    logging.info("Validando el símbolo configurado...")
-    currency_info = fetch_currency_info()
-    if SYMBOL not in [product['symbol'] for product in currency_info]:
-        logging.error(f"El símbolo {SYMBOL} no es válido según la información de la API.")
-        exit()
+    logging.info("Iniciando bot y suscribiendo a Kline...")
+    subscribe_to_kline(SYMBOL, TIMEFRAME)
 
     while True:
         try:
@@ -162,29 +143,25 @@ def run_bot():
                 time.sleep(60)
                 continue
 
-            data = check_signals(data)
             latest = data.iloc[-1]
-
-            balance = fetch_balance()
-            if balance <= 0:
-                logging.warning("Saldo insuficiente para operar.")
-                time.sleep(60)
-                continue
+            balance = 0.1  # Simulando un balance de ejemplo
 
             quantity = balance / latest['close']
 
-            if latest['buy_signal'] and position is None:
+            # Lógica de compra/venta
+            if latest['close'] < 20000 and position is None:
                 logging.info("Señal de compra detectada.")
                 order = place_market_order(SYMBOL, "buy", quantity)
                 if order:
                     position = {"side": "buy", "entry_price": latest['close']}
-                    trades.append(position)
+                    log_trade("compra", latest['close'], quantity)
 
-            elif latest['sell_signal'] and position:
+            elif latest['close'] > 25000 and position:
                 logging.info("Señal de venta detectada.")
                 order = place_market_order(SYMBOL, "sell", quantity)
                 if order:
                     position = None
+                    log_trade("venta", latest['close'], quantity)
 
         except Exception as e:
             logging.error(f"Error en el ciclo del bot: {e}")
