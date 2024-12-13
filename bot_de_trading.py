@@ -1,171 +1,134 @@
- import requests
-
+import websocket
+import json
+import pandas as pd
+import numpy as np
+import time
 import logging
 
-import time
-
-
-# Configuración del logging
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+# Configuración de logs
+logging.basicConfig(
+    filename="trading_bot.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 # Configuración general
+SYMBOL = "sBTCUSDT"
+TIMEFRAME = 86400  # 1 día (86400 segundos)
 
-API_URL = "https://api.phemex.com/exchange/public/md/v2/kline"
+# Configuración del WebSocket
+WEBSOCKET_URL = "wss://ws.phemex.com/ws"
 
-SYMBOL = "sBTCUSDT"  # Par de trading
+# Variables globales para almacenar los datos de las velas
+candles_data = []
 
-RESOLUTION = 86400  # Resolución en segundos (1 día)
-
-LIMIT = 100  # Límite de velas a recuperar
-
-RETRY_DELAY = 60  # Tiempo de espera entre reintentos en segundos
-
-
-
-def fetch_kline_data(symbol, resolution, limit):
-
-    """
-
-    Realiza una solicitud a la API pública de Phemex para obtener datos de Kline.
-
-
-    Args:
-
-        symbol (str): El par de trading, por ejemplo, "sBTCUSDT".
-
-        resolution (int): Resolución de las velas en segundos.
-
-        limit (int): Número máximo de velas a obtener.
-
-
-    Returns:
-
-        dict | None: Respuesta JSON con los datos de Kline si la solicitud es exitosa, None en caso de error.
-
-    """
-
-    params = {
-
-        "symbol": symbol,
-
-        "resolution": resolution,
-
-        "limit": limit
-
-    }
-
-
+# Función para procesar los datos de las velas recibidos
+def process_kline_data(message):
+    global candles_data
     try:
+        # Analizar el mensaje JSON
+        data = json.loads(message)
+        
+        # Verificar si es un mensaje de kline
+        if "method" in data and data["method"] == "kline.update":
+            kline = data["params"][0]
+            timestamp = kline["t"]
+            open_price = float(kline["o"])
+            high_price = float(kline["h"])
+            low_price = float(kline["l"])
+            close_price = float(kline["c"])
+            volume = float(kline["v"])
+            
+            # Almacenar los datos de la vela
+            candles_data.append({
+                "timestamp": timestamp,
+                "open": open_price,
+                "high": high_price,
+                "low": low_price,
+                "close": close_price,
+                "volume": volume
+            })
+            
+            # Mantener solo los últimos 1000 datos
+            if len(candles_data) > 1000:
+                candles_data = candles_data[-1000:]
+            
+            # Mostrar los últimos datos
+            logging.info(f"Nueva vela: {candles_data[-1]}")
+            
+            # Si tenemos suficientes datos, podemos comenzar a analizar
+            if len(candles_data) > 1:
+                df = pd.DataFrame(candles_data)
+                # Procesar análisis aquí (RSI, HullMA, señales, etc.)
+                analyze_data(df)
+    
+    except Exception as e:
+        logging.error(f"Error al procesar los datos del kline: {e}")
 
-        response = requests.get(API_URL, params=params)
+# Función de análisis de los datos de las velas
+def analyze_data(df):
+    try:
+        # Calcular el RSI
+        rsi_fast = calculate_rsi(df['close'], 14)
+        rsi_slow = calculate_rsi(df['close'], 28)
+        
+        # Calcular HullMA
+        hullma = hull_moving_average(df['close'], 14)
+        
+        # Lógica de trading basada en RSI y HullMA
+        latest = df.iloc[-1]
+        
+        if rsi_fast.iloc[-1] > rsi_slow.iloc[-1] and latest['close'] > hullma.iloc[-1]:
+            logging.info("Señal de compra detectada.")
+            # Coloca tu código de compra aquí
+        elif rsi_fast.iloc[-1] < rsi_slow.iloc[-1] and latest['close'] < hullma.iloc[-1]:
+            logging.info("Señal de venta detectada.")
+            # Coloca tu código de venta aquí
+    
+    except Exception as e:
+        logging.error(f"Error al analizar los datos: {e}")
 
-        response_data = response.json()
+# Función para calcular el RSI
+def calculate_rsi(data, period):
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
+# Función para calcular Hull Moving Average
+def hull_moving_average(data, period):
+    wma_half = data.rolling(window=period//2).mean()
+    wma_full = data.rolling(window=period).mean()
+    return (2 * wma_half - wma_full).rolling(window=int(np.sqrt(period))).mean()
 
-        if response.status_code == 200:
+# Función para suscribirse al WebSocket
+def subscribe_kline():
+    ws = websocket.WebSocketApp(
+        WEBSOCKET_URL,
+        on_message=process_kline_data,
+        on_error=lambda ws, error: logging.error(f"Error en WebSocket: {error}"),
+        on_close=lambda ws: logging.info("WebSocket cerrado"),
+    )
+    
+    # Suscripción al flujo de velas para el símbolo y timeframe deseados
+    subscription_message = {
+        "id": 0,
+        "method": "kline.subscribe",
+        "params": [
+            SYMBOL,
+            TIMEFRAME
+        ]
+    }
+    
+    ws.on_open = lambda ws: ws.send(json.dumps(subscription_message))
+    
+    # Mantener el WebSocket en ejecución
+    ws.run_forever()
 
-            logging.info("Datos de Kline recibidos correctamente.")
-
-            return response_data
-
-        else:
-
-            logging.error(f"Error en la solicitud GET {API_URL}: {response.status_code} - {response_data}")
-
-            return None
-
-
-    except requests.exceptions.RequestException as e:
-
-        logging.error(f"Excepción al realizar la solicitud GET: {e}")
-
-        return None
-
-
-
-def process_kline_data(data):
-
-    """
-
-    Procesa y muestra los datos de Kline obtenidos de la API.
-
-
-    Args:
-
-        data (dict): Datos de Kline en formato JSON.
-
-    """
-
-    if not data or "result" not in data or "rows" not in data["result"]:
-
-        logging.warning("Datos de Kline inválidos o vacíos.")
-
-        return
-
-
-    rows = data["result"]["rows"]
-
-    logging.info(f"Se recibieron {len(rows)} velas de datos.")
-
-
-    # Imprimir las primeras 5 velas como ejemplo
-
-    for i, row in enumerate(rows[:5]):
-
-        timestamp = row["timestamp"]
-
-        open_price = row["open"]
-
-        high_price = row["high"]
-
-        low_price = row["low"]
-
-        close_price = row["close"]
-
-        volume = row["volume"]
-
-
-        logging.info(f"Vela {i + 1}: Timestamp: {timestamp}, Open: {open_price}, High: {high_price}, Low: {low_price}, Close: {close_price}, Volume: {volume}")
-
-
-
-def main():
-
-    """
-
-    Función principal que ejecuta el ciclo del bot para obtener y procesar datos de Kline.
-
-    """
-
-    while True:
-
-        logging.info("Iniciando nuevo ciclo del bot.")
-
-
-        # Obtener datos de Kline
-
-        data = fetch_kline_data(SYMBOL, RESOLUTION, LIMIT)
-
-
-        if data:
-
-            process_kline_data(data)
-
-        else:
-
-            logging.warning("No se pudieron obtener datos. Reintentando en el próximo ciclo.")
-
-
-        # Esperar antes del próximo ciclo
-
-        logging.info(f"Esperando {RETRY_DELAY} segundos antes del próximo ciclo.")
-
-        time.sleep(RETRY_DELAY)
-
-
-
+# Función principal
 if __name__ == "__main__":
-
-    main()
+    logging.info("Iniciando bot y suscripción al WebSocket...")
+    subscribe_kline()
