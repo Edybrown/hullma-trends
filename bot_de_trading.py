@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 # Configuración general
-SYMBOL = "sBTCUSDT"
+SYMBOL = "BTCUSDT"  # Sin el prefijo 's'
 TIMEFRAME = 86400  # 1 día (86400 segundos)
 
 # Configuración del WebSocket
@@ -24,7 +24,7 @@ WEBSOCKET_URL = "wss://ws.phemex.com/ws"
 candles_data = []
 
 # Función para procesar los datos de las velas recibidos
-def process_kline_data(message):
+def process_kline_data(ws, message):
     global candles_data
     try:
         # Analizar el mensaje JSON
@@ -106,11 +106,17 @@ def hull_moving_average(data, period):
 
 # Función para suscribirse al WebSocket
 def subscribe_kline():
+    def on_error(ws, error):
+        logging.error(f"Error en WebSocket: {error}")
+
+    def on_close(ws):
+        logging.info("WebSocket cerrado")
+    
     ws = websocket.WebSocketApp(
         WEBSOCKET_URL,
         on_message=process_kline_data,
-        on_error=lambda ws, error: logging.error(f"Error en WebSocket: {error}"),
-        on_close=lambda ws: logging.info("WebSocket cerrado"),
+        on_error=on_error,
+        on_close=on_close,
     )
     
     # Suscripción al flujo de velas para el símbolo y timeframe deseados
