@@ -19,7 +19,7 @@ logging.basicConfig(
 API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
 API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
 BASE_URL = "https://api.phemex.com"
-SYMBOL = "sBTCUSDT"  # Asegúrate de usar el símbolo correcto según la API de Phemex
+SYMBOL = "BTCUSDT"  # Asegúrate de usar el símbolo correcto según la API de Phemex
 TIMEFRAME = "15m"
 STOP_LOSS_PERCENTAGE = 1.2
 
@@ -27,7 +27,7 @@ STOP_LOSS_PERCENTAGE = 1.2
 def generate_signature(method, path, query_string="", data=None):
     expires = str(int(time.time()) + 60000)  # Tiempo de expiración de la solicitud
     payload = f"{expires}{method}{path}{query_string}"
-    
+
     if data:
         payload += json.dumps(data)  # Si tienes datos en el cuerpo de la solicitud
 
@@ -68,13 +68,13 @@ def make_request(method, path, query_params=None, data=None):
 # Funciones específicas del bot
 
 def fetch_currency_info():
-    path = "/exchange/public/cfg"
+    path = "/public/products"
     response = make_request("GET", path)
     if response:
-        return response.get("data", {})
+        return response.get("data", {}).get("products", [])
     else:
         logging.error("No se pudo obtener la información de las monedas.")
-        return {}
+        return []
 
 def fetch_data(symbol, timeframe):
     path = f"/md/kline"
@@ -149,7 +149,7 @@ def run_bot():
     # Validación de símbolo
     logging.info("Validando el símbolo configurado...")
     currency_info = fetch_currency_info()
-    if SYMBOL not in [product['symbol'] for product in currency_info.get("products", [])]:
+    if SYMBOL not in [product['symbol'] for product in currency_info]:
         logging.error(f"El símbolo {SYMBOL} no es válido según la información de la API.")
         exit()
 
