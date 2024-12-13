@@ -68,6 +68,15 @@ def make_request(method, path, query_params=None, data=None):
 
 # Funciones específicas del bot
 
+def fetch_currency_info():
+    path = "/exchange/public/cfg"
+    response = make_request("GET", path)
+    if response:
+        return response.get("data", {})
+    else:
+        logging.error("No se pudo obtener la información de las monedas.")
+        return {}
+
 def fetch_data(symbol, timeframe):
     path = f"/md/kline"
     query_params = {
@@ -106,23 +115,6 @@ def place_market_order(symbol, side, quantity):
 
     return make_request("POST", path, data=data)
 
-def place_stop_loss_order(symbol, side, quantity, stop_price):
-    path = "/spot/orders"
-    data = {
-        "symbol": symbol,
-        "side": side.upper(),
-        "qtyType": "ByBase",  # Tipo de cantidad
-        "quoteQtyEv": "0",  # Si estás enviando por cotización, pon este a 0
-        "baseQtyEv": int(quantity * 1e8),  # Cantidad en satoshis
-        "priceEp": int(stop_price * 1e8),  # Precio del stop-loss en satoshis
-        "ordType": "StopMarket",  # Orden de tipo StopMarket
-        "stopPxEp": int(stop_price * 1e8),  # El precio del stop loss
-        "timeInForce": "GoodTillCancel",  # Tiempo de vida de la orden
-        "text": ""  # Campo opcional
-    }
-
-    return make_request("POST", path, data=data)
-
 def hma(data, length):
     wma1 = data.rolling(window=int(length / 2)).mean()
     wma2 = data.rolling(window=length).mean()
@@ -156,6 +148,13 @@ def run_bot():
     trades = []
     position = None
 
+    # Validación de símbolo
+    logging.info("Validando el símbolo configurado...")
+    currency_info = fetch_currency_info()
+    if SYMBOL not in [product['symbol'] for product in currency_info.get("products", [])]:
+        logging.error(f"El símbolo {SYMBOL} no es válido según la información de la API.")
+        exit()
+
     while True:
         try:
             logging.info("Iniciando nuevo ciclo del bot.")
@@ -180,38 +179,19 @@ def run_bot():
                 logging.info("Señal de compra detectada.")
                 order = place_market_order(SYMBOL, "buy", quantity)
                 if order:
-                    entry_price = latest['close']
-                    stop_loss_price = entry_price * (1 - STOP_LOSS_PERCENTAGE / 100)
-                    place_stop_loss_order(SYMBOL, "sell", quantity, stop_loss_price)
-
-                    position = {
-                        "side": "buy",
-                        "entry_price": entry_price,
-                        "timestamp": latest['timestamp']
-                    }
+                    position = {"side": "buy", "entry_price": latest['close']}
                     trades.append(position)
 
             elif latest['sell_signal'] and position:
                 logging.info("Señal de venta detectada.")
                 order = place_market_order(SYMBOL, "sell", quantity)
                 if order:
-                    trades[-1]["exit_price"] = latest['close']
-                    trades[-1]["exit_timestamp"] = latest['timestamp']
                     position = None
 
         except Exception as e:
             logging.error(f"Error en el ciclo del bot: {e}")
 
         time.sleep(60)
-def fetch_currency_info():
-    path = "/exchange/public/cfg"
-    response = make_request("GET", path)
-    if response:
-        return response.get("data", {})
-    else:
-        logging.error("No se pudo obtener la información de las monedas.")
-        return {}
-        
 
 if __name__ == "__main__":
     run_bot()
