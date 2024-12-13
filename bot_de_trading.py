@@ -15,8 +15,8 @@ logging.basicConfig(
 )
 
 # Configuración general
-API_KEY = "tu_api_key"
-API_SECRET = "tu_api_secret"
+API_KEY = '13412340-2737-4953-879c-8ff573cafa7f'
+API_SECRET = 'uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU'
 BASE_URL = "https://api.phemex.com"
 SYMBOL = "sBTCUSDT"  # Asegúrate de usar el símbolo correcto
 TIMEFRAME = 86400  # 1 día (86400 segundos)
