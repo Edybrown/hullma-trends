@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 # Configuración general
-SYMBOL = "BTCUSDT"  # Sin el prefijo 's'
+SYMBOL = "sBTCUSDT"  # Sin el prefijo 's'
 TIMEFRAME = 86400  # 1 día (86400 segundos)
 
 # Configuración del WebSocket
