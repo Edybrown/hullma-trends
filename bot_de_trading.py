@@ -19,12 +19,11 @@ logging.basicConfig(
 API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
 API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
 BASE_URL = "https://api.phemex.com"
-SYMBOL = "BTCUSDT"  # Asegúrate de que el símbolo sea correcto
+SYMBOL = "sBTCUSDT"  # Asegúrate de usar el símbolo correcto según la API de Phemex
 TIMEFRAME = "15m"
 STOP_LOSS_PERCENTAGE = 1.2
 
 # Funciones auxiliares para la API
-
 def generate_signature(method, path, query_string="", data=None):
     expires = str(int(time.time()) + 60000)  # Tiempo de expiración de la solicitud
     payload = f"{expires}{method}{path}{query_string}"
@@ -100,19 +99,18 @@ def fetch_balance():
     return 0
 
 def place_market_order(symbol, side, quantity):
-    path = "/spot/orders"  # Cambiar a '/spot/orders' para el mercado spot
+    path = "/spot/orders"
     data = {
         "symbol": symbol,
         "side": side.upper(),
-        "qtyType": "ByBase",  # Tipo de cantidad (por base, por cotización)
-        "quoteQtyEv": "0",  # Si estás enviando por cotización, pon este a 0
-        "baseQtyEv": int(quantity * 1e8),  # Cantidad en satoshis o unidades base
-        "priceEp": 0,  # Si es una orden de mercado, el precio es 0
+        "qtyType": "ByBase",  # Usar la cantidad base (en este caso, BTC)
+        "quoteQtyEv": 0,  # Esto se usa solo si envías por cantidad de cotización, así que 0 si es por cantidad base
+        "baseQtyEv": int(quantity * 1e8),  # Convertir la cantidad a unidades pequeñas de la moneda base (BTC en este caso)
+        "priceEp": 0,  # Para órdenes de mercado, el precio es 0
         "ordType": "Market",  # Orden de tipo Market
-        "timeInForce": "GoodTillCancel",  # Tiempo de vida de la orden
-        "text": ""  # Campo opcional para texto
+        "timeInForce": "GoodTillCancel",  # La orden es válida hasta que se ejecute o la canceles
+        "text": ""  # Comentario opcional para la orden
     }
-
     return make_request("POST", path, data=data)
 
 def hma(data, length):
