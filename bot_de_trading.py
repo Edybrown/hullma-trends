@@ -203,6 +203,15 @@ def run_bot():
             logging.error(f"Error en el ciclo del bot: {e}")
 
         time.sleep(60)
+def fetch_currency_info():
+    path = "/exchange/public/cfg"
+    response = make_request("GET", path)
+    if response:
+        return response.get("data", {})
+    else:
+        logging.error("No se pudo obtener la información de las monedas.")
+        return {}
+        
 
 if __name__ == "__main__":
     run_bot()
