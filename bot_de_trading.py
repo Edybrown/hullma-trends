@@ -8,11 +8,32 @@ import hmac
 import hashlib
 import base64
 
+def send_heartbeat(ws):
+    heartbeat_payload = {
+        "id": 4,  # id de la solicitud, puede ser cualquier número
+        "method": "server.ping",
+        "params": []
+    }
+    ws.send(json.dumps(heartbeat_payload))
+    logging.info("Heartbeat enviado")
+
+def on_open(ws):
+    authenticate(ws)
+    subscribe_kline(ws)
+    # Enviar el primer heartbeat justo después de la conexión
+    send_heartbeat(ws)
+    
+def on_message(ws, message):
+    process_kline_data(ws, message)
+    # Enviar heartbeat cada 30 segundos, por ejemplo
+    time.sleep(30)
+    send_heartbeat(ws)
+
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Configuración de la API
-WEBSOCKET_URL = "wss://phemex.com/ws"
+WEBSOCKET_URL = "wss://ws.phemex.com"
 API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
 API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
 SYMBOL = "sBTCUSDT"
@@ -150,8 +171,8 @@ def on_open(ws):
 def on_error(ws, error):
     logging.error(f"Error en WebSocket: {error}")
 
-def on_close(ws):
-    logging.info("WebSocket cerrado")
+def on_close(ws, close_status_code, close_msg):
+    logging.info(f"WebSocket cerrado: {close_status_code} - {close_msg}")
 
 def main():
     while True:
