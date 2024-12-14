@@ -38,7 +38,24 @@ API_KEY = "13412340-2737-4953-879c-8ff573cafa7f"
 API_SECRET = "uvCVTlX4UrrG5-OlplsUqIG1uWnuxPmYuC5uuPjP4IBkYTU0MDFkZS0xNzk1LTRlNTMtYWMwYS1jOTJkYjZlYTc3MzU"
 SYMBOL = "sBTCUSDT"
 TIMEFRAME = 900  # 15 minutos en segundos
+API_URL = "https://api.phemex.com/exchange/public/md/v2/kline"
 
+def fetch_kline_data():
+    """Obtiene los datos de velas desde la API pública de Phemex."""
+    url = API_URL
+    params = {
+        "symbol": SYMBOL,
+        "resolution": TIMEFRAME,
+        "limit": LIMIT
+    }
+    
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        return data.get('data', [])
+    else:
+        logging.error(f"Error al obtener las velas: {response.status_code}")
+        return []
 # Variables globales
 candles_data = []  # Lista para almacenar datos de velas
 
