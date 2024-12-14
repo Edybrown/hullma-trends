@@ -23,22 +23,24 @@ RSI_SLOW_PERIOD = 14
 HULL_PERIOD = 14
 
 # Función para generar la firma
-def generate_signature(api_secret, expires):
-    message = f"{expires}"
+def generate_signature(api_secret, expires, method, request_path, body=""):
+    message = f"{expires}{method}{request_path}{body}"
     signature = hmac.new(bytes(api_secret, 'utf-8'), bytes(message, 'utf-8'), hashlib.sha256).hexdigest()
     return signature
 
 # Función de autenticación
 def authenticate(ws):
     expires = int(time.time()) + 60  # Tiempo de expiración de la firma
-    signature = generate_signature(API_SECRET, expires)
+    request_path = "/user.auth"  # Path del endpoint para autenticación
+    signature = generate_signature(API_SECRET, expires, "POST", request_path)
 
     auth_payload = {
         "id": 1,
         "method": "user.auth",
-        "params": ["API", API_KEY, signature, expires]
+        "params": [API_KEY, signature, expires]
     }
     ws.send(json.dumps(auth_payload))
+    logging.info(f"Autenticado con la firma: {signature}")
 
 # Función para calcular el RSI
 def calculate_rsi(data, period):
