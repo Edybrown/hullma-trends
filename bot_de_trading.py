@@ -6,19 +6,20 @@ import hmac
 import hashlib
 import numpy as np
 import pandas as pd
+import requests
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Configuración de la API de CoinEx
-WEBSOCKET_URL = "wss://socket.coinex.com/"
+WEBSOCKET_URL = "wss://socket.coinex.com/v2/spot"
 API_KEY = "2A8AE2B7B0D0458CBF00F06620FA4E7C"
 API_SECRET = "958D43B4E07D47E8B84E7DEEA58AAF321818AB5A0452FA80"
 SYMBOL = "BTCUSDT"  # Par de mercado
 TIMEFRAME = 900  # 15 minutos en segundos
 
 # Configuración de los indicadores
-RSI_FAST_PERIOD =8
+RSI_FAST_PERIOD = 8
 RSI_SLOW_PERIOD = 14
 HULL_PERIOD = 14
 
@@ -65,15 +66,50 @@ def process_kline_data(df, kline_data):
 
     return df
 
-# Función para realizar la orden (pendiente de implementar con API privada de CoinEx)
+# Función para crear la firma (X-COINEX-SIGN)
+def create_signature(params, secret_key):
+    query_string = '&'.join([f"{key}={value}" for key, value in sorted(params.items())])
+    return hmac.new(secret_key.encode(), query_string.encode(), hashlib.sha256).hexdigest()
+
+# Función para realizar una orden (compra/venta)
 def place_order(order_type):
-    logging.info(f"Orden de {order_type} (pendiente de implementar)")
+    url = "https://api.coinex.com/v1/order/limit"
+    params = {
+        "market": SYMBOL,  # Par de mercado
+        "side": order_type,  # 'buy' o 'sell'
+        "price": "10000",  # Precio de la orden (puedes ajustar esto con el precio actual)
+        "amount": "0.01",  # Cantidad a comprar/vender
+        "type": "limit",  # Tipo de orden (limit o market)
+        "timestamp": str(int(time.time() * 1000))  # Timestamp en milisegundos
+    }
+    
+    # Crear la firma
+    signature = create_signature(params, API_SECRET)
+    
+    # Agregar la clave API y la firma a los headers
+    headers = {
+        "X-COINEX-KEY": API_KEY,
+        "X-COINEX-SIGN": signature
+    }
+    
+    # Enviar la solicitud POST a la API
+    response = requests.post(url, params=params, headers=headers)
+    
+    # Verificar la respuesta
+    if response.status_code == 200:
+        data = response.json()
+        if data['code'] == 0:
+            logging.info(f"Orden de {order_type} ejecutada con éxito.")
+        else:
+            logging.error(f"Error en la orden: {data['message']}")
+    else:
+        logging.error(f"Error en la solicitud: {response.status_code} - {response.text}")
 
 # Función para suscribirse a velas
 def subscribe_kline(ws):
     payload = {
         "method": "kline.subscribe",
-        "params": [SYMBOL, 60],  # Intervalo en segundos
+        "params": [SYMBOL, 900],  # 15 minutos en segundos
         "id": 1
     }
     ws.send(json.dumps(payload))
