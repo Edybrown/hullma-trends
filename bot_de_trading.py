@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import pandas as pd
 import numpy as np
+import threading
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -78,6 +79,10 @@ def process_kline_data(df, kline_data):
     close_price = float(kline_data['close'])
     df = df.append({"timestamp": kline_data['time'], "close": close_price}, ignore_index=True)
 
+    # Limitar el tamaño del DataFrame a 100 velas
+    if len(df) > 100:
+        df = df.iloc[1:]
+
     if len(df) >= max(RSI_SLOW_PERIOD, RSI_FAST_PERIOD, HULL_PERIOD):
         # Calcular RSI y HullMA
         df['rsi_fast'] = calculate_rsi(df['close'], RSI_FAST_PERIOD)
@@ -89,7 +94,7 @@ def process_kline_data(df, kline_data):
         hullma = df['hullma'].iloc[-1]
         last_close = df['close'].iloc[-1]
 
-        # Señales de compra y venta
+        # Señales de compra y venta según la estrategia
         if rsi_fast > rsi_slow and last_close > hullma:
             logging.info("Señal de COMPRA generada")
             place_order("buy")
@@ -103,9 +108,17 @@ def process_kline_data(df, kline_data):
 def place_order(order_type):
     logging.info(f"Orden de {order_type} (pendiente de implementar)")
 
+# Función para enviar un ping para mantener viva la conexión WebSocket
+def send_ping(ws):
+    while True:
+        time.sleep(30)  # Enviar ping cada 30 segundos
+        ws.send(json.dumps({"event": "ping"}))
+        logging.info("Ping enviado")
+
 # Función cuando se abre la conexión WebSocket
 def on_open(ws):
     authenticate_websocket(ws)  # Autenticar la conexión al abrirla
+    threading.Thread(target=send_ping, args=(ws,), daemon=True).start()  # Enviar ping en un hilo separado
     subscribe_kline(ws)  # Suscribirse a las velas después de autenticar
 
 # Función cuando se recibe un mensaje
@@ -124,6 +137,9 @@ def on_error(ws, error):
 # Función cuando se cierra la conexión WebSocket
 def on_close(ws, close_status_code, close_msg):
     logging.info(f"WebSocket cerrado: {close_status_code} - {close_msg}")
+    logging.info("Intentando reconectar en 5 segundos...")
+    time.sleep(5)
+    main()  # Reconectar automáticamente
 
 # Función principal para ejecutar el WebSocket
 def main():
