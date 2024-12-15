@@ -4,9 +4,8 @@ import time
 import logging
 import hmac
 import hashlib
-import numpy as np
 import pandas as pd
-import requests
+import numpy as np
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,6 +21,40 @@ TIMEFRAME = 900  # 15 minutos en segundos
 RSI_FAST_PERIOD = 8
 RSI_SLOW_PERIOD = 14
 HULL_PERIOD = 14
+
+# Función para generar el HMAC-SHA256 y firmar la solicitud
+def generate_signature(secret_key, timestamp):
+    prepared_str = str(timestamp)
+    signed_str = hmac.new(bytes(secret_key, 'latin-1'), msg=bytes(prepared_str, 'latin-1'), digestmod=hashlib.sha256).hexdigest().lower()
+    return signed_str
+
+# Función para autenticar la conexión WebSocket
+def authenticate_websocket(ws):
+    timestamp = int(time.time() * 1000)  # Obtener el timestamp actual en milisegundos
+    signed_str = generate_signature(API_SECRET, timestamp)
+
+    auth_payload = {
+        "id": 15,
+        "method": "server.sign",
+        "params": {
+            "access_id": API_KEY,
+            "signed_str": signed_str,
+            "timestamp": timestamp
+        }
+    }
+
+    ws.send(json.dumps(auth_payload))  # Enviar la solicitud de autenticación
+    logging.info("Autenticación WebSocket enviada.")
+
+# Función para suscribirse a velas
+def subscribe_kline(ws):
+    payload = {
+        "method": "kline.subscribe",
+        "params": [SYMBOL, TIMEFRAME],  # Intervalo en segundos (900 = 15 minutos)
+        "id": 1
+    }
+    ws.send(json.dumps(payload))
+    logging.info(f"Suscripción a velas para {SYMBOL} enviada.")
 
 # Función para calcular el RSI
 def calculate_rsi(data, period):
@@ -66,62 +99,19 @@ def process_kline_data(df, kline_data):
 
     return df
 
-# Función para crear la firma (X-COINEX-SIGN)
-def create_signature(params, secret_key):
-    query_string = '&'.join([f"{key}={value}" for key, value in sorted(params.items())])
-    return hmac.new(secret_key.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-
-# Función para realizar una orden (compra/venta)
+# Función para realizar la orden (pendiente de implementar con API privada de CoinEx)
 def place_order(order_type):
-    url = "https://api.coinex.com/v1/order/limit"
-    params = {
-        "market": SYMBOL,  # Par de mercado
-        "side": order_type,  # 'buy' o 'sell'
-        "price": "10000",  # Precio de la orden (puedes ajustar esto con el precio actual)
-        "amount": "0.01",  # Cantidad a comprar/vender
-        "type": "limit",  # Tipo de orden (limit o market)
-        "timestamp": str(int(time.time() * 1000))  # Timestamp en milisegundos
-    }
-    
-    # Crear la firma
-    signature = create_signature(params, API_SECRET)
-    
-    # Agregar la clave API y la firma a los headers
-    headers = {
-        "X-COINEX-KEY": API_KEY,
-        "X-COINEX-SIGN": signature
-    }
-    
-    # Enviar la solicitud POST a la API
-    response = requests.post(url, params=params, headers=headers)
-    
-    # Verificar la respuesta
-    if response.status_code == 200:
-        data = response.json()
-        if data['code'] == 0:
-            logging.info(f"Orden de {order_type} ejecutada con éxito.")
-        else:
-            logging.error(f"Error en la orden: {data['message']}")
-    else:
-        logging.error(f"Error en la solicitud: {response.status_code} - {response.text}")
+    logging.info(f"Orden de {order_type} (pendiente de implementar)")
 
-# Función para suscribirse a velas
-def subscribe_kline(ws):
-    payload = {
-        "method": "kline.subscribe",
-        "params": [SYMBOL, 900],  # 15 minutos en segundos
-        "id": 1
-    }
-    ws.send(json.dumps(payload))
-    logging.info(f"Suscripción a velas para {SYMBOL} enviada.")
-
-# Función cuando se abre la conexión
+# Función cuando se abre la conexión WebSocket
 def on_open(ws):
-    subscribe_kline(ws)
+    authenticate_websocket(ws)  # Autenticar la conexión al abrirla
+    subscribe_kline(ws)  # Suscribirse a las velas después de autenticar
 
 # Función cuando se recibe un mensaje
 def on_message(ws, message):
     global df
+    logging.info(f"Mensaje recibido: {message}")
     data = json.loads(message)
     if "params" in data and "method" in data and data["method"] == "kline.update":
         kline_data = data['params'][0]
@@ -131,11 +121,11 @@ def on_message(ws, message):
 def on_error(ws, error):
     logging.error(f"Error en WebSocket: {error}")
 
-# Función cuando se cierra la conexión
+# Función cuando se cierra la conexión WebSocket
 def on_close(ws, close_status_code, close_msg):
     logging.info(f"WebSocket cerrado: {close_status_code} - {close_msg}")
 
-# Función principal
+# Función principal para ejecutar el WebSocket
 def main():
     global df
     df = pd.DataFrame(columns=["timestamp", "close"])  # DataFrame para almacenar las velas
