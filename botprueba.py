@@ -100,21 +100,49 @@ candles = {}  # Diccionario para almacenar las velas. Clave: timestamp de inicio
 MAX_CANDLES = 100 # Maximo de velas a guardar
 
 def calculate_indicators(market, candles_list):
-    if candles_list and len(candles_list) > 14: #validacion de cantidad de velas
-        try:
-            df = pd.DataFrame(candles_list)
-            df = df.set_index('timestamp')
-            rsi_indicator = RSIIndicator(close=df["close"], window=14)
-            df['rsi'] = rsi_indicator.rsi()
-            hma_indicator = HMAIndicator(close=df["close"], window=9)
-            df["hma"] = hma_indicator.hma()
-            logging.info(f"Calculo de indicadores para {market} exitoso")
-            return df
-        except Exception as e:
-            logging.error(f"Error al calcular los indicadores {e}")
-            return None
-    else:
-        logging.warning(f"No hay suficientes datos para calcular los indicadores de {market}")
+    """Calcula RSI (rápido y lento) y HMA y genera señales.
+
+    Args:
+        market: El mercado (ej. "BTCUSDT").
+        candles_list: Lista de diccionarios de velas.
+
+    Returns:
+        DataFrame con indicadores y señales, o None si hay error.
+    """
+    if not candles_list or len(candles_list) < 25: # Necesito al menos 25 velas para HMA(24) + shift(1)
+        logging.warning(f"No hay suficientes datos para calcular indicadores en {market}")
+        return None
+
+    try:
+        df = pd.DataFrame(candles_list)
+        df = df.set_index('timestamp')
+        close_prices = df['close']
+
+        # RSI rápido y lento (con ventanas distintas)
+        rsi_fast = RSIIndicator(close=close_prices, window=8).rsi()
+        rsi_slow = RSIIndicator(close=close_prices, window=14).rsi()
+        df['rsi_fast'] = rsi_fast
+        df['rsi_slow'] = rsi_slow
+
+        # HMA (con corrección en el cálculo de la WMA)
+        def hma(src, length):
+            half_length = int(length / 2)
+            sqrt_length = int(np.sqrt(length))
+            wma1 = src.rolling(half_length).apply(lambda x: np.average(x, weights=np.arange(1, half_length + 1)))
+            wma2 = src.rolling(length).apply(lambda x: np.average(x, weights=np.arange(1, length + 1)))
+            hma_result = 2 * wma1 - wma2
+            return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
+
+        df['hma'] = hma(close_prices, 24)
+
+        # GENERACIÓN DE SEÑALES (AHORA CORRECTAMENTE IMPLEMENTADA)
+        df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
+        df['sell_signal'] = (df['rsi_fast'] < df['rsi_slow']) & (df['rsi_fast'].shift(1) >= df['rsi_slow'].shift(1)) & (df['close'] < df['hma'])
+
+        logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
+        return df
+    except Exception as e:
+        logging.error(f"Error al calcular indicadores o señales: {e}")
         return None
 
 
