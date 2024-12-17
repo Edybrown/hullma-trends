@@ -63,7 +63,7 @@ def on_close(ws, close_status_code, close_msg):
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
     try:
-        ws = websocket.WebSocketApp("wss://api.coinex.com/ws/v1/",
+        ws = websocket.WebSocketApp("wss://socket.coinex.com/v2/spot",
                                   on_open=on_open,
                                   on_message=on_message,
                                   on_error=on_error,
