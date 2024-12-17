@@ -5,6 +5,7 @@ import hmac
 import hashlib
 import requests
 import logging
+import os
 
 # Configuración del logging
 LOG_DIR = "logs"  # Directorio para los logs
