@@ -16,6 +16,8 @@ import threading
 import time
 from ta.momentum import RSIIndicator
 
+server_time_offset = 0  # Diferencia entre la hora local y la del servidor
+
 
 # Configuración del logging
 LOG_DIR = "logs"  # Directorio para los logs
@@ -33,6 +35,18 @@ console_handler.setLevel(logging.INFO) #Nivel para la consola
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 logging.getLogger('').addHandler(console_handler) #Añadir a la configuracion
+
+def get_server_time(ws):
+    global server_time_offset
+    try:
+        ws.send(json.dumps({"method": "server.time", "params": {}, "id": time.time()}))
+        # ... (Recibir la respuesta y extraer el timestamp del servidor)
+        server_time_from_server = ...  # El timestamp recibido del servidor
+        local_time = time.time() * 1000 # Timestamp local en milisegundos
+        server_time_offset = server_time_from_server - local_time
+        logging.info(f"Hora del servidor obtenida, offset: {server_time_offset} ms")
+    except Exception as e:
+        logging.error(f"Error al obtener la hora del servidor: {e}")
 
 def on_open(ws):
     logging.info("Conexión WebSocket abierta.")
@@ -132,19 +146,17 @@ def on_message(ws, message):
         try:
             decompressed_message = gzip.decompress(message).decode('utf-8')
             logging.debug("Mensaje descomprimido exitosamente.")
-        except (OSError, EOFError, zlib.error):
+        except (OSError, EOFError, zlib.error, UnicodeDecodeError):
             decompressed_message = message.decode('utf-8')
             logging.debug("Mensaje NO comprimido, decodificado directamente.")
 
-        data = json.loads(decompressed_message)  # Ya se ha gestionado la descompresión
+        data = json.loads(decompressed_message)
 
         if data.get('method') == 'state.update':
-            server_time = data.get('serverTime')
-            if server_time is None:
-                logging.warning("No se recibio serverTime, usando tiempo local")
-                now = datetime.datetime.utcnow()
-            else:
-                now = datetime.datetime.utcfromtimestamp(server_time/1000)
+            local_time = datetime.datetime.now(datetime.UTC)
+            server_now = local_time + datetime.timedelta(milliseconds=server_time_offset)
+            minute10_timestamp = server_now - datetime.timedelta(minutes=server_now.minute % 10, seconds=server_now.second, microseconds=server_now.microsecond)
+            minute10_timestamp = int(minute10_timestamp.timestamp())
             state_list = data.get('data').get('state_list')
 
             if state_list:
@@ -152,9 +164,6 @@ def on_message(ws, message):
                     market = state.get('market')
                     last_price = float(state.get('last'))
                     volume = float(state.get('volume')) if state.get('volume') is not None else 0
-
-                    minute10_timestamp = now - datetime.timedelta(minutes=now.minute % 10, seconds=now.second, microseconds=now.microsecond)
-                    minute10_timestamp = int(minute10_timestamp.timestamp())
 
                     if minute10_timestamp not in candles:
                         candles[minute10_timestamp] = {
@@ -174,11 +183,10 @@ def on_message(ws, message):
                         candles[minute10_timestamp]['volume'] += volume
                         logging.debug(f"Actualizando vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}, precio: {last_price}")
 
-                    # Eliminar velas antiguas si se excede el máximo
-                    while len(candles) > MAX_CANDLES:
-                        oldest_candle = min(candles.keys())
-                        del candles[oldest_candle]
-                        logging.debug(f"Eliminando vela antigua con timestamp: {oldest_candle}")
+                while len(candles) > MAX_CANDLES:
+                    oldest_candle = min(candles.keys())
+                    del candles[oldest_candle]
+                    logging.debug(f"Eliminando vela antigua con timestamp: {oldest_candle}")
             else:
                 logging.warning("La lista de estados esta vacia")
 
@@ -187,8 +195,8 @@ def on_message(ws, message):
         else:
             logging.debug(f"Mensaje recibido (otro tipo): {message}")
 
-    except (json.JSONDecodeError, UnicodeDecodeError) as e: #Se unifican los errores de decodificación
-        logging.error(f"Error al procesar el mensaje: {e}. Mensaje original: {decompressed_message!r}") #Utilizamos decompressed_message si existe
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        logging.error(f"Error al procesar el mensaje: {e}. Mensaje original: {message!r}")
     except Exception as e:
         logging.error(f"Error inesperado en on_message: {e}")
 
