@@ -9,6 +9,13 @@ import os
 import sys
 import gzip
 import signal
+import datetime
+import pandas as pd
+import numpy as np
+import threading
+import time
+from ta.momentum import RSIIndicator
+from ta.trend import HMAIndicator
 
 # Configuración del logging
 LOG_DIR = "logs"  # Directorio para los logs
@@ -87,7 +94,89 @@ def on_message(ws, message):
     except UnicodeDecodeError as e:
         logging.error(f"Error de decodificación UTF-8 (fuera del gzip): {e}. Mensaje original (bytes): {message}")
     except Exception as e:
-        logging.error(f"Error general en on_message: {e}")  
+        logging.error(f"Error general en on_message: {e}") 
+      
+candles = {}  # Diccionario para almacenar las velas. Clave: timestamp de inicio (int), Valor: diccionario con datos de la vela
+MAX_CANDLES = 100 # Maximo de velas a guardar
+
+def calculate_indicators(market, candles_list):
+    if candles_list and len(candles_list) > 14: #validacion de cantidad de velas
+        try:
+            df = pd.DataFrame(candles_list)
+            df = df.set_index('timestamp')
+            rsi_indicator = RSIIndicator(close=df["close"], window=14)
+            df['rsi'] = rsi_indicator.rsi()
+            hma_indicator = HMAIndicator(close=df["close"], window=9)
+            df["hma"] = hma_indicator.hma()
+            logging.info(f"Calculo de indicadores para {market} exitoso")
+            return df
+        except Exception as e:
+            logging.error(f"Error al calcular los indicadores {e}")
+            return None
+    else:
+        logging.warning(f"No hay suficientes datos para calcular los indicadores de {market}")
+        return None
+
+
+def on_message(ws, message):
+    try:
+        # ... (descompresión y decodificación del mensaje - igual que antes)
+        data = json.loads(decompressed_message)
+
+        if data.get('method') == 'state.update':
+            server_time = data.get('serverTime')
+            if server_time is None:
+                logging.warning("No se recibio serverTime, usando tiempo local")
+                now = datetime.datetime.utcnow()
+            else:
+                now = datetime.datetime.utcfromtimestamp(server_time/1000)
+            state_list = data.get('data').get('state_list')
+
+            if state_list:
+                for state in state_list:
+                    market = state.get('market')
+                    last_price = float(state.get('last'))
+                    volume = float(state.get('volume')) if state.get('volume') is not None else 0
+
+                    minute10_timestamp = now - datetime.timedelta(minutes=now.minute % 10, seconds=now.second, microseconds=now.microsecond)
+                    minute10_timestamp = int(minute10_timestamp.timestamp())
+
+                    if minute10_timestamp not in candles:
+                        candles[minute10_timestamp] = {
+                            'timestamp': minute10_timestamp,
+                            'open': last_price,
+                            'high': last_price,
+                            'low': last_price,
+                            'close': last_price,
+                            'volume': volume
+                        }
+                        threading.Timer(600, calculate_indicators, args=[market, list(candles.values())]).start()
+                        logging.info(f"Creando nueva vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}")
+                    else:
+                        candles[minute10_timestamp]['close'] = last_price
+                        candles[minute10_timestamp]['high'] = max(candles[minute10_timestamp]['high'], last_price)
+                        candles[minute10_timestamp]['low'] = min(candles[minute10_timestamp]['low'], last_price)
+                        candles[minute10_timestamp]['volume'] += volume
+                        logging.debug(f"Actualizando vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}, precio: {last_price}")
+
+                    # Eliminar velas antiguas si se excede el máximo
+                    while len(candles) > MAX_CANDLES: #usando while para evitar que se salteen velas en caso de que el reloj se atrase mucho
+                        oldest_candle = min(candles.keys())
+                        del candles[oldest_candle]
+                        logging.debug(f"Eliminando vela antigua con timestamp: {oldest_candle}")
+            else:
+                logging.warning("La lista de estados esta vacia")
+
+        elif data.get('error'):
+            logging.error(f"Error del servidor: {data.get('error')}")
+        else:
+            logging.debug(f"Mensaje recibido (otro tipo): {message}")
+
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        logging.error(f"Error al procesar el mensaje: {e}. Mensaje original: {message!r}")
+    except Exception as e:
+        logging.error(f"Error inesperado en on_message: {e}")      
+      
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
     try:
