@@ -6,6 +6,9 @@ import hashlib
 import requests
 import logging
 import os
+import sys
+import gzip
+import signal
 
 # Configuración del logging
 LOG_DIR = "logs"  # Directorio para los logs
@@ -60,6 +63,31 @@ def on_error(ws, error):
 
 def on_close(ws, close_status_code, close_msg):
     logging.info(f"Conexión WebSocket cerrada. Código: {close_status_code}, Mensaje: {close_msg}")
+
+def on_message(ws, message):
+    try:
+        try:
+            # Intenta descomprimir
+            decompressed_message = gzip.decompress(message).decode('utf-8')
+            logging.debug("Mensaje descomprimido exitosamente.")
+        except (OSError, EOFError, zlib.error): #Captura las excepciones de descompresion
+            # Si falla la descompresión, asume que el mensaje NO está comprimido
+            decompressed_message = message.decode('utf-8')
+            logging.debug("Mensaje NO comprimido, decodificado directamente.")
+
+        try:
+            data = json.loads(decompressed_message)
+            print(data)
+            # ... (procesamiento de datos)
+        except json.JSONDecodeError as e:
+            logging.error(f"Error al decodificar JSON: {e}. Mensaje original: {decompressed_message}")
+        except Exception as e:
+            logging.error(f"Error al procesar mensaje JSON: {e}")
+
+    except UnicodeDecodeError as e:
+        logging.error(f"Error de decodificación UTF-8 (fuera del gzip): {e}. Mensaje original (bytes): {message}")
+    except Exception as e:
+        logging.error(f"Error general en on_message: {e}")  
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
     try:
