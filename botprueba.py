@@ -28,7 +28,7 @@ def on_open(ws):
     logging.info("Conexión WebSocket abierta.")
     subscription_message = {
         "method": "state.subscribe",
-        "params": {"market_list": ["BTCUSDT", "ETHUSDT", "BNBUSDT"]},
+        "params": {"market_list": ["BTCUSDT"]},
         "id": 1
     }
     try:
