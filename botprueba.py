@@ -15,7 +15,7 @@ import numpy as np
 import threading
 import time
 from ta.momentum import RSIIndicator
-from ta.trend import HMAIndicator
+
 
 # Configuración del logging
 LOG_DIR = "logs"  # Directorio para los logs
