@@ -47,24 +47,6 @@ def on_open(ws):
     except Exception as e:
         logging.error(f"Error al enviar el mensaje de suscripción: {e}")
 
-def on_message(ws, message):
-    logging.debug(f"Mensaje recibido (sin procesar): {message}") #Log en debug para ver todos los msj
-    try:
-        data = json.loads(message)
-        # *** Aquí va tu lógica de procesamiento del mensaje ***
-        # Ejemplos:
-        if "market" in data and "ticker" in data:
-          logging.info(f"Actualización de mercado recibida: {data['market']}")
-          #logging.debug(f"Datos del ticker: {data['ticker']}") #Datos detallados del ticker
-        elif "error" in data:
-          logging.error(f"Error recibido del servidor: {data['error']}")
-        # ... otros procesamientos según la estructura de los mensajes de CoinEx
-    except json.JSONDecodeError as e:
-        logging.error(f"Error al decodificar JSON: {e}. Mensaje original: {message}")
-    except Exception as e: #Captura otros posibles errores en el procesamiento del mensaje
-      logging.error(f"Error al procesar mensaje: {e}")
-
-
 def on_error(ws, error):
     logging.error(f"Error en la conexión WebSocket: {error}")
 
@@ -145,11 +127,16 @@ def calculate_indicators(market, candles_list):
         logging.error(f"Error al calcular indicadores o señales: {e}")
         return None
 
-
 def on_message(ws, message):
     try:
-        # ... (descompresión y decodificación del mensaje - igual que antes)
-        data = json.loads(decompressed_message)
+        try:
+            decompressed_message = gzip.decompress(message).decode('utf-8')
+            logging.debug("Mensaje descomprimido exitosamente.")
+        except (OSError, EOFError, zlib.error):
+            decompressed_message = message.decode('utf-8')
+            logging.debug("Mensaje NO comprimido, decodificado directamente.")
+
+        data = json.loads(decompressed_message)  # Ya se ha gestionado la descompresión
 
         if data.get('method') == 'state.update':
             server_time = data.get('serverTime')
@@ -188,7 +175,7 @@ def on_message(ws, message):
                         logging.debug(f"Actualizando vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}, precio: {last_price}")
 
                     # Eliminar velas antiguas si se excede el máximo
-                    while len(candles) > MAX_CANDLES: #usando while para evitar que se salteen velas en caso de que el reloj se atrase mucho
+                    while len(candles) > MAX_CANDLES:
                         oldest_candle = min(candles.keys())
                         del candles[oldest_candle]
                         logging.debug(f"Eliminando vela antigua con timestamp: {oldest_candle}")
@@ -200,11 +187,10 @@ def on_message(ws, message):
         else:
             logging.debug(f"Mensaje recibido (otro tipo): {message}")
 
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        logging.error(f"Error al procesar el mensaje: {e}. Mensaje original: {message!r}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as e: #Se unifican los errores de decodificación
+        logging.error(f"Error al procesar el mensaje: {e}. Mensaje original: {decompressed_message!r}") #Utilizamos decompressed_message si existe
     except Exception as e:
-        logging.error(f"Error inesperado en on_message: {e}")      
-      
+        logging.error(f"Error inesperado en on_message: {e}")
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
     try:
