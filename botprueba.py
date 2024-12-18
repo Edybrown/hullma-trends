@@ -239,9 +239,9 @@ def on_message(ws, message):
     except Exception as e:
         logging.error(f"Error inesperado en on_message: {e}")
 
-if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
-   logging.info("Iniciando bot...")
-    ws = conectar()
+if __name__ == "__main__":
+    logging.info("Iniciando bot...")
+    ws = conectar()  # Correcto: Indentado
     if ws is None:
         logging.error("Fallo la conexion inicial. Bot detenido.")
         os._exit(1)
@@ -249,12 +249,16 @@ if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
 
     try:
         while True:
-            ws.run_forever(ping_interval=30, ping_timeout=10) #Mantenemos la conexion en este loop y agregamos pings para evitar desconexiones por inactividad
-            ws = ws.on_close #Si se ejecuta on_close actualizamos el websocket
-            if ws == None:
-              logging.error("Fallo la reconexion. Bot detenido")
-              break
-            logging.info("Reconectando...")
+            if ws is None: #Si ws es none intentamos reconectar
+              ws = conectar()
+              if ws is None: #Si falla la reconexión cerramos el programa
+                logging.error("Fallo la reconexión. Bot detenido")
+                break
+              logging.info("Reconectando...")
+              continue #Continuamos a la siguiente iteracion del bucle para ejecutar ws.run_forever
+            ws.run_forever(ping_interval=30, ping_timeout=10)  # Llama a run_forever aqui dentro del bucle
+            ws = ws.on_close #Si se cierra la conexion on_close retorna un nuevo websocket o None
+            logging.info("Conexion cerrada, intentando reconectar")
     except KeyboardInterrupt:
         logging.info("Bot detenido por el usuario.")
         if ws:
