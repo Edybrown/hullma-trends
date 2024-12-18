@@ -121,7 +121,7 @@ def calculate_indicators(market, candles_list):
         df['rsi_fast'] = rsi_fast
         df['rsi_slow'] = rsi_slow
 
-        # HMA (con corrección en el cálculo de la WMA)
+        # HMA (con corrección en el cálculo de la WMA)  
 def hma(src, length):
     half_length = int(length / 2)
     sqrt_length = int(np.sqrt(length))
@@ -133,7 +133,7 @@ def hma(src, length):
     hma_result = 2 * wma1 - wma2
     return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
 
-        df['hma'] = hma(close_prices, 14)
+df['hma'] = hma(close_prices, 14)
 
         # GENERACIÓN DE SEÑALES (AHORA CORRECTAMENTE IMPLEMENTADA)
         df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
