@@ -108,43 +108,32 @@ def hma(src, length):
 
 
 def calculate_indicators(market, candles_list):
-    """Calcula RSI (rápido y lento) y HMA y genera señales.
-
-    Args:
-        market: El mercado (ej. "BTCUSDT").
-        candles_list: Lista de diccionarios de velas.
-
-    Returns:
-        DataFrame con indicadores y señales, o None si hay error.
-    """
-    if not candles_list or len(candles_list) < 25: # Necesito al menos 25 velas para HMA(24) + shift(1)
+    """Calcula RSI (rápido y lento) y HMA y genera señales."""
+    if not candles_list or len(candles_list) < 25:
         logging.warning(f"No hay suficientes datos para calcular indicadores en {market}")
         return None
 
-    try:
+    try:  # Inicio del bloque try
         df = pd.DataFrame(candles_list)
         df = df.set_index('timestamp')
         close_prices = df['close']
 
-        # RSI rápido y lento (con ventanas distintas)
         rsi_fast = RSIIndicator(close=close_prices, window=8).rsi()
         rsi_slow = RSIIndicator(close=close_prices, window=14).rsi()
         df['rsi_fast'] = rsi_fast
         df['rsi_slow'] = rsi_slow
 
-        # HMA (con corrección en el cálculo de la WMA)
+        df['hma'] = hma(close_prices, 14)  # Línea 137 (ahora bien indentada)
 
-    df['hma'] = hma(close_prices, 14)
+        df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
+        df['sell_signal'] = (df['rsi_fast'] < df['rsi_slow']) & (df['rsi_fast'].shift(1) >= df['rsi_slow'].shift(1)) & (df['close'] < df['hma'])
 
-        # GENERACIÓN DE SEÑALES (AHORA CORRECTAMENTE IMPLEMENTADA)
-    df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
-    df['sell_signal'] = (df['rsi_fast'] < df['rsi_slow']) & (df['rsi_fast'].shift(1) >= df['rsi_slow'].shift(1)) & (df['close'] < df['hma'])
+        logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
+        return df
 
-logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
-return df
- except Exception as e:
-logging.error(f"Error al calcular indicadores o señales: {e}")
-return None
+    except Exception as e:  # Bloque except (correctamente indentado al mismo nivel que el try)
+        logging.error(f"Error al calcular indicadores o señales: {e}")
+        return None
 
 def on_message(ws, message):
     try:
