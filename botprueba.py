@@ -121,9 +121,9 @@ def calculate_indicators(market, candles_list):
         df['rsi_slow'] = rsi_slow
 
         # HMA (con corrección en el cálculo de la WMA)
-       def hma(src, length):
-    half_length = int(length / 2)
-    sqrt_length = int(np.sqrt(length))
+    def hma(src, length):
+        half_length = int(length / 2)
+        sqrt_length = int(np.sqrt(length))
 
     # Cálculo CORRECTO de la WMA usando weights
     wma1 = src.rolling(half_length).apply(lambda x: np.average(x, weights=np.arange(1, half_length + 1)))
@@ -132,17 +132,17 @@ def calculate_indicators(market, candles_list):
     hma_result = 2 * wma1 - wma2
     return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
 
-        df['hma'] = hma(close_prices, 14)
+    df['hma'] = hma(close_prices, 14)
 
         # GENERACIÓN DE SEÑALES (AHORA CORRECTAMENTE IMPLEMENTADA)
-        df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
-        df['sell_signal'] = (df['rsi_fast'] < df['rsi_slow']) & (df['rsi_fast'].shift(1) >= df['rsi_slow'].shift(1)) & (df['close'] < df['hma'])
+    df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
+    df['sell_signal'] = (df['rsi_fast'] < df['rsi_slow']) & (df['rsi_fast'].shift(1) >= df['rsi_slow'].shift(1)) & (df['close'] < df['hma'])
 
-        logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
-        return df
-    except Exception as e:
-        logging.error(f"Error al calcular indicadores o señales: {e}")
-        return None
+logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
+return df
+ except Exception as e:
+logging.error(f"Error al calcular indicadores o señales: {e}")
+return None
 
 def on_message(ws, message):
     try:
