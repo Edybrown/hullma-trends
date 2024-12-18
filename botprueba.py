@@ -122,7 +122,7 @@ def calculate_indicators(market, candles_list):
         df['rsi_slow'] = rsi_slow
 
         # HMA (con corrección en el cálculo de la WMA)
-       def hma(src, length):
+def hma(src, length):
     half_length = int(length / 2)
     sqrt_length = int(np.sqrt(length))
 
