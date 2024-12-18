@@ -241,7 +241,7 @@ def on_message(ws, message):
         logging.error(f"Error inesperado en on_message: {e}")
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
-   logging.info("Iniciando bot...")
+    logging.info("Iniciando bot...")
     ws = conectar()
     if ws is None:
         logging.error("Fallo la conexion inicial. Bot detenido.")
