@@ -15,6 +15,7 @@ import numpy as np
 import threading
 import time
 from ta.momentum import RSIIndicator
+import random
 
 server_time_offset = 0  # Diferencia entre la hora local y la del servidor
 
@@ -35,6 +36,50 @@ console_handler.setLevel(logging.INFO) #Nivel para la consola
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 logging.getLogger('').addHandler(console_handler) #Añadir a la configuracion
+
+    try:
+        ws = websocket.WebSocketApp("wss://socket.coinex.com/v2/spot",
+                                    on_open=on_open,
+                                    on_message=on_message,
+                                    on_error=on_error,
+                                    on_close=on_close)
+        ws.run_forever() #Esta linea es la que se encarga de mantener la conexion
+        return ws #Retornamos el websocket
+    except Exception as e:
+        logging.error(f"Error al conectar: {e}")
+        return None
+
+def reconectar():
+    """Maneja la reconexión con retroceso exponencial y límite."""
+    attempts = 0
+    start_time = time.time()
+    while attempts < MAX_RETRIES and (time.time() - start_time) < MAX_WAIT_TIME:
+        attempts += 1
+        delay = (BASE_DELAY * (2 ** (attempts - 1))) + random.uniform(0, 1)  # Retroceso exponencial + jitter
+        logging.info(f"Intentando reconectar (intento {attempts}/{MAX_RETRIES}) en {delay:.2f} segundos...")
+        time.sleep(delay)
+        ws = conectar() #Intentamos conectar de nuevo
+        if ws: #Si la conexion es correcta
+            logging.info("Reconexión exitosa.")
+            return ws #Retornamos el nuevo websocket
+    
+    if attempts >= MAX_RETRIES:
+        logging.error(f"Número máximo de reintentos ({MAX_RETRIES}) alcanzado. No se pudo reconectar.")
+    elif (time.time() - start_time) >= MAX_WAIT_TIME:
+        logging.error(f"Tiempo máximo de espera ({MAX_WAIT_TIME} segundos) alcanzado. No se pudo reconectar.")
+    return None #Si no se pudo reconectar retornamos None
+
+def on_close(ws, close_status_code, close_msg):
+    logging.info(f"Conexión cerrada. Código: {close_status_code}, Mensaje: {close_msg}")
+    logging.info("Iniciando proceso de reconexión...")
+    new_ws = reconectar() #Intentamos reconectar y guardamos el nuevo websocket
+    if new_ws: #Si la reconexion fue exitosa
+        global ws #Hacemos que la variable ws sea global para poder modificarla
+        ws = new_ws #Asignamos el nuevo websocket a la variable global ws
+        logging.info("Reconexión completa. Bot continuando.")
+    else:
+        logging.error("Reconexión fallida. Bot detenido.")
+        os._exit(1) #Forzamos la detencion del bot
 
 def get_server_time(ws):
     global server_time_offset
@@ -195,12 +240,21 @@ def on_message(ws, message):
         logging.error(f"Error inesperado en on_message: {e}")
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
+   logging.info("Iniciando bot...")
+    ws = conectar()
+    if ws is None:
+        logging.error("Fallo la conexion inicial. Bot detenido.")
+        os._exit(1)
+    logging.info("Bot en funcionamiento.")
     try:
-        ws = websocket.WebSocketApp("wss://socket.coinex.com/v2/spot",
-                                  on_open=on_open,
-                                  on_message=on_message,
-                                  on_error=on_error,
-                                  on_close=on_close)
-        ws.run_forever()
+        while True:
+            time.sleep(1)
+            #Aqui se puede agregar codigo para que el bot haga otras tareas
+    except KeyboardInterrupt:
+        logging.info("Bot detenido por el usuario.")
+        ws.close()
+        sys.exit()
     except Exception as e:
-        logging.critical(f"Error crítico al iniciar el bot: {e}") #Error critico que detiene la app
+        logging.critical(f"Error critico en el loop principal del bot: {e}")
+        ws.close()
+        sys.exit()
