@@ -38,38 +38,35 @@ console_handler.setFormatter(formatter)
 logging.getLogger('').addHandler(console_handler) #Añadir a la configuracion
 
 def conectar():
+    """Conecta al servidor WebSocket y retorna el objeto WebSocket."""
     try:
-        ws = websocket.WebSocketApp("wss://socket.coinex.com/v2/spot",
-                                    on_open=on_open,
-                                    on_message=on_message,
-                                    on_error=on_error,
-                                    on_close=on_close)
-        ws.run_forever() #Esta linea es la que se encarga de mantener la conexion
-        return ws #Retornamos el websocket
+        ws = websocket.WebSocketApp(
+            "wss://socket.coinex.com/v2/spot",
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+        )
+        return ws #Retornamos el objeto ws sin ejecutar run_forever aqui
     except Exception as e:
         logging.error(f"Error al conectar: {e}")
         return None
 
-def reconectar():
+def reconectar(max_retries=MAX_RETRIES, base_delay=BASE_DELAY, max_wait_time=MAX_WAIT_TIME):
     """Maneja la reconexión con retroceso exponencial y límite."""
     attempts = 0
     start_time = time.time()
-    while attempts < MAX_RETRIES and (time.time() - start_time) < MAX_WAIT_TIME:
+    while attempts < max_retries and (time.time() - start_time) < max_wait_time:
         attempts += 1
-        delay = (BASE_DELAY * (2 ** (attempts - 1))) + random.uniform(0, 1)  # Retroceso exponencial + jitter
-        logging.info(f"Intentando reconectar (intento {attempts}/{MAX_RETRIES}) en {delay:.2f} segundos...")
+        delay = (base_delay * (2 ** (attempts - 1))) + random.uniform(0, 1)
+        logging.info(f"Intentando reconectar (intento {attempts}/{max_retries}) en {delay:.2f} segundos...")
         time.sleep(delay)
-        ws = conectar() #Intentamos conectar de nuevo
-        if ws: #Si la conexion es correcta
+        ws_nuevo = conectar() #Intentamos conectar de nuevo
+        if ws_nuevo:
             logging.info("Reconexión exitosa.")
-            return ws #Retornamos el nuevo websocket
-    
-    if attempts >= MAX_RETRIES:
-        logging.error(f"Número máximo de reintentos ({MAX_RETRIES}) alcanzado. No se pudo reconectar.")
-    elif (time.time() - start_time) >= MAX_WAIT_TIME:
-        logging.error(f"Tiempo máximo de espera ({MAX_WAIT_TIME} segundos) alcanzado. No se pudo reconectar.")
-    return None #Si no se pudo reconectar retornamos None
-
+            return ws_nuevo
+    logging.error(f"Número máximo de reintentos ({max_retries}) alcanzado. No se pudo reconectar.")
+    return None
 def on_close(ws, close_status_code, close_msg):
     logging.info(f"Conexión cerrada. Código: {close_status_code}, Mensaje: {close_msg}")
     logging.info("Iniciando proceso de reconexión...")
@@ -99,7 +96,7 @@ def on_open(ws):
     subscription_message = {
         "method": "state.subscribe",
         "params": {"market_list": ["BTCUSDT"]},
-        "id": 1
+        "id": 1,
     }
     try:
         ws.send(json.dumps(subscription_message))
@@ -112,6 +109,8 @@ def on_error(ws, error):
 
 def on_close(ws, close_status_code, close_msg):
     logging.info(f"Conexión WebSocket cerrada. Código: {close_status_code}, Mensaje: {close_msg}")
+    logging.info("Iniciando proceso de reconexión...")
+    return reconectar() #Retornamos el nuevo websocket
 
 def on_message(ws, message):
     try:
@@ -241,21 +240,28 @@ def on_message(ws, message):
         logging.error(f"Error inesperado en on_message: {e}")
 
 if __name__ == "__main__": #Para que solo se ejecute esto al correr el script
-    logging.info("Iniciando bot...")
+   logging.info("Iniciando bot...")
     ws = conectar()
     if ws is None:
         logging.error("Fallo la conexion inicial. Bot detenido.")
         os._exit(1)
     logging.info("Bot en funcionamiento.")
+
     try:
         while True:
-            time.sleep(1)
-            #Aqui se puede agregar codigo para que el bot haga otras tareas
+            ws.run_forever(ping_interval=30, ping_timeout=10) #Mantenemos la conexion en este loop y agregamos pings para evitar desconexiones por inactividad
+            ws = ws.on_close #Si se ejecuta on_close actualizamos el websocket
+            if ws == None:
+              logging.error("Fallo la reconexion. Bot detenido")
+              break
+            logging.info("Reconectando...")
     except KeyboardInterrupt:
         logging.info("Bot detenido por el usuario.")
-        ws.close()
+        if ws:
+            ws.close()
         sys.exit()
     except Exception as e:
         logging.critical(f"Error critico en el loop principal del bot: {e}")
-        ws.close()
+        if ws:
+            ws.close()
         sys.exit()
