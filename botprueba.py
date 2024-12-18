@@ -37,6 +37,7 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 logging.getLogger('').addHandler(console_handler) #Añadir a la configuracion
 
+def conectar():
     try:
         ws = websocket.WebSocketApp("wss://socket.coinex.com/v2/spot",
                                     on_open=on_open,
