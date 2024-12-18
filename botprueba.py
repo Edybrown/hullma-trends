@@ -100,11 +100,11 @@ def hma(src, length):
         sqrt_length = int(np.sqrt(length))
 
     # Cálculo CORRECTO de la WMA usando weights
-    wma1 = src.rolling(half_length).apply(lambda x: np.average(x, weights=np.arange(1, half_length + 1)))
-    wma2 = src.rolling(length).apply(lambda x: np.average(x, weights=np.arange(1, length + 1)))
+        wma1 = src.rolling(half_length).apply(lambda x: np.average(x, weights=np.arange(1, half_length + 1)))
+        wma2 = src.rolling(length).apply(lambda x: np.average(x, weights=np.arange(1, length + 1)))
 
-    hma_result = 2 * wma1 - wma2
-    return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
+        hma_result = 2 * wma1 - wma2
+        return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
 
 
 def calculate_indicators(market, candles_list):
