@@ -139,9 +139,7 @@ def on_close(close_status_code, close_msg): #ws ya no es un parametro
     if ws is None:
         logging.error("Reconexión fallida. Bot detenido.")
         os._exit(1)
-    else:
-        logging.info("Reconexión completada")
-      
+  
 def get_server_time(ws):
     global server_time_offset
     try:
