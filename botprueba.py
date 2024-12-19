@@ -321,7 +321,7 @@ if __name__ == "__main__":
     limite_inicial = 200
 
     df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
-     if df_historico is not None and not df_historico.empty:
+    if df_historico is not None and not df_historico.empty:
         logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
         logging.debug(df_historico)
 
