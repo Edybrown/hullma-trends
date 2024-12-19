@@ -314,7 +314,7 @@ if __name__ == "__main__":
     if ws is None:
         logging.error("Fallo la conexión inicial. Bot detenido.")
         sys.exit(1)
-df_historico = obtener_historico(market="BTCUSDT", tipo_vela="1m", limite=200) #Obtenemos los datos historicos ANTES del bucle principal
+   df_historico = obtener_historico(market="BTCUSDT", tipo_vela="1m", limite=200) #Obtenemos los datos historicos ANTES del bucle principal
     if df_historico is not None:
         print("Datos históricos iniciales:")
         print(df_historico)
@@ -326,6 +326,8 @@ df_historico = obtener_historico(market="BTCUSDT", tipo_vela="1m", limite=200) #
     else:
         logging.error("No se pudieron obtener los datos históricos iniciales. El bot continuará sin ellos.")       
 
+
+  
     logging.info("Bot en funcionamiento.")
 
     try:
