@@ -68,17 +68,7 @@ def obtener_historico(market, tipo_vela, limite=200):
     except (KeyError, TypeError) as e:
         logging.error(f"Error al procesar la respuesta JSON: {e}. Respuesta: {data}")
         return None
-if df_historico is not None:
-    print(df_historico)
-    #Ahora puedes trabajar con tu dataframe
-    #Por ejemplo calcular indicadores
-    #RSI
-    from ta.momentum import RSIIndicator
-    rsi = RSIIndicator(df_historico['close'], window=14).rsi()
-    df_historico['rsi'] = rsi
-    print(df_historico)
-else:
-    logging.error("No se pudieron obtener los datos históricos.")
+
 def construir_velas_10min(df_5min):
     """Construye velas de 10 minutos a partir de velas de 5 minutos."""
     if df_5min is None or df_5min.empty:
