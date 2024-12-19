@@ -314,41 +314,50 @@ if __name__ == "__main__":
     if ws is None:
         logging.error("Fallo la conexión inicial. Bot detenido.")
         sys.exit(1)
-    df_historico = obtener_historico(market="BTCUSDT", tipo_vela="1m", limite=200) #Obtenemos los datos historicos ANTES del bucle principal
-   
+
+    # *** BLOQUE MOVIDO Y MEJORADO (FUERA DEL BUCLE) ***
+    market_inicial = "BTCUSDT"
+    tipo_vela_inicial = "1m"
+    limite_inicial = 200
+
+    df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
+
     if df_historico is not None:
-        print("Datos históricos iniciales:")
-        print(df_historico)
-        #Calculamos indicadores iniciales
-        from ta.momentum import RSIIndicator
-        rsi = RSIIndicator(df_historico['close'], window=14).rsi()
-        df_historico['rsi'] = rsi
-        print(df_historico)
+        logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
+        logging.debug(df_historico)
+
+        try:
+            from ta.momentum import RSIIndicator
+            rsi = RSIIndicator(df_historico['close'], window=14).rsi()
+            df_historico['rsi'] = rsi
+            logging.debug("RSI calculado:")
+            logging.debug(df_historico)
+        except Exception as e:
+            logging.error(f"Error al calcular el RSI inicial: {e}")
     else:
-        logging.error("No se pudieron obtener los datos históricos iniciales. El bot continuará sin ellos.")       
+        logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}). El bot continuará sin datos históricos iniciales.")
+    # *** FIN DEL BLOQUE MOVIDO ***
 
-
-  
     logging.info("Bot en funcionamiento.")
 
     try:
-        while True:
+        while True:  # Bucle principal
             if ws is None:
                 logging.info("Intentando reconectar...")
                 ws = conectar()
                 if ws is None:
                     logging.error("Reconexión fallida. Esperando 5 segundos...")
-                    time.sleep(5)  # Espera antes de reintentar
-                    continue  # Vuelve al inicio del bucle para reintentar la conexión
+                    time.sleep(5)
+                    continue
 
             try:
-                ws.run_forever(ping_interval=30, ping_timeout=10)  # Llama a run_forever aquí
+                ws.run_forever(ping_interval=30, ping_timeout=10)
                 logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
-                ws = None #Reseteamos ws a None para que entre en el if ws is None
+                ws = None  # Reseteamos ws a None para que entre en el if ws is None
             except Exception as e:
                 logging.error(f"Error en run_forever: {e}")
-                ws = None #Reseteamos ws a None para que entre en el if ws is None
-                time.sleep(5) # Espera antes de reintentar
+                ws = None  # Reseteamos ws a None para que entre en el if ws is None
+                time.sleep(5)
                 continue
 
     except KeyboardInterrupt:
