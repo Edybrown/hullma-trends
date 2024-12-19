@@ -314,6 +314,17 @@ if __name__ == "__main__":
     if ws is None:
         logging.error("Fallo la conexión inicial. Bot detenido.")
         sys.exit(1)
+df_historico = obtener_historico(market="BTCUSDT", tipo_vela="1m", limite=200) #Obtenemos los datos historicos ANTES del bucle principal
+    if df_historico is not None:
+        print("Datos históricos iniciales:")
+        print(df_historico)
+        #Calculamos indicadores iniciales
+        from ta.momentum import RSIIndicator
+        rsi = RSIIndicator(df_historico['close'], window=14).rsi()
+        df_historico['rsi'] = rsi
+        print(df_historico)
+    else:
+        logging.error("No se pudieron obtener los datos históricos iniciales. El bot continuará sin ellos.")       
 
     logging.info("Bot en funcionamiento.")
 
