@@ -321,23 +321,27 @@ if __name__ == "__main__":
     limite_inicial = 200
 
     df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
-
-    if df_historico is not None:
+     if df_historico is not None and not df_historico.empty:
         logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
         logging.debug(df_historico)
 
         try:
-            from ta.momentum import RSIIndicator
             rsi = RSIIndicator(df_historico['close'], window=14).rsi()
             df_historico['rsi'] = rsi
             logging.debug("RSI calculado:")
             logging.debug(df_historico)
+        except KeyError as e:
+            logging.error(f"Error de KeyError al calcular RSI: {e}. Asegúrate de que la columna 'close' existe en el DataFrame.")
+            logging.debug(df_historico)
         except Exception as e:
             logging.error(f"Error al calcular el RSI inicial: {e}")
+            logging.debug(df_historico)
     else:
-        logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}). El bot continuará sin datos históricos iniciales.")
-    # *** FIN DEL BLOQUE MOVIDO ***
-
+        if df_historico is None:
+            logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}).")
+        elif df_historico.empty:
+            logging.error(f"Se obtuvieron datos históricos de {market_inicial} ({tipo_vela_inicial}), pero el DataFrame está vacío.")
+        logging.error("El bot continuará sin datos históricos iniciales.")
     logging.info("Bot en funcionamiento.")
 
     try:
