@@ -246,51 +246,47 @@ def on_message(ws, message):
     except Exception as e:
         logging.error(f"Error inesperado en on_message: {e}")
 
-MAX_RETRIES = 5
-MAX_WAIT_TIME = 60
-BASE_DELAY = 2
 
-ws = None #Declaramos ws como global aqui
-
-def conectar():
-    """Conecta al servidor WebSocket."""
-    try:
-        ws_nuevo = websocket.WebSocketApp(
-            "wss://socket.coinex.com/v2/spot",
-            on_open=on_open,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close,
-        )
-        return ws_nuevo
-    except Exception as e:
-        logging.error(f"Error al conectar: {e}")
-        return None
-
-def reconectar(max_retries=MAX_RETRIES, base_delay=BASE_DELAY, max_wait_time=MAX_WAIT_TIME):
-    """Maneja la reconexión."""
-    attempts = 0
-    start_time = time.time()
-    while attempts < max_retries and (time.time() - start_time) < max_wait_time:
-        attempts += 1
-        delay = (base_delay * (2 ** (attempts - 1))) + random.uniform(0, 1)
-        logging.info(f"Intentando reconectar (intento {attempts}/{max_retries}) en {delay:.2f} segundos...")
-        time.sleep(delay)
-        ws_nuevo = conectar()
-        if ws_nuevo:
-            logging.info("Reconexión exitosa.")
-            return ws_nuevo
-    logging.error(f"Número máximo de reintentos ({max_retries}) alcanzado. No se pudo reconectar.")
-    return None
-
-def on_close(close_status_code, close_msg): #ws ya no es un parametro
-    """Maneja el cierre de la conexión."""
-    logging.info(f"Conexión WebSocket cerrada. Código: {close_status_code}, Mensaje: {close_msg}")
-    logging.info("Iniciando proceso de reconexión...")
-    global ws  # Declaración global DENTRO de on_close
-    ws = reconectar()
-    if ws is None:
-        logging.error("Reconexión fallida. Bot detenido.")
-        os._exit(1)
     else:
         logging.info("Reconexión completada")
+if __name__ == "__main__":
+    logging.info("Iniciando bot...")
+    ws = conectar()
+
+    if ws is None:
+        logging.error("Fallo la conexión inicial. Bot detenido.")
+        sys.exit(1)
+
+    logging.info("Bot en funcionamiento.")
+
+    try:
+        while True:
+            if ws is None:
+                logging.info("Intentando reconectar...")
+                ws = conectar()
+                if ws is None:
+                    logging.error("Reconexión fallida. Esperando 5 segundos...")
+                    time.sleep(5)  # Espera antes de reintentar
+                    continue  # Vuelve al inicio del bucle para reintentar la conexión
+
+            try:
+                ws.run_forever(ping_interval=30, ping_timeout=10)  # Llama a run_forever aquí
+                logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
+                ws = None #Reseteamos ws a None para que entre en el if ws is None
+            except Exception as e:
+                logging.error(f"Error en run_forever: {e}")
+                ws = None #Reseteamos ws a None para que entre en el if ws is None
+                time.sleep(5) # Espera antes de reintentar
+                continue
+
+    except KeyboardInterrupt:
+        logging.info("Bot detenido por el usuario.")
+        if ws:
+            ws.close()
+        sys.exit()
+
+    except Exception as e:
+        logging.critical(f"Error crítico en el bucle principal del bot: {e}")
+        if ws:
+            ws.close()
+        sys.exit(1)
