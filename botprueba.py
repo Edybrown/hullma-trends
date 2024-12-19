@@ -43,6 +43,62 @@ BASE_DELAY = 2
 
 ws = None #Declaramos ws como global aqui
 
+def obtener_historico(market, tipo_vela, limite=200):
+    """Obtiene datos históricos de CoinEx usando la API REST."""
+    url = f"https://api.coinex.com/v1/market/kline?market={market}&type={tipo_vela}&limit={limite}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP (4xx o 5xx)
+        data = response.json()
+
+        if data['code'] == 0:
+            kline_data = data['data']
+            # Convertir a DataFrame de pandas para facilitar el manejo
+            df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
+            df['time'] = pd.to_datetime(df['time'], unit='s') #Convertimos el tiempo a datetime
+            df[['open', 'close', 'high', 'low', 'volume']] = df[['open', 'close', 'high', 'low', 'volume']].astype(float)
+            df = df.set_index('time')
+            return df
+        else:
+          logging.error(f"Error al obtener datos históricos: {data['message']}")
+          return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error en la solicitud HTTP: {e}")
+        return None
+    except (KeyError, TypeError) as e:
+        logging.error(f"Error al procesar la respuesta JSON: {e}. Respuesta: {data}")
+        return None
+if df_historico is not None:
+    print(df_historico)
+    #Ahora puedes trabajar con tu dataframe
+    #Por ejemplo calcular indicadores
+    #RSI
+    from ta.momentum import RSIIndicator
+    rsi = RSIIndicator(df_historico['close'], window=14).rsi()
+    df_historico['rsi'] = rsi
+    print(df_historico)
+else:
+    logging.error("No se pudieron obtener los datos históricos.")
+def construir_velas_10min(df_5min):
+    """Construye velas de 10 minutos a partir de velas de 5 minutos."""
+    if df_5min is None or df_5min.empty:
+        logging.warning("DataFrame de 5 minutos vacío. No se pueden construir velas de 10 minutos.")
+        return pd.DataFrame()
+
+    try:
+        df_10min = df_5min.resample('10T').agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        })
+        df_10min = df_10min.dropna() #Eliminamos las filas con valores nulos que se crean al resamplear
+        return df_10min
+    except Exception as e:
+        logging.error(f"Error al construir velas de 10 minutos: {e}")
+        return pd.DataFrame()  
+
 def conectar():
     """Conecta al servidor WebSocket."""
     try:
@@ -159,35 +215,33 @@ def hma(src, length):
         return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
 
 
-def calculate_indicators(market, candles_list):
-    """Calcula RSI (rápido y lento) y HMA y genera señales."""
-    if not candles_list or len(candles_list) < 25:
+
+def calcular_indicadores(market, df_10min):
+    """Calcula RSI y HMA y genera señales."""
+    if df_10min is None or len(df_10min) < 25:
         logging.warning(f"No hay suficientes datos para calcular indicadores en {market}")
         return None
 
-    try:  # Inicio del bloque try
-        df = pd.DataFrame(candles_list)
-        df = df.set_index('timestamp')
-        close_prices = df['close']
-
+    try:
+        close_prices = df_10min['close']
         rsi_fast = RSIIndicator(close=close_prices, window=8).rsi()
         rsi_slow = RSIIndicator(close=close_prices, window=14).rsi()
-        df['rsi_fast'] = rsi_fast
-        df['rsi_slow'] = rsi_slow
+        df_10min['rsi_fast'] = rsi_fast
+        df_10min['rsi_slow'] = rsi_slow
+        df_10min['hma'] = hma(close_prices, 14)
 
-        df['hma'] = hma(close_prices, 14)  # Línea 137 (ahora bien indentada)
-
-        df['buy_signal'] = (df['rsi_fast'] > df['rsi_slow']) & (df['rsi_fast'].shift(1) <= df['rsi_slow'].shift(1)) & (df['close'] > df['hma'])
-        df['sell_signal'] = (df['rsi_fast'] < df['rsi_slow']) & (df['rsi_fast'].shift(1) >= df['rsi_slow'].shift(1)) & (df['close'] < df['hma'])
+        df_10min['buy_signal'] = (df_10min['rsi_fast'] > df_10min['rsi_slow']) & (df_10min['rsi_fast'].shift(1) <= df_10min['rsi_slow'].shift(1)) & (df_10min['close'] > df_10min['hma'])
+        df_10min['sell_signal'] = (df_10min['rsi_fast'] < df_10min['rsi_slow']) & (df_10min['rsi_fast'].shift(1) >= df_10min['rsi_slow'].shift(1)) & (df_10min['close'] < df_10min['hma'])
 
         logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
-        return df
+        return df_10min
 
-    except Exception as e:  # Bloque except (correctamente indentado al mismo nivel que el try)
+    except Exception as e:
         logging.error(f"Error al calcular indicadores o señales: {e}")
         return None
 
 def on_message(ws, message):
+    """Procesa los mensajes recibidos del WebSocket."""
     try:
         try:
             decompressed_message = gzip.decompress(message).decode('utf-8')
@@ -220,7 +274,6 @@ def on_message(ws, message):
                             'close': last_price,
                             'volume': volume
                         }
-                        threading.Timer(600, calculate_indicators, args=[market, list(candles.values())]).start()
                         logging.info(f"Creando nueva vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}")
                     else:
                         candles[minute10_timestamp]['close'] = last_price
@@ -228,13 +281,22 @@ def on_message(ws, message):
                         candles[minute10_timestamp]['low'] = min(candles[minute10_timestamp]['low'], last_price)
                         candles[minute10_timestamp]['volume'] += volume
                         logging.debug(f"Actualizando vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}, precio: {last_price}")
-
-                while len(candles) > MAX_CANDLES:
-                    oldest_candle = min(candles.keys())
-                    del candles[oldest_candle]
-                    logging.debug(f"Eliminando vela antigua con timestamp: {oldest_candle}")
+                    #Calculamos los indicadores despues de actualizar la vela
+                    df_candles = pd.DataFrame.from_dict(candles, orient='index')
+                    df_candles = df_candles.set_index('timestamp')
+                    df_con_indicadores = calcular_indicadores(market, df_candles)
+                    if df_con_indicadores is not None:
+                        print("Datos con indicadores:")
+                        print(df_con_indicadores)
+                    else:
+                        logging.warning("No se pudieron calcular los indicadores")
             else:
-                logging.warning("La lista de estados esta vacia")
+                logging.warning("La lista de estados está vacía")
+
+            while len(candles) > MAX_CANDLES:
+                oldest_candle = min(candles.keys())
+                del candles[oldest_candle]
+                logging.debug(f"Eliminando vela antigua con timestamp: {oldest_candle}")
 
         elif data.get('error'):
             logging.error(f"Error del servidor: {data.get('error')}")
@@ -246,9 +308,7 @@ def on_message(ws, message):
     except Exception as e:
         logging.error(f"Error inesperado en on_message: {e}")
 
-
-    else:
-        logging.info("Reconexión completada")
+  
 if __name__ == "__main__":
     logging.info("Iniciando bot...")
     ws = conectar()
