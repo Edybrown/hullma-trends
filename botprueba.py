@@ -45,14 +45,15 @@ BASE_DELAY = 2
 ws = None #Declaramos ws como global aqui
 
 
-def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
-    base_url ="https://api.coinex.com/v2/spot/kline" 
+def obtener_historico(market, period, limit=200):
+    """Obtiene datos históricos de la API y los convierte a un DataFrame con valores numéricos."""
+    base_url = "https://api.coinex.com/v2/spot/kline"
     params = {
-        "market": "BTCUSDT",
-        "period": "5min",
-        "limit": 300
+        "market": market,
+        "period": period,
+        "limit": limit
     }
-    url = urljoin(base_url, "?" + urlencode(params)) #Construye la url de forma segura
+    url = urljoin(base_url, "?" + urlencode(params))  # Construye la URL de forma segura
     logging.debug(f"URL de la solicitud: {url}")
     try:
         response = requests.get(url)
@@ -61,60 +62,31 @@ def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
         if data['code'] == 0:
             kline_data = data['data']
             df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-        # ... (resto del procesamiento del DataFrame, como convertir tipos de datos, etc.)
-            return df  # Devuelve el DataFrame procesado
+            
+            # Convertir columnas relevantes a float
+            columnas_a_convertir = ['open', 'close', 'high', 'low', 'volume']
+            for col in columnas_a_convertir:
+                df[col] = pd.to_numeric(df[col], errors='coerce')  # Convierte a float, reemplaza errores con NaN
+            
+            # Eliminar filas con valores NaN tras la conversión
+            df = df.dropna()
+            
+            # Convertir la columna 'time' a tipo datetime si es necesario
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+
+            logging.info("Datos históricos obtenidos y procesados correctamente.")
+            return df
         else:
             logging.error(f"Error al obtener datos históricos: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
             return None
     except requests.exceptions.HTTPError as e:
         logging.error(f"Error HTTP: {e}")
-        if e.response is not None:
-            logging.error(f"Código de estado: {e.response.status_code}")
-            try:
-                error_data = e.response.json()
-                logging.error(f"Detalles del error: {error_data}")
-            except json.JSONDecodeError:
-                logging.error(f"Texto de la respuesta: {e.response.text}")
         return None
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud: {e}")
         return None
-    except (KeyError, TypeError) as e:
-        logging.error(f"Error al procesar la respuesta JSON: {e}")
-        return (None)
-        response.raise_for_status()
-        data = response.json()
-        if data["code"] != 0:
-            logging.error(f"Error al obtener datos históricos: {data['message']}")
-            return None
-
-        # CONVERSIÓN INMEDIATA A FLOAT: Convertimos los precios a float *aquí mismo*
-        klines = []
-        for kline_data in data["data"]:
-            try:
-                kline = {
-                    "market": kline_data["market"],
-                    "created_at": kline_data["created_at"],
-                    "open": float(kline_data["open"]),
-                    "close": float(kline_data["close"]),
-                    "high": float(kline_data["high"]),
-                    "low": float(kline_data["low"]),
-                    "volume": float(kline_data["volume"]),
-                    "value": float(kline_data["value"])
-                }
-                klines.append(kline)
-            except ValueError as e:
-                logging.error(f"Error al convertir datos a float en datos históricos: {e}. Datos: {kline_data}")
-                return None
-        df = pd.DataFrame(klines)
-        return df
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"Error de conversión numérica en calcular_indicadores: {e}")
-        print(f"Error de conversión numérica en calcular_indicadores: {e}") # Imprime el error para depuración
-        return None
-    except json.JSONDecodeError as e:
-        logging.error(f"Error al calcular indicadores o señales: {e}")
-        print(f"Error al calcular indicadores o señales: {e}") # Imprime el error para depuración
+    except Exception as e:
+        logging.error(f"Error al procesar datos históricos: {e}")
         return None
 
 def procesar_datos_iniciales(market, period, limit=25):
