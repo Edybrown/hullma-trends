@@ -74,12 +74,27 @@ def obtener_historico(market, period, limit=200):
         df = pd.DataFrame(klines)
         return df
     except requests.exceptions.HTTPError as e:
-        # ... (manejo de excepciones HTTP sin cambios)
+        logging.error(f"Error de conversión numérica en calcular_indicadores: {e}")
+        print(f"Error de conversión numérica en calcular_indicadores: {e}") # Imprime el error para depuración
+        return None
     except json.JSONDecodeError as e:
-        # ... (manejo de excepciones JSON sin cambios)
-    except Exception as e:
-        # ... (manejo de excepciones generales sin cambios)
+        logging.error(f"Error al calcular indicadores o señales: {e}")
+        print(f"Error al calcular indicadores o señales: {e}") # Imprime el error para depuración
+        return None
 
+def procesar_datos_iniciales(market, period, limit=25):
+    df_inicial = obtener_historico(market, period, limit)
+    if df_inicial is None:
+        logging.error(f"Error al obtener datos históricos iniciales para {market}")
+        return None
+
+    # Imprime el DataFrame *antes* de la conversión y *después* de obtenerlo de la API
+    print("DataFrame inicial ANTES de la conversión:")
+    print(df_inicial)
+    print(df_inicial.dtypes) #Imprime los tipos de datos
+
+    df_con_indicadores = calcular_indicadores(market, df_inicial.copy()) # Pasamos una copia para no modificar el original directamente
+    return df_con_indicadores
 
 def construir_velas_10min(df_5min):
     """Construye velas de 10 minutos a partir de velas de 5 minutos."""
