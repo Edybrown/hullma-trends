@@ -48,7 +48,7 @@ def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
     base_url ="https://api.coinex.com/v2/spot/kline" 
     params = {
         "market": market,
-        "period": period,
+        "type": period,
         "limit": limit
     }
     url = urljoin(base_url, "?" + urlencode(params)) #Construye la url de forma segura
