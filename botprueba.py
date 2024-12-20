@@ -46,48 +46,56 @@ ws = None #Declaramos ws como global aqui
 
 
 def obtener_historico(market, period, limit=200):
-    """Obtiene datos históricos de la API y los convierte a un DataFrame con valores numéricos."""
+    """Obtiene datos históricos de la API y los convierte a un DataFrame."""
     base_url = "https://api.coinex.com/v2/spot/kline"
     params = {
-        "market":"BTCUSDT",
+        "market": "BTCUSDT", # Usar el parámetro market
         "period": "5min",
         "limit": 200
     }
-    url = urljoin(base_url, "?" + urlencode(params))  # Construye la URL de forma segura
+    url = urljoin(base_url, "?" + urlencode(params))
     logging.debug(f"URL de la solicitud: {url}")
+
     try:
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        if data['code'] == 0:
-            kline_data = data['data']
-            df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-            
-            # Convertir columnas relevantes a float
-            columnas_a_convertir = ['open', 'close', 'high', 'low', 'volume']
-            for col in columnas_a_convertir:
-                df[col] = pd.to_numeric(df[col], errors='coerce')  # Convierte a float, reemplaza errores con NaN
-            
-            # Eliminar filas con valores NaN tras la conversión
-            df = df.dropna()
-            
-            # Convertir la columna 'time' a tipo datetime si es necesario
-            df['time'] = pd.to_datetime(df['time'], unit='s')
 
+        if data['code'] == 0:
+            klines = []
+            for kline_data in data['data']:
+                try:
+                    # CONVERSIÓN A FLOAT Y MANEJO DE ERRORES *ANTES* DE CREAR EL DATAFRAME
+                    kline = {
+                        'created_at': pd.to_datetime(kline_data['created_at'], unit='ms'), # Convertir a datetime directamente
+                        'open': float(kline_data['open']),
+                        'close': float(kline_data['close']),
+                        'high': float(kline_data['high']),
+                        'low': float(kline_data['low']),
+                        'volume': float(kline_data['volume']),
+                        'value': float(kline_data['value'])
+                    }
+                    klines.append(kline)
+                except (ValueError, TypeError) as e:
+                    logging.error(f"Error al convertir datos: {e}. Datos: {kline_data}")
+                    return pd.DataFrame() # Retornar un DataFrame vacío en caso de error
+            
+            df = pd.DataFrame(klines)
+            df = df.set_index('created_at') # Establecer 'created_at' como índice
             logging.info("Datos históricos obtenidos y procesados correctamente.")
             return df
         else:
             logging.error(f"Error al obtener datos históricos: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
-            return None
+            return pd.DataFrame() # Retornar un DataFrame vacío en caso de error
     except requests.exceptions.HTTPError as e:
         logging.error(f"Error HTTP: {e}")
-        return None
+        return pd.DataFrame() # Retornar un DataFrame vacío en caso de error
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud: {e}")
-        return None
+        return pd.DataFrame() # Retornar un DataFrame vacío en caso de error
     except Exception as e:
         logging.error(f"Error al procesar datos históricos: {e}")
-        return None
+        return pd.DataFrame() # Retornar un DataFrame vacío en caso de error
 
 def procesar_datos_iniciales(market, period, limit=25):
     df_inicial = obtener_historico(market, period, limit)
@@ -392,66 +400,72 @@ if __name__ == "__main__":
         logging.error("Fallo la conexión inicial. Bot detenido.")
         sys.exit(1)
 
-    # *** BLOQUE MOVIDO Y MEJORADO (FUERA DEL BUCLE) ***
+    logging.info("Conexión WebSocket establecida. Obteniendo datos históricos iniciales...")
+
+    # *** BLOQUE PARA OBTENER DATOS HISTÓRICOS Y CALCULAR RSI (UBICACIÓN CORRECTA) ***
     market_inicial = "BTCUSDT"
-    tipo_vela_inicial = "1m"
+    tipo_vela_inicial = "5m"
     limite_inicial = 200
 
-df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
+    df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
 
-if df_historico is not None and not df_historico.empty:
-    logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
-    logging.debug(df_historico)
+    if not df_historico.empty:  # Verificar si el DataFrame NO está vacío
+        logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
+        print("DataFrame inicial:")
+        print(df_historico)
+        print(df_historico.dtypes)
+
+        try:
+            rsi = RSIIndicator(df_historico['close'], window=14).rsi()
+            df_historico['rsi'] = rsi
+            print("DataFrame con RSI:")
+            print(df_historico)
+            print(df_historico.dtypes)
+        except KeyError as e:
+            logging.error(f"Error de KeyError al calcular RSI: {e}. Asegúrate de que la columna 'close' existe en el DataFrame.")
+            print(df_historico)
+            print(df_historico.dtypes)
+        except Exception as e:
+            logging.error(f"Error al calcular el RSI inicial: {e}")
+            print(df_historico)
+            print(df_historico.dtypes)
+    else:
+        logging.error(f"No se pudieron obtener datos históricos válidos de {market_inicial} ({tipo_vela_inicial}). DataFrame vacío.")
+        # Decidir si continuar o detener el bot si no hay datos históricos iniciales
+        # Por ejemplo, puedes detener el bot:
+        # sys.exit(1)
+        logging.warning("El bot continuará sin datos históricos iniciales.") #O continuar pero con la advertencia
+
+    logging.info("Bot en funcionamiento. Iniciando bucle principal...") #Mensaje más descriptivo
 
     try:
-        rsi = RSIIndicator(df_historico['close'], window=14).rsi()
-        df_historico['rsi'] = rsi
-        logging.debug("RSI calculado:")
-        logging.debug(df_historico)
-    except KeyError as e:
-        logging.error(f"Error de KeyError al calcular RSI: {e}. Asegúrate de que la columna 'close' existe en el DataFrame.")
-        logging.debug(df_historico)
-    except Exception as e:
-        logging.error(f"Error al calcular el RSI inicial: {e}")
-        logging.debug(df_historico)
-
-else:  # Este else corresponde al primer if
-    if df_historico is None:
-        logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}).")
-    elif df_historico.empty:
-        logging.error(f"Se obtuvieron datos históricos de {market_inicial} ({tipo_vela_inicial}), pero el DataFrame está vacío.")
-    logging.error("El bot continuará sin datos históricos iniciales.")
-
-logging.info("Bot en funcionamiento.") #Esto está fuera del if/else
-
-try:
-    while True:  # Bucle principal
-        if ws is None:
-            logging.info("Intentando reconectar...")
-            ws = conectar()
+        while True:  # Bucle principal
             if ws is None:
-                logging.error("Reconexión fallida. Esperando 5 segundos...")
+                logging.info("Intentando reconectar...")
+                ws = conectar()
+                if ws is None:
+                    logging.error("Reconexión fallida. Esperando 5 segundos...")
+                    time.sleep(5)
+                    continue
+
+            try:
+                ws.run_forever(ping_interval=30, ping_timeout=10)
+                logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
+                ws = None
+            except Exception as e:
+                logging.error(f"Error en run_forever: {e}")
+                ws = None
                 time.sleep(5)
                 continue
 
-        try:
-            ws.run_forever(ping_interval=30, ping_timeout=10)
-            logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
-            ws = None
-        except Exception as e:
-            logging.error(f"Error en run_forever: {e}")
-            ws = None
-            time.sleep(5)
-            continue
+    except KeyboardInterrupt:
+        logging.info("Bot detenido por el usuario.")
+        if ws:
+            ws.close()
+        sys.exit()
 
-except KeyboardInterrupt:
-    logging.info("Bot detenido por el usuario.")
-    if ws:
-        ws.close()
-    sys.exit()
-
-except Exception as e:
-    logging.critical(f"Error crítico en el bucle principal del bot: {e}")
-    if ws:
-        ws.close()
-    sys.exit(1)
+    except Exception as e:
+        logging.critical(f"Error crítico en el bucle principal del bot: {e}")
+        if ws:
+            ws.close()
+        sys.exit(1)
