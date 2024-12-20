@@ -47,9 +47,9 @@ ws = None #Declaramos ws como global aqui
 def obtener_historico(market, period, limit=200):  # Cambiar la definición de period
     base_url = "https://api.coinex.com/v2/spot/kline"
     params = {
-        "market": market,
-        "period": period,  # Periodo debe ser uno de los valores válidos
-        "limit": limit  # No debe superar 1000
+        "market": "BTCUSDT",
+        "period": "5min",  # Periodo debe ser uno de los valores válidos
+        "limit": 200  # No debe superar 1000
     }
     logging.debug(f"URL de la solicitud: {base_url}, Parámetros: {params}")
     try:
