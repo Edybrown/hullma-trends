@@ -193,34 +193,65 @@ candles = {}  # Diccionario para almacenar las velas. Clave: timestamp de inicio
 MAX_CANDLES = 100 # Maximo de velas a guardar
 
 def hma(src, length):
-        half_length = int(length / 2)
-        sqrt_length = int(np.sqrt(length))
+    """Calcula la Hull Moving Average (HMA)"""
+    half_length = int(length / 2)
+    sqrt_length = int(np.sqrt(length))
+    
+    # Cálculo de WMA utilizando pesos explícitos
+    wma1 = src.rolling(half_length).apply(lambda x: np.average(x, weights=np.arange(1, half_length + 1)), raw=True)
+    wma2 = src.rolling(length).apply(lambda x: np.average(x, weights=np.arange(1, length + 1)), raw=True)
+    
+    # Cálculo de HMA: WMA1 * 2 - WMA2
+    hma_result = 2 * wma1 - wma2
+    # Aplicamos la WMA a la raíz cuadrada de la longitud
+    return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)), raw=True)
 
-    # Cálculo CORRECTO de la WMA usando weights
-        wma1 = src.rolling(half_length).apply(lambda x: np.average(x, weights=np.arange(1, half_length + 1)))
-        wma2 = src.rolling(length).apply(lambda x: np.average(x, weights=np.arange(1, length + 1)))
-
-        hma_result = 2 * wma1 - wma2
-        return hma_result.rolling(sqrt_length).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_length + 1)))
-
-
+def calcular_rsi(data, period=14):
+    """Calcula el RSI a partir de los datos de precios."""
+    # Asegúrate de que los datos son numéricos
+    data = pd.to_numeric(data, errors='coerce')
+    
+    # Cálculo de las variaciones diarias de los precios
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    
+    # Media móvil exponencial de las ganancias y pérdidas
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    
+    # Cálculo del RSI
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    return rsi
 
 def calcular_indicadores(market, df_10min):
-    """Calcula RSI y HMA y genera señales."""
+    """Calcula RSI y HMA y genera señales de compra/venta."""
     if df_10min is None or len(df_10min) < 25:
         logging.warning(f"No hay suficientes datos para calcular indicadores en {market}")
         return None
 
     try:
         close_prices = df_10min['close']
-        rsi_fast = RSIIndicator(close=close_prices, window=8).rsi()
-        rsi_slow = RSIIndicator(close=close_prices, window=14).rsi()
+        
+        # Calculamos el RSI utilizando la función personalizada
+        rsi_fast = calcular_rsi(close_prices, 8)
+        rsi_slow = calcular_rsi(close_prices, 14)
+
         df_10min['rsi_fast'] = rsi_fast
         df_10min['rsi_slow'] = rsi_slow
+        
+        # Calculamos la HMA utilizando la función definida
         df_10min['hma'] = hma(close_prices, 14)
 
-        df_10min['buy_signal'] = (df_10min['rsi_fast'] > df_10min['rsi_slow']) & (df_10min['rsi_fast'].shift(1) <= df_10min['rsi_slow'].shift(1)) & (df_10min['close'] > df_10min['hma'])
-        df_10min['sell_signal'] = (df_10min['rsi_fast'] < df_10min['rsi_slow']) & (df_10min['rsi_fast'].shift(1) >= df_10min['rsi_slow'].shift(1)) & (df_10min['close'] < df_10min['hma'])
+        # Generación de señales de compra y venta
+        df_10min['buy_signal'] = (df_10min['rsi_fast'] > df_10min['rsi_slow']) & \
+                                 (df_10min['rsi_fast'].shift(1) <= df_10min['rsi_slow'].shift(1)) & \
+                                 (df_10min['close'] > df_10min['hma'])
+        df_10min['sell_signal'] = (df_10min['rsi_fast'] < df_10min['rsi_slow']) & \
+                                  (df_10min['rsi_fast'].shift(1) >= df_10min['rsi_slow'].shift(1)) & \
+                                  (df_10min['close'] < df_10min['hma'])
 
         logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
         return df_10min
@@ -228,7 +259,6 @@ def calcular_indicadores(market, df_10min):
     except Exception as e:
         logging.error(f"Error al calcular indicadores o señales: {e}")
         return None
-
 def on_message(ws, message):
     """Procesa los mensajes recibidos del WebSocket."""
     try:
