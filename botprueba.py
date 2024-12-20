@@ -16,6 +16,7 @@ import threading
 import time
 from ta.momentum import RSIIndicator
 import random
+from urllib.parse import urljoin, urlencode 
 
 server_time_offset = 0  # Diferencia entre la hora local y la del servidor
 
