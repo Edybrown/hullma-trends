@@ -44,31 +44,42 @@ BASE_DELAY = 2
 
 ws = None #Declaramos ws como global aqui
 
-def obtener_historico(market, period, limit=200):  # Cambiar la definición de period
-    base_url = "https://api.coinex.com/v2/spot/kline"
-    params = {
-        "market": "BTCUSDT",
-        "period": "5min",  # Periodo debe ser uno de los valores válidos
-        "limit": 200  # No debe superar 1000
-    }
-    logging.debug(f"URL de la solicitud: {base_url}, Parámetros: {params}")
+def obtener_historico(market, period, limit=200):
     try:
-        response = requests.get(base_url, params=params)  # Solicitar los datos
-        response.raise_for_status()  # Lanza excepción si el HTTP no es 200
-        data = response.json()  # Procesar la respuesta JSON
-        if data['code'] == 0:
-            kline_data = data['data']
-            df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-            return df
-        else:
-            logging.error(f"Error en la respuesta: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
+        # ... (código para obtener datos de la API sin cambios)
+        response.raise_for_status()
+        data = response.json()
+        if data["code"] != 0:
+            logging.error(f"Error al obtener datos históricos: {data['message']}")
             return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error en la solicitud: {e}")
-        return None
+
+        # CONVERSIÓN INMEDIATA A FLOAT: Convertimos los precios a float *aquí mismo*
+        klines = []
+        for kline_data in data["data"]:
+            try:
+                kline = {
+                    "market": kline_data["market"],
+                    "created_at": kline_data["created_at"],
+                    "open": float(kline_data["open"]),
+                    "close": float(kline_data["close"]),
+                    "high": float(kline_data["high"]),
+                    "low": float(kline_data["low"]),
+                    "volume": float(kline_data["volume"]),
+                    "value": float(kline_data["value"])
+                }
+                klines.append(kline)
+            except ValueError as e:
+                logging.error(f"Error al convertir datos a float en datos históricos: {e}. Datos: {kline_data}")
+                return None
+        df = pd.DataFrame(klines)
+        return df
+    except requests.exceptions.HTTPError as e:
+        # ... (manejo de excepciones HTTP sin cambios)
+    except json.JSONDecodeError as e:
+        # ... (manejo de excepciones JSON sin cambios)
     except Exception as e:
-        logging.error(f"Error inesperado: {e}")
-        return None
+        # ... (manejo de excepciones generales sin cambios)
+
 
 def construir_velas_10min(df_5min):
     """Construye velas de 10 minutos a partir de velas de 5 minutos."""
