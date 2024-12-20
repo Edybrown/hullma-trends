@@ -49,9 +49,9 @@ def obtener_historico(market, period, limit=200):
     """Obtiene datos históricos de la API y los convierte a un DataFrame con valores numéricos."""
     base_url = "https://api.coinex.com/v2/spot/kline"
     params = {
-        "market": market,
-        "period": period,
-        "limit": limit
+        "market":"BTCUSDT",
+        "period": "5min",
+        "limit": 200
     }
     url = urljoin(base_url, "?" + urlencode(params))  # Construye la URL de forma segura
     logging.debug(f"URL de la solicitud: {url}")
