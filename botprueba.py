@@ -57,7 +57,10 @@ def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
         response.raise_for_status()
         data = response.json()
         if data['code'] == 0:
-            # ... (procesamiento del DataFrame)
+            kline_data = data['data']
+            df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
+        # ... (resto del procesamiento del DataFrame, como convertir tipos de datos, etc.)
+            return df  # Devuelve el DataFrame procesado
         else:
             logging.error(f"Error al obtener datos históricos: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
             return None
