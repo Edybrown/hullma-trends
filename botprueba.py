@@ -208,27 +208,24 @@ def hma(src, length):
 
 def calcular_rsi(data, period=14):
     """Calcula el RSI a partir de los datos de precios."""
-    # Asegúrate de que los datos son numéricos
-    data = pd.to_numeric(data, errors='coerce')
-    
-    # Verifica si hay valores nulos después de la conversión
-    if data.isnull().any():
-        logging.error("Datos nulos encontrados en el cálculo del RSI. Verifica los datos de entrada.")
+    try:
+        # Intenta convertir los datos a numéricos, manejando posibles errores
+        data = pd.to_numeric(data, errors='raise')  # 'raise' lanza una excepción si falla la conversión
+    except ValueError as e:
+        logging.error(f"Error al convertir datos a numéricos para RSI: {e}")
         return None
-    
-    # Cálculo de las variaciones diarias de los precios
+
     delta = data.diff()
     gain = (delta.where(delta > 0, 0)).fillna(0)
     loss = (-delta.where(delta < 0, 0)).fillna(0)
-    
-    # Media móvil exponencial de las ganancias y pérdidas
+
     avg_gain = gain.rolling(window=period).mean()
     avg_loss = loss.rolling(window=period).mean()
-    
-    # Cálculo del RSI
+
+    # Manejo de división por cero
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    
+
     return rsi
 
 def calcular_indicadores(market, df_10min):
@@ -238,31 +235,22 @@ def calcular_indicadores(market, df_10min):
         return None
 
     try:
-        # Asegúrate de que los precios de cierre sean numéricos
-        df_10min['close'] = pd.to_numeric(df_10min['close'], errors='coerce')
-        
-        # Verifica si hay valores nulos después de la conversión
-        if df_10min['close'].isnull().any():
-            logging.error("Datos nulos encontrados en la columna 'close'. Verifica los datos de entrada.")
-            return None
-        
+        # CONVERSIÓN CRÍTICA: Convertir 'close' a numérico *antes* de cualquier cálculo
+        df_10min['close'] = pd.to_numeric(df_10min['close'], errors='raise')
+
         close_prices = df_10min['close']
-        
-        # Calculamos el RSI utilizando la función personalizada
+
         rsi_fast = calcular_rsi(close_prices, 8)
         rsi_slow = calcular_rsi(close_prices, 14)
 
-        # Verificamos si el cálculo del RSI fue exitoso
         if rsi_fast is None or rsi_slow is None:
             logging.error(f"Error en el cálculo de RSI para {market}")
             return None
 
         df_10min['rsi_fast'] = rsi_fast
         df_10min['rsi_slow'] = rsi_slow
-        
-        # Calculamos la HMA utilizando la función definida
-        df_10min['hma'] = hma(close_prices, 14)
 
+        df_10min['hma'] = hma(close_prices, 14)
         # Generación de señales de compra y venta
         df_10min['buy_signal'] = (df_10min['rsi_fast'] > df_10min['rsi_slow']) & \
                                  (df_10min['rsi_fast'].shift(1) <= df_10min['rsi_slow'].shift(1)) & \
@@ -274,9 +262,13 @@ def calcular_indicadores(market, df_10min):
         logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
         return df_10min
 
+    except ValueError as e: # Captura errores de conversion a numerico en calcular_indicadores
+        logging.error(f"Error de conversión numérica en calcular_indicadores: {e}")
+        return None
     except Exception as e:
         logging.error(f"Error al calcular indicadores o señales: {e}")
         return None
+
 def on_message(ws, message):
     """Procesa los mensajes recibidos del WebSocket."""
     try:
