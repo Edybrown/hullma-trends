@@ -35,13 +35,17 @@ def obtener_datos(simbolo, periodo, intervalo):
 
 def calcular_indicadores(df):
     try:
-        df['RSI_14'] = talib.RSI(df['Close'], timeperiod=14)
-        df['RSI_7'] = talib.RSI(df['Close'], timeperiod=7)
-        df['HMA_9'] = talib.HMA(df['Close'], timeperiod=9)
+        # Extraer los valores de la columna 'Close' como un array de NumPy
+        close_prices = df['Close'].values
+
+        df['RSI_14'] = talib.RSI(close_prices, timeperiod=14)
+        df['RSI_7'] = talib.RSI(close_prices, timeperiod=7)
+        df['HMA_9'] = talib.HMA(close_prices, timeperiod=9)
         return df
     except Exception as e:
         logging.error(f"Error al calcular indicadores: {e}")
         return None
+
 
 def aplicar_estrategia(df, stop_loss_percent=0.01):
     df['Signal'] = 0
