@@ -117,7 +117,7 @@ def analizar_resultados(df, simbolo, intervalo, operaciones):
     logging.info(f"Porcentaje de operaciones ganadoras: {porcentaje_ganadoras:.2f}%")
 
 simbolos = ["AAPL", "MSFT", "GOOG"]
-periodo = "1y"
+periodo = "5d"
 intervalos = ["5m", "15m", "30m", "1h"]
 
 for simbolo in simbolos:
