@@ -44,43 +44,31 @@ BASE_DELAY = 2
 
 ws = None #Declaramos ws como global aqui
 
-def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
-    base_url ="https://api.coinex.com/v2/spot/kline" 
+def obtener_historico(market, period, limit=200):
+    base_url = "https://api.coinex.com/v2/spot/kline"
     params = {
         "market": market,
-        "type": period,
+        "period": period,
         "limit": limit
     }
-    url = urljoin(base_url, "?" + urlencode(params)) #Construye la url de forma segura
-    logging.debug(f"URL de la solicitud: {url}")
     try:
-        response = requests.get(url)
-        response.raise_for_status()
+        response = requests.get(base_url, params=params)  # Uso correcto de params
+        response.raise_for_status()  # Lanza una excepción si ocurre un error HTTP
         data = response.json()
         if data['code'] == 0:
             kline_data = data['data']
             df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-        # ... (resto del procesamiento del DataFrame, como convertir tipos de datos, etc.)
-            return df  # Devuelve el DataFrame procesado
+            return df
         else:
-            logging.error(f"Error al obtener datos históricos: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
+            logging.error(f"Error en respuesta: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
             return None
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"Error HTTP: {e}")
-        if e.response is not None:
-            logging.error(f"Código de estado: {e.response.status_code}")
-            try:
-                error_data = e.response.json()
-                logging.error(f"Detalles del error: {error_data}")
-            except json.JSONDecodeError:
-                logging.error(f"Texto de la respuesta: {e.response.text}")
-        return None
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud: {e}")
         return None
-    except (KeyError, TypeError) as e:
-        logging.error(f"Error al procesar la respuesta JSON: {e}")
+    except Exception as e:
+        logging.error(f"Error inesperado: {e}")
         return None
+
 def construir_velas_10min(df_5min):
     """Construye velas de 10 minutos a partir de velas de 5 minutos."""
     if df_5min is None or df_5min.empty:
