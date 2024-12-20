@@ -81,7 +81,7 @@ def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
         return None
     except (KeyError, TypeError) as e:
         logging.error(f"Error al procesar la respuesta JSON: {e}")
-        return Noneos)
+        return (None)
         response.raise_for_status()
         data = response.json()
         if data["code"] != 0:
