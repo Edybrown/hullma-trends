@@ -321,57 +321,61 @@ if __name__ == "__main__":
     tipo_vela_inicial = "1m"
     limite_inicial = 200
 
+df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
+
 if df_historico is not None and not df_historico.empty:
-        logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
+    logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
+    logging.debug(df_historico)
+
+    try:
+        rsi = RSIIndicator(df_historico['close'], window=14).rsi()
+        df_historico['rsi'] = rsi
+        logging.debug("RSI calculado:")
+        logging.debug(df_historico)
+    except KeyError as e:
+        logging.error(f"Error de KeyError al calcular RSI: {e}. Asegúrate de que la columna 'close' existe en el DataFrame.")
+        logging.debug(df_historico)
+    except Exception as e:
+        logging.error(f"Error al calcular el RSI inicial: {e}")
         logging.debug(df_historico)
 
-        try:
-            rsi = RSIIndicator(df_historico['close'], window=14).rsi()
-            df_historico['rsi'] = rsi
-            logging.debug("RSI calculado:")
-            logging.debug(df_historico)
-        except KeyError as e:
-            logging.error(f"Error de KeyError al calcular RSI: {e}. Asegúrate de que la columna 'close' existe en el DataFrame.")
-            logging.debug(df_historico)
-        except Exception as e:
-            logging.error(f"Error al calcular el RSI inicial: {e}")
-            logging.debug(df_historico)
-else:
-        if df_historico is None:
-            logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}).")
-        elif df_historico.empty:
-            logging.error(f"Se obtuvieron datos históricos de {market_inicial} ({tipo_vela_inicial}), pero el DataFrame está vacío.")
-        logging.error("El bot continuará sin datos históricos iniciales.")
-logging.info("Bot en funcionamiento.")
+else:  # Este else corresponde al primer if
+    if df_historico is None:
+        logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}).")
+    elif df_historico.empty:
+        logging.error(f"Se obtuvieron datos históricos de {market_inicial} ({tipo_vela_inicial}), pero el DataFrame está vacío.")
+    logging.error("El bot continuará sin datos históricos iniciales.")
+
+logging.info("Bot en funcionamiento.") #Esto está fuera del if/else
 
 try:
-        while True:  # Bucle principal
+    while True:  # Bucle principal
+        if ws is None:
+            logging.info("Intentando reconectar...")
+            ws = conectar()
             if ws is None:
-                logging.info("Intentando reconectar...")
-                ws = conectar()
-                if ws is None:
-                    logging.error("Reconexión fallida. Esperando 5 segundos...")
-                    time.sleep(5)
-                    continue
-
-            try:
-                ws.run_forever(ping_interval=30, ping_timeout=10)
-                logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
-                ws = None  # Reseteamos ws a None para que entre en el if ws is None
-            except Exception as e:
-                logging.error(f"Error en run_forever: {e}")
-                ws = None  # Reseteamos ws a None para que entre en el if ws is None
+                logging.error("Reconexión fallida. Esperando 5 segundos...")
                 time.sleep(5)
                 continue
 
+        try:
+            ws.run_forever(ping_interval=30, ping_timeout=10)
+            logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
+            ws = None
+        except Exception as e:
+            logging.error(f"Error en run_forever: {e}")
+            ws = None
+            time.sleep(5)
+            continue
+
 except KeyboardInterrupt:
-        logging.info("Bot detenido por el usuario.")
-        if ws:
-            ws.close()
-        sys.exit()
+    logging.info("Bot detenido por el usuario.")
+    if ws:
+        ws.close()
+    sys.exit()
 
 except Exception as e:
-        logging.critical(f"Error crítico en el bucle principal del bot: {e}")
-        if ws:
-            ws.close()
-        sys.exit(1)
+    logging.critical(f"Error crítico en el bucle principal del bot: {e}")
+    if ws:
+        ws.close()
+    sys.exit(1)
