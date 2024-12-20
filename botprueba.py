@@ -321,8 +321,7 @@ if __name__ == "__main__":
     tipo_vela_inicial = "1m"
     limite_inicial = 200
 
-df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
-    if df_historico is not None and not df_historico.empty:
+if df_historico is not None and not df_historico.empty:
         logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
         logging.debug(df_historico)
 
@@ -337,15 +336,15 @@ df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inici
         except Exception as e:
             logging.error(f"Error al calcular el RSI inicial: {e}")
             logging.debug(df_historico)
-    else:
+else:
         if df_historico is None:
             logging.error(f"No se pudieron obtener los datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}).")
         elif df_historico.empty:
             logging.error(f"Se obtuvieron datos históricos de {market_inicial} ({tipo_vela_inicial}), pero el DataFrame está vacío.")
         logging.error("El bot continuará sin datos históricos iniciales.")
-    logging.info("Bot en funcionamiento.")
+logging.info("Bot en funcionamiento.")
 
-    try:
+try:
         while True:  # Bucle principal
             if ws is None:
                 logging.info("Intentando reconectar...")
@@ -365,13 +364,13 @@ df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inici
                 time.sleep(5)
                 continue
 
-    except KeyboardInterrupt:
+except KeyboardInterrupt:
         logging.info("Bot detenido por el usuario.")
         if ws:
             ws.close()
         sys.exit()
 
-    except Exception as e:
+except Exception as e:
         logging.critical(f"Error crítico en el bucle principal del bot: {e}")
         if ws:
             ws.close()
