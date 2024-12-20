@@ -48,9 +48,9 @@ ws = None #Declaramos ws como global aqui
 def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
     base_url ="https://api.coinex.com/v2/spot/kline" 
     params = {
-        "market": market,
-        "period": period,
-        "limit": limit
+        "market": "BTCUSDT",
+        "period": "5min",
+        "limit": 300
     }
     url = urljoin(base_url, "?" + urlencode(params)) #Construye la url de forma segura
     logging.debug(f"URL de la solicitud: {url}")
