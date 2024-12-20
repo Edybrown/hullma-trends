@@ -269,6 +269,19 @@ def calcular_indicadores(market, df_10min):
         logging.error(f"Error al calcular indicadores o señales: {e}")
         return None
 
+def procesar_datos_iniciales(market, period, limit=25): # Función para procesar los datos *iniciales*
+    df_inicial = obtener_historico(market, period, limit)
+    if df_inicial is None:
+        logging.error(f"Error al obtener datos históricos iniciales para {market}")
+        return None
+    try:
+        df_inicial['close'] = pd.to_numeric(df_inicial['close'], errors='raise') #CONVERSIÓN CRÍTICA AQUÍ
+        df_con_indicadores = calcular_indicadores(market, df_inicial) # Calculamos los indicadores
+        return df_con_indicadores
+    except ValueError as e:
+        logging.error(f"Error de conversión numérica en datos iniciales de {market}: {e}")
+        return None
+
 def on_message(ws, message):
     """Procesa los mensajes recibidos del WebSocket."""
     try:
