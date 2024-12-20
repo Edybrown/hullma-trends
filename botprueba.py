@@ -44,23 +44,24 @@ BASE_DELAY = 2
 
 ws = None #Declaramos ws como global aqui
 
-def obtener_historico(market, period, limit=200):
+def obtener_historico(market, period, limit=200):  # Cambiar la definición de period
     base_url = "https://api.coinex.com/v2/spot/kline"
     params = {
         "market": market,
-        "period": period,
-        "limit": limit
+        "period": period,  # Periodo debe ser uno de los valores válidos
+        "limit": limit  # No debe superar 1000
     }
+    logging.debug(f"URL de la solicitud: {base_url}, Parámetros: {params}")
     try:
-        response = requests.get(base_url, params=params)  # Uso correcto de params
-        response.raise_for_status()  # Lanza una excepción si ocurre un error HTTP
-        data = response.json()
+        response = requests.get(base_url, params=params)  # Solicitar los datos
+        response.raise_for_status()  # Lanza excepción si el HTTP no es 200
+        data = response.json()  # Procesar la respuesta JSON
         if data['code'] == 0:
             kline_data = data['data']
             df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
             return df
         else:
-            logging.error(f"Error en respuesta: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
+            logging.error(f"Error en la respuesta: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
             return None
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud: {e}")
