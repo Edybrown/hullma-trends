@@ -45,7 +45,7 @@ BASE_DELAY = 2
 ws = None #Declaramos ws como global aqui
 
 def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
-    base_url = "https://api.coinex.com/v1/market/kline"
+    base_url ="https://api.coinex.com/v2/spot/kline" 
     params = {
         "market": market,
         "period": period,
