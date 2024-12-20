@@ -43,32 +43,40 @@ BASE_DELAY = 2
 
 ws = None #Declaramos ws como global aqui
 
-def obtener_historico(market, tipo_vela, limite=200):
-    """Obtiene datos históricos de CoinEx usando la API REST."""
-    url = f"https://api.coinex.com/v1/market/kline?market={market}&type={tipo_vela}&limit={limite}"
+def obtener_historico(market, period, limit=200):  # Cambiado tipo_vela a period
+    base_url = "https://api.coinex.com/v1/market/kline"
+    params = {
+        "market": market,
+        "period": period,
+        "limit": limit
+    }
+    url = urljoin(base_url, "?" + urlencode(params)) #Construye la url de forma segura
+    logging.debug(f"URL de la solicitud: {url}")
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP (4xx o 5xx)
+        response.raise_for_status()
         data = response.json()
-
         if data['code'] == 0:
-            kline_data = data['data']
-            # Convertir a DataFrame de pandas para facilitar el manejo
-            df = pd.DataFrame(kline_data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-            df['time'] = pd.to_datetime(df['time'], unit='s') #Convertimos el tiempo a datetime
-            df[['open', 'close', 'high', 'low', 'volume']] = df[['open', 'close', 'high', 'low', 'volume']].astype(float)
-            df = df.set_index('time')
-            return df
+            # ... (procesamiento del DataFrame)
         else:
-          logging.error(f"Error al obtener datos históricos: {data['message']}")
-          return None
+            logging.error(f"Error al obtener datos históricos: {data.get('message', 'Sin mensaje adicional')}, Código: {data['code']}")
+            return None
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"Error HTTP: {e}")
+        if e.response is not None:
+            logging.error(f"Código de estado: {e.response.status_code}")
+            try:
+                error_data = e.response.json()
+                logging.error(f"Detalles del error: {error_data}")
+            except json.JSONDecodeError:
+                logging.error(f"Texto de la respuesta: {e.response.text}")
+        return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error en la solicitud HTTP: {e}")
+        logging.error(f"Error en la solicitud: {e}")
         return None
     except (KeyError, TypeError) as e:
-        logging.error(f"Error al procesar la respuesta JSON: {e}. Respuesta: {data}")
+        logging.error(f"Error al procesar la respuesta JSON: {e}")
         return None
-
 def construir_velas_10min(df_5min):
     """Construye velas de 10 minutos a partir de velas de 5 minutos."""
     if df_5min is None or df_5min.empty:
@@ -310,7 +318,7 @@ if __name__ == "__main__":
     tipo_vela_inicial = "1m"
     limite_inicial = 200
 
-    df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
+   df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
     if df_historico is not None and not df_historico.empty:
         logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
         logging.debug(df_historico)
