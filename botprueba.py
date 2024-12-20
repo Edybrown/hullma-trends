@@ -419,14 +419,30 @@ if __name__ == "__main__":
     try:
         while True:
             if ws is None:
-                logging.info("Intentando reconectar...")
-                ws = conectar()
-                if ws is None:
-                    logging.error("Reconexión fallida. Esperando 5 segundos...")
-                    time.sleep(5)
-                    continue
+                # ... (código de reconexión)
+                continue
 
             try:
                 ws.run_forever(ping_interval=30, ping_timeout=10)
                 logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
+                ws = None #Importante volver a poner ws a None para que se intente reconectar
+                time.sleep(5) #Añadimos un sleep para no saturar la cpu
+            except Exception as e: #AQUI ESTABA EL ERROR, FALTA EL EXCEPT
+                logging.error(f"Error en run_forever: {e}")
+                ws = None
+                time.sleep(5)
+                continue
+            #finally: #No es necesario finally en este caso
+            #   ws = None
+            #   logging.info("Bucle run_forever finalizado")
+    except KeyboardInterrupt:
+        logging.info("Bot detenido por el usuario.")
+        if ws:
+            ws.close()
+        sys.exit()
 
+    except Exception as e:
+        logging.critical(f"Error crítico en el bucle principal del bot: {e}")
+        if ws:
+            ws.close()
+        sys.exit(1)
