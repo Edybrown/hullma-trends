@@ -7,17 +7,28 @@ import csv
 import os
 
 def obtener_datos_coinex(simbolo, intervalo, limit=1000):
-    url = f"https://api.coinex.com/v1/market/kline?market={simbolo}&type={intervalo}&limit={limit}"
+    # Diccionario para convertir los intervalos a los formatos de Coinex
+    intervalos_coinex = {
+        "5m": "5min",
+        "15m": "15min",
+        "1h": "1hour",
+        "4h": "4hour"
+    }
+
+    if intervalo not in intervalos_coinex:
+        print(f"Intervalo no válido: {intervalo}. Intervalos válidos: {list(intervalos_coinex.keys())}")
+        return None
+
+    intervalo_coinex = intervalos_coinex[intervalo]
+    url = f"https://api.coinex.com/v1/market/kline?market={simbolo}&type={intervalo_coinex}&limit={limit}"
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Lanza una excepción para errores HTTP
+        response.raise_for_status()
         data = response.json()['data']
         df = pd.DataFrame(data)
 
-        # Convertir timestamps a datetime y establecer como índice
         df['date'] = pd.to_datetime(df['date'], unit='s')
         df.set_index('date', inplace=True)
-        # Convertir columnas a numérico (importante para cálculos)
         df = df.apply(pd.to_numeric, errors='coerce')
         df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'vol':'Volume'}, inplace=True)
         return df
@@ -27,11 +38,6 @@ def obtener_datos_coinex(simbolo, intervalo, limit=1000):
     except KeyError as e:
         print(f"Error al procesar datos de Coinex, posible cambio en formato de API: {e}")
         return None
-
-# Ejemplos de uso
-simbolo = "BTC/USDT"
-intervalo = "5m"
-df_5m = obtener_datos_coinex(simbolo, intervalo)
 
 def calcular_indicadores(df):
     try:
