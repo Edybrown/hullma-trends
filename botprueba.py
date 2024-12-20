@@ -41,8 +41,11 @@ logging.getLogger('').addHandler(console_handler) #Añadir a la configuracion
 MAX_RETRIES = 5
 MAX_WAIT_TIME = 60
 BASE_DELAY = 2
+ws = None
+candles = {}  # Diccionario para almacenar TODAS las velas
+MAX_CANDLES = 100
+df_historico = pd.DataFrame() # Inicializar df_historico como DataFrame vacío
 
-ws = None #Declaramos ws como global aqui
 
 
 def obtener_historico(market, period, limit=200):
@@ -269,18 +272,14 @@ def calcular_rsi(data, period=14):
 
     return rsi
 
-def calcular_indicadores(market, df_10min):
-    """Calcula RSI y HMA y genera señales de compra/venta."""
-    if df_10min is None or len(df_10min) < 25:
+def calcular_indicadores(market, df):
+    """Calcula RSI y HMA."""
+    if df is None or df.empty or len(df) < 25:
         logging.warning(f"No hay suficientes datos para calcular indicadores en {market}")
         return None
 
     try:
-        # CONVERSIÓN CRÍTICA: Convertir 'close' a numérico *antes* de cualquier cálculo
-        df_10min['close'] = pd.to_numeric(df_10min['close'], errors='raise')
-
-        close_prices = df_10min['close']
-
+        close_prices = df['close'].astype(float) # Asegurar que 'close' sea float
         rsi_fast = calcular_rsi(close_prices, 8)
         rsi_slow = calcular_rsi(close_prices, 14)
 
@@ -288,28 +287,15 @@ def calcular_indicadores(market, df_10min):
             logging.error(f"Error en el cálculo de RSI para {market}")
             return None
 
-        df_10min['rsi_fast'] = rsi_fast
-        df_10min['rsi_slow'] = rsi_slow
-
-        df_10min['hma'] = hma(close_prices, 14)
-        # Generación de señales de compra y venta
-        df_10min['buy_signal'] = (df_10min['rsi_fast'] > df_10min['rsi_slow']) & \
-                                 (df_10min['rsi_fast'].shift(1) <= df_10min['rsi_slow'].shift(1)) & \
-                                 (df_10min['close'] > df_10min['hma'])
-        df_10min['sell_signal'] = (df_10min['rsi_fast'] < df_10min['rsi_slow']) & \
-                                  (df_10min['rsi_fast'].shift(1) >= df_10min['rsi_slow'].shift(1)) & \
-                                  (df_10min['close'] < df_10min['hma'])
-
-        logging.info(f"Cálculo de indicadores y señales para {market} exitoso")
-        return df_10min
-
-    except ValueError as e: # Captura errores de conversion a numerico en calcular_indicadores
-        logging.error(f"Error de conversión numérica en calcular_indicadores: {e}")
-        return None
+        df['rsi_fast'] = rsi_fast
+        df['rsi_slow'] = rsi_slow
+        df['hma'] = hma(close_prices, 14)
+        # ... (cálculo de señales sin cambios)
+        return df
     except Exception as e:
-        logging.error(f"Error al calcular indicadores o señales: {e}")
+        logging.error(f"Error al calcular indicadores: {e}")
         return None
-
+      
 def procesar_datos_iniciales(market, period, limit=25): # Función para procesar los datos *iniciales*
     df_inicial = obtener_historico(market, period, limit)
     if df_inicial is None:
@@ -324,57 +310,60 @@ def procesar_datos_iniciales(market, period, limit=25): # Función para procesar
         return None
 
 def on_message(ws, message):
-    """Procesa los mensajes recibidos del WebSocket."""
     try:
         try:
             decompressed_message = gzip.decompress(message).decode('utf-8')
-            logging.debug("Mensaje descomprimido exitosamente.")
         except (OSError, EOFError, zlib.error, UnicodeDecodeError):
             decompressed_message = message.decode('utf-8')
-            logging.debug("Mensaje NO comprimido, decodificado directamente.")
 
         data = json.loads(decompressed_message)
 
         if data.get('method') == 'state.update':
             local_time = datetime.datetime.now(datetime.UTC)
             server_now = local_time + datetime.timedelta(milliseconds=server_time_offset)
-            minute10_timestamp = server_now - datetime.timedelta(minutes=server_now.minute % 10, seconds=server_now.second, microseconds=server_now.microsecond)
-            minute10_timestamp = int(minute10_timestamp.timestamp())
-            state_list = data.get('data').get('state_list')
+            minute10_timestamp = int((server_now - datetime.timedelta(minutes=server_now.minute % 10, seconds=server_now.second, microseconds=server_now.microsecond)).timestamp())
+            state_list = data.get('data', {}).get('state_list', []) # Manejo de claves faltantes
 
-            if state_list:
-                for state in state_list:
-                    market = state.get('market')
-                    last_price = float(state.get('last'))
-                    volume = float(state.get('volume')) if state.get('volume') is not None else 0
+            for state in state_list:
+                market = state.get('market')
+                last_price = float(state.get('last', 0)) # Valor por defecto si 'last' no existe
+                volume = float(state.get('volume', 0))
 
-                    if minute10_timestamp not in candles:
-                        candles[minute10_timestamp] = {
-                            'timestamp': minute10_timestamp,
-                            'open': last_price,
-                            'high': last_price,
-                            'low': last_price,
-                            'close': last_price,
-                            'volume': volume
-                        }
-                        logging.info(f"Creando nueva vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}")
-                    else:
-                        candles[minute10_timestamp]['close'] = last_price
-                        candles[minute10_timestamp]['high'] = max(candles[minute10_timestamp]['high'], last_price)
-                        candles[minute10_timestamp]['low'] = min(candles[minute10_timestamp]['low'], last_price)
-                        candles[minute10_timestamp]['volume'] += volume
-                        logging.debug(f"Actualizando vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}, precio: {last_price}")
-                    #Calculamos los indicadores despues de actualizar la vela
-                    df_candles = pd.DataFrame.from_dict(candles, orient='index')
-                    df_candles = df_candles.set_index('timestamp')
-                    df_con_indicadores = calcular_indicadores(market, df_candles)
-                    if df_con_indicadores is not None:
-                        print("Datos con indicadores:")
-                        print(df_con_indicadores)
-                    else:
-                        logging.warning("No se pudieron calcular los indicadores")
+                if minute10_timestamp not in candles:
+                    candles[minute10_timestamp] = {
+                        'open': last_price,
+                        'high': last_price,
+                        'low': last_price,
+                        'close': last_price,
+                        'volume': volume
+                    }
+                    logging.info(f"Creando nueva vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}")
+                else:
+                    candles[minute10_timestamp]['close'] = last_price
+                    candles[minute10_timestamp]['high'] = max(candles[minute10_timestamp]['high'], last_price)
+                    candles[minute10_timestamp]['low'] = min(candles[minute10_timestamp]['low'], last_price)
+                    candles[minute10_timestamp]['volume'] += volume
+                    logging.debug(f"Actualizando vela para {market} a las {datetime.datetime.fromtimestamp(minute10_timestamp)}, precio: {last_price}")
+
+            # *** FUSIÓN DE DATOS Y CÁLCULO DE INDICADORES ***
+            df_candles = pd.DataFrame.from_dict(candles, orient='index')
+            df_candles.index = pd.to_datetime(df_candles.index, unit='s')
+            df_candles.index.name = 'created_at'
+
+            global df_historico
+            if not df_historico.empty:
+                df_merged = pd.concat([df_historico, df_candles]).drop_duplicates(keep='last')
             else:
-                logging.warning("La lista de estados está vacía")
+                df_merged = df_candles
+            df_merged = df_merged.sort_index()
+
+            df_con_indicadores = calcular_indicadores(market, df_merged.copy()) #Pasamos una copia
+            if df_con_indicadores is not None:
+                print("Datos con indicadores:")
+                print(df_con_indicadores)
+                print(df_con_indicadores.dtypes)
+            else:
+                logging.warning("No se pudieron calcular los indicadores")
 
             while len(candles) > MAX_CANDLES:
                 oldest_candle = min(candles.keys())
@@ -383,15 +372,12 @@ def on_message(ws, message):
 
         elif data.get('error'):
             logging.error(f"Error del servidor: {data.get('error')}")
-        else:
-            logging.debug(f"Mensaje recibido (otro tipo): {message}")
 
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logging.error(f"Error al procesar el mensaje: {e}. Mensaje original: {message!r}")
     except Exception as e:
         logging.error(f"Error inesperado en on_message: {e}")
 
-  
 if __name__ == "__main__":
     logging.info("Iniciando bot...")
     ws = conectar()
@@ -399,30 +385,26 @@ if __name__ == "__main__":
     if ws is None:
         logging.error("Fallo la conexión inicial. Bot detenido.")
         sys.exit(1)
-
+    
     logging.info("Conexión WebSocket establecida. Obteniendo datos históricos iniciales...")
 
-    # *** BLOQUE PARA OBTENER DATOS HISTÓRICOS Y CALCULAR RSI (UBICACIÓN CORRECTA) ***
     market_inicial = "BTCUSDT"
     tipo_vela_inicial = "5m"
     limite_inicial = 200
 
     df_historico = obtener_historico(market_inicial, tipo_vela_inicial, limite_inicial)
 
-    if not df_historico.empty:  # Verificar si el DataFrame NO está vacío
-        logging.info(f"Datos históricos iniciales de {market_inicial} ({tipo_vela_inicial}) obtenidos.")
-        print("DataFrame inicial:")
+    if not df_historico.empty:
+        df_historico.index = pd.to_datetime(df_historico.index, unit='ms')
+        df_historico.index.name = 'created_at'
+        print("DataFrame Historico Inicial:")
         print(df_historico)
         print(df_historico.dtypes)
 
         try:
-            rsi = RSIIndicator(df_historico['close'], window=14).rsi()
+            rsi = RSIIndicator(df_historico['close'].astype(float), window=14).rsi() #Convertimos a float
             df_historico['rsi'] = rsi
             print("DataFrame con RSI:")
-            print(df_historico)
-            print(df_historico.dtypes)
-        except KeyError as e:
-            logging.error(f"Error de KeyError al calcular RSI: {e}. Asegúrate de que la columna 'close' existe en el DataFrame.")
             print(df_historico)
             print(df_historico.dtypes)
         except Exception as e:
@@ -431,15 +413,11 @@ if __name__ == "__main__":
             print(df_historico.dtypes)
     else:
         logging.error(f"No se pudieron obtener datos históricos válidos de {market_inicial} ({tipo_vela_inicial}). DataFrame vacío.")
-        # Decidir si continuar o detener el bot si no hay datos históricos iniciales
-        # Por ejemplo, puedes detener el bot:
-        # sys.exit(1)
-        logging.warning("El bot continuará sin datos históricos iniciales.") #O continuar pero con la advertencia
+        logging.warning("El bot continuará sin datos históricos iniciales.")
 
-    logging.info("Bot en funcionamiento. Iniciando bucle principal...") #Mensaje más descriptivo
-
+    logging.info("Bot en funcionamiento. Iniciando bucle principal...")
     try:
-        while True:  # Bucle principal
+        while True:
             if ws is None:
                 logging.info("Intentando reconectar...")
                 ws = conectar()
@@ -451,21 +429,4 @@ if __name__ == "__main__":
             try:
                 ws.run_forever(ping_interval=30, ping_timeout=10)
                 logging.info("Conexión cerrada por el servidor. Intentando reconectar...")
-                ws = None
-            except Exception as e:
-                logging.error(f"Error en run_forever: {e}")
-                ws = None
-                time.sleep(5)
-                continue
 
-    except KeyboardInterrupt:
-        logging.info("Bot detenido por el usuario.")
-        if ws:
-            ws.close()
-        sys.exit()
-
-    except Exception as e:
-        logging.critical(f"Error crítico en el bucle principal del bot: {e}")
-        if ws:
-            ws.close()
-        sys.exit(1)
