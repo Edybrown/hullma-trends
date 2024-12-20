@@ -211,6 +211,11 @@ def calcular_rsi(data, period=14):
     # Asegúrate de que los datos son numéricos
     data = pd.to_numeric(data, errors='coerce')
     
+    # Verifica si hay valores nulos después de la conversión
+    if data.isnull().any():
+        logging.error("Datos nulos encontrados en el cálculo del RSI. Verifica los datos de entrada.")
+        return None
+    
     # Cálculo de las variaciones diarias de los precios
     delta = data.diff()
     gain = (delta.where(delta > 0, 0)).fillna(0)
@@ -233,11 +238,24 @@ def calcular_indicadores(market, df_10min):
         return None
 
     try:
+        # Asegúrate de que los precios de cierre sean numéricos
+        df_10min['close'] = pd.to_numeric(df_10min['close'], errors='coerce')
+        
+        # Verifica si hay valores nulos después de la conversión
+        if df_10min['close'].isnull().any():
+            logging.error("Datos nulos encontrados en la columna 'close'. Verifica los datos de entrada.")
+            return None
+        
         close_prices = df_10min['close']
         
         # Calculamos el RSI utilizando la función personalizada
         rsi_fast = calcular_rsi(close_prices, 8)
         rsi_slow = calcular_rsi(close_prices, 14)
+
+        # Verificamos si el cálculo del RSI fue exitoso
+        if rsi_fast is None or rsi_slow is None:
+            logging.error(f"Error en el cálculo de RSI para {market}")
+            return None
 
         df_10min['rsi_fast'] = rsi_fast
         df_10min['rsi_slow'] = rsi_slow
