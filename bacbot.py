@@ -18,11 +18,9 @@ def obtener_tiempo_local():
     
 def obtener_datos_coinex(simbolo, intervalo, limit=1000):
     intervalos_coinex = {
-        "1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min",
-        "30m": "30min", "1h": "1hour", "2h": "2hour", "4h": "4hour",
-        "6h": "6hour", "12h": "12hour", "1d": "1day", "3d": "3day",
-        "1w": "1week"
+        "5m": "5min", "15m": "15min", "1h": "1hour", "4h": "4hour"
     }
+
 
     if intervalo not in intervalos_coinex:
         logging.error(f"Intervalo no válido: {intervalo}. Intervalos válidos: {list(intervalos_coinex.keys())}")
