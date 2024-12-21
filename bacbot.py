@@ -8,6 +8,8 @@ import datetime
 import pytz
 import numpy as np
 import json
+import random
+
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,43 +18,83 @@ def obtener_tiempo_local():
     dt_utc = datetime.datetime.now(tz=pytz.utc)
     return dt_utc
     
-def obtener_datos_coinex(simbolo, intervalo, limit=1000):
+ef obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
     intervalos_coinex = {
         "5m": "5min", "15m": "15min", "1h": "1hour", "4h": "4hour"
     }
-
 
     if intervalo not in intervalos_coinex:
         logging.error(f"Intervalo no válido: {intervalo}. Intervalos válidos: {list(intervalos_coinex.keys())}")
         return None
 
-    intervalo_coinex = intervalos_coinex.get(intervalo) # Usar .get() para evitar KeyError
-    if intervalo_coinex is None: #Comprobar que el valor existe
-        logging.error(f"No se encontró la conversión para el intervalo: {intervalo}")
-        return None
-
+    intervalo_coinex = intervalos_coinex[intervalo]
     market = simbolo.replace("/", "")
-    url = f"https://api.coinex.com/v2/spot/kline?market={market}&type={intervalo_coinex}&limit={limit}"
+    url = f"https://api.coinex.com/v2/spot/kline?market={market}&type={intervalo_coinex}&from={desde}&to={hasta}"
 
-    logging.info(f"URL de la API: {url}") # Imprimir la URL para depuración
+    logging.info(f"URL de la API: {url}")
 
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
 
-        # ... (resto del código para procesar la respuesta)
+            if data.get('code') == 0 and 'data' in data and data['data']:
+                klines = data['data']
+                if klines:
+                    if isinstance(klines[0], list):
+                        df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
+                    elif isinstance(klines[0], dict):
+                        df = pd.DataFrame(klines)
+                    else:
+                        logging.error(f"Formato de datos kline inesperado: {type(klines[0])}")
+                        print(json.dumps(data, indent=4))
+                        return None
+                elif isinstance(klines, dict):
+                    df = pd.DataFrame.from_dict(klines, orient='index', columns=['open', 'close', 'high', 'low', 'volume'])
+                    df['time'] = df.index
+                else:
+                    logging.error(f"Formato de datos kline inesperado: {type(klines)}")
+                    print(json.dumps(data, indent=4))
+                    return None
+                else:
+                    logging.warning(f"No se encontraron datos para {simbolo} en {intervalo} entre {desde} y {hasta}")
+                    return pd.DataFrame()
 
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error al obtener datos de CoinEx: {e}")
-        if hasattr(e.response, 'text'): #Imprimir el texto de la respuesta si existe
-            logging.error(f"Respuesta del servidor: {e.response.text}")
-        return None
-    except (KeyError, IndexError, TypeError, ValueError) as e:
-        logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
-        if 'data' in locals(): #Comprobar que data existe antes de imprimirlo
-            print(json.dumps(data, indent=4))
-        return None
+                df['time'] = pd.to_datetime(df['time'], unit='s')
+                df.set_index('time', inplace=True)
+                df = df.apply(pd.to_numeric, errors='coerce')
+                df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'volume':'Volume'}, inplace=True)
+                return df
+            else:
+                mensaje_error = data.get('message', f"Código de error desconocido: {data.get('code', 'sin codigo')}")
+                logging.error(f"Error en la respuesta de la API: {mensaje_error}")
+                print(json.dumps(data, indent=4))
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.random()
+                    logging.info(f"Reintentando en {wait_time:.2f} segundos...")
+                    time.sleep(wait_time)
+                else:
+                    return None
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Intento {attempt+1}/{max_retries} fallido al obtener datos de CoinEx: {e}")
+            if hasattr(e.response, 'text'):
+                logging.error(f"Respuesta del servidor: {e.response.text}")
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + random.random()
+                logging.info(f"Reintentando en {wait_time:.2f} segundos...")
+                time.sleep(wait_time)
+            else:
+                return None
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
+            if 'data' in locals():
+                print(json.dumps(data, indent=4))
+            return None
+
+    return None
+
 
 
 def calcular_hma(data, period):
@@ -116,33 +158,22 @@ def registrar_operaciones(simbolo, intervalo, operaciones):
     except Exception as e:
         logging.error(f"Error al registrar operaciones: {e}")
 
-if __name__ == "__main__":
-    simbolos = ["BTC/USDT", "ETH/USDT"]  # <-- Definición de simbolos
-    intervalos = ["1m", "5m", "1h"]  # <-- Definición de intervalos
+imbolos = ["BTC/USDT", "ETH/USDT"]
+    intervalos = ["5m", "15m", "1h", "4h"]
 
-    tiempo_inicio = obtener_tiempo_local()
-    logging.info(f"Inicio del backtesting (UTC): {tiempo_inicio}")
+    ahora = int(time.time())
+    siete_dias_atras = ahora - (7 * 24 * 60 * 60)
 
     for simbolo in simbolos:
         for intervalo in intervalos:
             logging.info(f"Descargando datos de {simbolo} en {intervalo}...")
-            df = obtener_datos_coinex(simbolo, intervalo, limit=1000)
-            if df is not None:
-                logging.info(f"Datos descargados correctamente para {simbolo} en {intervalo}")
-                df = calcular_indicadores(df)
-                if df is not None:
-                    logging.info("Aplicando estrategia...")
-                    df, operaciones = aplicar_estrategia(df)
-                    if operaciones:
-                        logging.info(f"Registrando operaciones para {simbolo} en {intervalo}...")
-                        registrar_operaciones(simbolo.replace("/", ""), intervalo, operaciones)
-                        logging.info(f"Operaciones registradas en registros/{simbolo.replace('/', '')}_{intervalo}.csv")
-                    else:
-                        logging.info(f"No hubo operaciones para {simbolo} en {intervalo}") #Añadido mensaje informativo
-                else:
-                    logging.warning(f"No se pudieron calcular los indicadores para {simbolo} en {intervalo}")
+            df = obtener_datos_coinex(simbolo, intervalo, siete_dias_atras, ahora)
+            if df is not None and not df.empty: #Comprobar que el DataFrame no sea None y no este vacio
+                print(f"Datos de {simbolo} en {intervalo}:")
+                print(df.head())
+                # Aquí va tu código para procesar los datos
+            elif df is not None and df.empty:
+                logging.warning(f"No hay datos disponibles para {simbolo} en {intervalo} en el periodo seleccionado")
             else:
-                logging.error(f"Error al obtener datos para {simbolo} en {intervalo}")
-
-    tiempo_fin = obtener_tiempo_local()
-    logging.info(f"Fin del backtesting (UTC): {tiempo_fin}")
+                logging.error(f"No se pudieron obtener datos para {simbolo} en {intervalo} después de {3} reintentos")
+            time.sleep(1) # Pausa después de cada intento, independientemente del resultado
