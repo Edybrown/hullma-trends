@@ -152,13 +152,18 @@ intervalos = ["5m", "15m", "1h", "4h"]
 ahora = int(time.time())
 siete_dias_atras = ahora - (7 * 24 * 60 * 60)
 
-for simbolo in simbolos:
+simbolos = ["BTC/USDT", "ETH/USDT"]  # Definición MOVIDA ARRIBA (SOLUCIÓN)
+intervalos = ["5m", "15m", "1h", "4h"]  # Definición MOVIDA ARRIBA
+ahora = int(time.time()) # Definición MOVIDA ARRIBA
+siete_dias_atras = ahora - (7 * 24 * 60 * 60) # Definición MOVIDA ARRIBA
+
+for simbolo in simbolos:  # Ahora simbolos está definida, NO HAY ERROR
     for intervalo in intervalos:
         logging.info(f"Descargando datos de {simbolo} en {intervalo}...")
         df = obtener_datos_coinex(simbolo, intervalo, siete_dias_atras, ahora)
         if df is not None and not df.empty:
             print(f"Datos de {simbolo} en {intervalo}:")
-            print(df.head())
+            print(df.head()
 
             # APLICAR ESTRATEGIA Y REGISTRAR OPERACIONES (CORRECCIÓN IMPORTANTE)
             df, operaciones = aplicar_estrategia(df)
