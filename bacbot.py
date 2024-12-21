@@ -7,6 +7,7 @@ import csv
 import datetime
 import pytz
 import numpy as np
+import json
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
