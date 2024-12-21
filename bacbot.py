@@ -28,34 +28,49 @@ def obtener_datos_coinex(simbolo, intervalo, limit=1000):
 
     intervalo_coinex = intervalos_coinex[intervalo]
     market = simbolo.replace("/", "")
-    url = f"https://api.coinex.com/v2/market/kline?market={market}&type={intervalo_coinex}&limit={limit}"
+    url = f"https://api.coinex.com/v2/spot/kline?market={market}&type={intervalo_coinex}&limit={limit}" # Endpoint corregido
 
     try:
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        if data['code'] == 0 and 'data' in data:
+
+        if data.get('code') == 0 and 'data' in data and data['data']: #Comprobar que data no este vacio
             klines = data['data']
-            df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-            df['time'] = pd.to_datetime(df['time'], unit='s') #Esta línea es la importante
+            # Convertir klines a lista de diccionarios si es necesario
+            if isinstance(klines, list):
+                if isinstance(klines[0],list): #Si viene como lista de listas
+                    df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
+                elif isinstance(klines[0], dict): #Si viene como lista de diccionarios, aunque la doc dice que no
+                    df = pd.DataFrame(klines)
+                else:
+                    logging.error(f"Formato de datos kline inesperado: {type(klines[0])}")
+                    print(json.dumps(data, indent=4))
+                    return None
+            elif isinstance(klines, dict): #Si viene como diccionario
+                df = pd.DataFrame.from_dict(klines, orient='index', columns=['open', 'close', 'high', 'low', 'volume'])
+                df['time'] = df.index
+            else:
+                logging.error(f"Formato de datos kline inesperado: {type(klines)}")
+                print(json.dumps(data, indent=4))
+                return None
+            df['time'] = pd.to_datetime(df['time'], unit='s')
             df.set_index('time', inplace=True)
             df = df.apply(pd.to_numeric, errors='coerce')
             df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'volume':'Volume'}, inplace=True)
             return df
         else:
-            logging.error(f"Error en la respuesta de la API: {data.get('message', 'Código de error desconocido: ' + str(data.get('code', 'sin codigo')))}")
+            mensaje_error = data.get('message', f"Código de error desconocido: {data.get('code', 'sin codigo')}")
+            logging.error(f"Error en la respuesta de la API: {mensaje_error}")
+            print(json.dumps(data, indent=4)) #Imprime el json para debug
             return None
     except requests.exceptions.RequestException as e:
         logging.error(f"Error al obtener datos de CoinEx: {e}")
         return None
-    except (KeyError, IndexError, TypeError) as e:
+    except (KeyError, IndexError, TypeError, ValueError) as e:
         logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
+        print(json.dumps(data, indent=4)) #Imprime el json para debug
         return None
-
-# ... (resto de las funciones: calcular_indicadores, aplicar_estrategia, registrar_operaciones)
-
-simbolos = ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
-intervalos = ["5m", "15m", "1h", "4h"]
 
 if __name__ == "__main__":
     tiempo_inicio = obtener_tiempo_local()
