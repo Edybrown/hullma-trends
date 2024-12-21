@@ -4,110 +4,67 @@ import talib
 import os
 import logging
 import csv
-import requests
 import datetime
-import pytz  # Para el manejo de zonas horarias
+import pytz
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def obtener_tiempo_local():
-    dt_utc = datetime.datetime.now(tz=pytz.utc) # Obtener tiempo UTC
+    dt_utc = datetime.datetime.now(tz=pytz.utc)
     return dt_utc
-
-# Ejemplo de uso:
-tiempo_local = obtener_tiempo_local()
-print(f"Tiempo local (UTC): {tiempo_local}")
-
-#Convertir a otra zona horaria (ej. Madrid):
-madrid_tz = pytz.timezone("Europe/Madrid")
-tiempo_madrid = tiempo_local.astimezone(madrid_tz)
-print(f"Tiempo local (Madrid): {tiempo_madrid}")
 
 def obtener_datos_coinex(simbolo, intervalo, limit=1000):
     intervalos_coinex = {
-        "5m": "5min", "15m": "15min", "1h": "1hour", "4h": "4hour"
+        "1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min",
+        "30m": "30min", "1h": "1hour", "2h": "2hour", "4h": "4hour",
+        "6h": "6hour", "12h": "12hour", "1d": "1day", "3d": "3day",
+        "1w": "1week"
     }
+
     if intervalo not in intervalos_coinex:
         logging.error(f"Intervalo no válido: {intervalo}. Intervalos válidos: {list(intervalos_coinex.keys())}")
         return None
 
     intervalo_coinex = intervalos_coinex[intervalo]
-    url = f"https://api.coinex.com/v1/market/kline?market={simbolo}&type={intervalo_coinex}&limit={limit}"
+    market = simbolo.replace("/", "")
+    url = f"https://api.coinex.com/v2/market/kline?market={market}&type={intervalo_coinex}&limit={limit}"
+
     try:
         response = requests.get(url)
         response.raise_for_status()
-        data = response.json()['data']
-        df = pd.DataFrame(data)
-        df['date'] = pd.to_datetime(df['date'], unit='s')
-        df.set_index('date', inplace=True)
-        df = df.apply(pd.to_numeric, errors='coerce')
-        df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'vol':'Volume'}, inplace=True)
-        return df
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error al obtener datos de Coinex: {e}")
-        return None
-    except KeyError as e:
-        logging.error(f"Error al procesar datos de Coinex, posible cambio en formato de API: {e}")
-        return None
-
-def calcular_indicadores(df):
-    try:
-        close = df['Close'].values
-        if len(close) < 14:
-            logging.warning("No hay suficientes datos para calcular los indicadores")
+        data = response.json()
+        if data['code'] == 0 and 'data' in data:
+            klines = data['data']
+            df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
+            df['time'] = pd.to_datetime(df['time'], unit='s') #Esta línea es la importante
+            df.set_index('time', inplace=True)
+            df = df.apply(pd.to_numeric, errors='coerce')
+            df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'volume':'Volume'}, inplace=True)
+            return df
+        else:
+            logging.error(f"Error en la respuesta de la API: {data.get('message', 'Código de error desconocido: ' + str(data.get('code', 'sin codigo')))}")
             return None
-        df['RSI_Lento'] = talib.RSI(close, timeperiod=14)
-        df['RSI_Rapido'] = talib.RSI(close, timeperiod=8)
-        df['HMA'] = talib.HMA(close, timeperiod=14)
-        return df
-    except Exception as e:
-        logging.error(f"Error al calcular indicadores: {e}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error al obtener datos de CoinEx: {e}")
+        return None
+    except (KeyError, IndexError, TypeError) as e:
+        logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
         return None
 
-def aplicar_estrategia(df, stop_loss=0.01):
-    operaciones = []
-    en_posicion = False
-    precio_entrada = 0
-
-    for i in range(1, len(df)):
-        if pd.isna(df['RSI_Lento'][i]) or pd.isna(df['RSI_Rapido'][i]) or pd.isna(df['HMA'][i]):
-            continue
-
-        if df['RSI_Rapido'][i] > df['RSI_Lento'][i] and not en_posicion:
-            operacion = {'fecha': df.index[i], 'tipo': 'compra', 'precio_entrada': df['Close'][i]}
-            en_posicion = True
-            precio_entrada = df['Close'][i]
-        elif df['RSI_Rapido'][i] < df['RSI_Lento'][i] and en_posicion:
-            operacion = {'fecha': df.index[i], 'tipo': 'venta', 'precio_entrada': precio_entrada, 'precio_salida': df['Close'][i], 'profit':(df['Close'][i]-precio_entrada)/precio_entrada}
-            operaciones.append(operacion)
-            en_posicion = False
-
-        if en_posicion:
-            if df['Close'][i] < precio_entrada * (1 - stop_loss):
-                operacion = {'fecha': df.index[i], 'tipo': 'venta SL', 'precio_entrada': precio_entrada, 'precio_salida': df['Close'][i], 'profit':(df['Close'][i]-precio_entrada)/precio_entrada}
-                operaciones.append(operacion)
-                en_posicion = False
-
-    return df, operaciones
-
-def registrar_operaciones(simbolo, intervalo, operaciones):
-    nombre_archivo = f"registros/{simbolo}_{intervalo}.csv"
-    os.makedirs(os.path.dirname(nombre_archivo), exist_ok=True)
-    with open(nombre_archivo, 'w', newline='') as csvfile:
-        fieldnames = ['fecha', 'tipo', 'precio_entrada','precio_salida', 'profit']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(operaciones)
+# ... (resto de las funciones: calcular_indicadores, aplicar_estrategia, registrar_operaciones)
 
 simbolos = ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
 intervalos = ["5m", "15m", "1h", "4h"]
 
 if __name__ == "__main__":
+    tiempo_inicio = obtener_tiempo_local()
+    logging.info(f"Inicio del backtesting (UTC): {tiempo_inicio}")
+
     for simbolo in simbolos:
         for intervalo in intervalos:
             logging.info(f"Descargando datos de {simbolo} en {intervalo}...")
-            df = obtener_datos_coinex(simbolo.replace("/", ""), intervalo, limit=1000)
+            df = obtener_datos_coinex(simbolo, intervalo, limit=1000) #<---Aquí se hace la llamada
             if df is not None:
                 logging.info(f"Datos descargados correctamente para {simbolo} en {intervalo}")
                 df = calcular_indicadores(df)
@@ -118,3 +75,10 @@ if __name__ == "__main__":
                         logging.info(f"Registrando operaciones para {simbolo} en {intervalo}...")
                         registrar_operaciones(simbolo.replace("/", ""), intervalo, operaciones)
                         logging.info(f"Operaciones registradas en registros/{simbolo.replace('/', '')}_{intervalo}.csv")
+                else:
+                    logging.warning(f"No se pudieron calcular los indicadores para {simbolo} en {intervalo}")
+
+            else:
+                logging.error(f"Error al obtener datos para {simbolo} en {intervalo}")
+    tiempo_fin = obtener_tiempo_local()
+    logging.info(f"Fin del backtesting (UTC): {tiempo_fin}")
