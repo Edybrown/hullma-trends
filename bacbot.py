@@ -11,34 +11,18 @@ import pytz  # Para el manejo de zonas horarias
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def obtener_tiempo_servidor_coinex():
-    url = "https://api.coinex.com/v2/common/time"  # Endpoint para el tiempo del servidor
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        timestamp_ms = data['data']  # Timestamp en milisegundos
-        timestamp_s = timestamp_ms / 1000  # Convertir a segundos
-        # Crear objeto datetime con zona horaria UTC
-        dt_utc = datetime.datetime.fromtimestamp(timestamp_s, tz=pytz.utc)
-        return dt_utc
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error al obtener el tiempo del servidor de Coinex: {e}")
-        return None
-    except KeyError as e:
-        logging.error(f"Error al procesar la respuesta del tiempo del servidor: {e}")
-        return None
+def obtener_tiempo_local():
+    dt_utc = datetime.datetime.now(tz=pytz.utc) # Obtener tiempo UTC
+    return dt_utc
 
-#Ejemplo de uso
-tiempo_servidor = obtener_tiempo_servidor_coinex()
-if tiempo_servidor:
-    print(f"Tiempo del servidor CoinEx (UTC): {tiempo_servidor}")
-    #Convertir a otra zona horaria (ej. Madrid)
-    madrid_tz = pytz.timezone("Europe/Madrid")
-    tiempo_madrid = tiempo_servidor.astimezone(madrid_tz)
-    print(f"Tiempo del servidor CoinEx (Madrid): {tiempo_madrid}")
-else:
-    print("No se pudo obtener el tiempo del servidor")
+# Ejemplo de uso:
+tiempo_local = obtener_tiempo_local()
+print(f"Tiempo local (UTC): {tiempo_local}")
+
+#Convertir a otra zona horaria (ej. Madrid):
+madrid_tz = pytz.timezone("Europe/Madrid")
+tiempo_madrid = tiempo_local.astimezone(madrid_tz)
+print(f"Tiempo local (Madrid): {tiempo_madrid}")
 
 def obtener_datos_coinex(simbolo, intervalo, limit=1000):
     intervalos_coinex = {
