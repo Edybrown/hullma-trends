@@ -106,8 +106,7 @@ def aplicar_estrategia(df, rsi_period_1=2, rsi_period_2=14, hma_period=20):
         logging.error("La columna 'Close' no está presente en el DataFrame.")
         return df, []
     
-    operaciones = []
-    
+   operaciones = []
     try:
         df['RSI_1'] = talib.RSI(df['Close'], timeperiod=rsi_period_1)
         df['RSI_2'] = talib.RSI(df['Close'], timeperiod=rsi_period_2)
@@ -120,26 +119,20 @@ def aplicar_estrategia(df, rsi_period_1=2, rsi_period_2=14, hma_period=20):
             rsi_2_actual = df['RSI_2'][i]
             rsi_1_anterior = df['RSI_1'][i-1]
 
-            # Señal de Compra:
-            # 1. RSI de corto plazo cruza por encima de 30.
-            # 2. RSI de largo plazo está por encima de 50.
-            # 3. El precio cruza por encima de la HMA.
             if rsi_1_actual > 30 and rsi_1_anterior <= 30 and rsi_2_actual > 50 and precio_actual > hma_actual:
                 operaciones.append([df.index[i], "COMPRA", precio_actual])
                 logging.info(f"Señal de COMPRA en {df.index[i]}: Precio {precio_actual}, HMA {hma_actual}, RSI1 {rsi_1_actual}, RSI2 {rsi_2_actual}")
-                
-            # Señal de Venta:
-            # 1. RSI de corto plazo cruza por debajo de 70.
-            # 2. RSI de largo plazo está por debajo de 50.
-            # 3. El precio cruza por debajo de la HMA.
+
             elif rsi_1_actual < 70 and rsi_1_anterior >= 70 and rsi_2_actual < 50 and precio_actual < hma_actual:
                 operaciones.append([df.index[i], "VENTA", precio_actual])
                 logging.info(f"Señal de VENTA en {df.index[i]}: Precio {precio_actual}, HMA {hma_actual}, RSI1 {rsi_1_actual}, RSI2 {rsi_2_actual}")
 
-          return df, operaciones
+        return df, operaciones  # CORRECTO: Fuera del bucle for, dentro del try
     except Exception as e:
         logging.error(f"Error al aplicar la estrategia: {e}")
         return df, []
+
+
 
 def registrar_operaciones(simbolo, intervalo, operaciones):
     nombre_archivo = f"registros/{simbolo}_{intervalo}.csv"
