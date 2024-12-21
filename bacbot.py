@@ -163,7 +163,7 @@ for simbolo in simbolos:  # Ahora simbolos está definida, NO HAY ERROR
         df = obtener_datos_coinex(simbolo, intervalo, siete_dias_atras, ahora)
         if df is not None and not df.empty:
             print(f"Datos de {simbolo} en {intervalo}:")
-            print(df.head()
+            print(df.head())
 
             # APLICAR ESTRATEGIA Y REGISTRAR OPERACIONES (CORRECCIÓN IMPORTANTE)
             df, operaciones = aplicar_estrategia(df)
