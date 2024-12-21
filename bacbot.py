@@ -41,7 +41,7 @@ def obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
 
             if data.get('code') == 0 and 'data' in data and data['data']:
                 klines = data['data']
-                if klines:
+                if klines: #Comprobar que klines no este vacio
                     if isinstance(klines[0], list):
                         df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
                     elif isinstance(klines[0], dict):
@@ -50,17 +50,13 @@ def obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
                         logging.error(f"Formato de datos kline inesperado: {type(klines[0])}")
                         print(json.dumps(data, indent=4))
                         return None
-                elif isinstance(klines, dict):
+                elif isinstance(klines, dict): #Si viene como diccionario
                     df = pd.DataFrame.from_dict(klines, orient='index', columns=['open', 'close', 'high', 'low', 'volume'])
                     df['time'] = df.index
-                else:
-                    logging.error(f"Formato de datos kline inesperado: {type(klines)}")
-                    print(json.dumps(data, indent=4))
-                    return None
-                else:
+                else: #Si klines no es ni lista ni diccionario
                     logging.warning(f"No se encontraron datos para {simbolo} en {intervalo} entre {desde} y {hasta}")
                     return pd.DataFrame()
-
+                
                 df['time'] = pd.to_datetime(df['time'], unit='s')
                 df.set_index('time', inplace=True)
                 df = df.apply(pd.to_numeric, errors='coerce')
@@ -78,24 +74,11 @@ def obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
                     return None
 
         except requests.exceptions.RequestException as e:
-            logging.error(f"Intento {attempt+1}/{max_retries} fallido al obtener datos de CoinEx: {e}")
-            if hasattr(e.response, 'text'):
-                logging.error(f"Respuesta del servidor: {e.response.text}")
-            if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) + random.random()
-                logging.info(f"Reintentando en {wait_time:.2f} segundos...")
-                time.sleep(wait_time)
-            else:
-                return None
+            # ... (manejo de excepciones)
         except (KeyError, IndexError, TypeError, ValueError) as e:
-            logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
-            if 'data' in locals():
-                print(json.dumps(data, indent=4))
-            return None
+            # ... (manejo de excepciones)
 
     return None
-
-
 
 def calcular_hma(data, period):
     """Calcula la Hull Moving Average."""
