@@ -140,6 +140,8 @@ def aplicar_estrategia(df, rsi_period_1=2, rsi_period_2=14, hma_period=20):
     except Exception as e:
         logging.error(f"Error al aplicar la estrategia: {e}")
         return df, []
+        print  (df, [])
+        print(operaciones )
 def registrar_operaciones(simbolo, intervalo, operaciones):
     nombre_archivo = f"registros/{simbolo}_{intervalo}.csv"
     os.makedirs("registros", exist_ok=True) # Crea el directorio si no existe.
