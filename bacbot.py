@@ -74,9 +74,20 @@ def obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
                     return None
 
         except requests.exceptions.RequestException as e:
-            # ... (manejo de excepciones)
+            logging.error(f"Intento {attempt+1}/{max_retries} fallido al obtener datos de CoinEx: {e}")
+            if hasattr(e.response, 'text'):
+                logging.error(f"Respuesta del servidor: {e.response.text}")
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + random.random()
+                logging.info(f"Reintentando en {wait_time:.2f} segundos...")
+                time.sleep(wait_time)
+            else:
+                return None
         except (KeyError, IndexError, TypeError, ValueError) as e:
-            # ... (manejo de excepciones)
+            logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
+            if 'data' in locals():
+                print(json.dumps(data, indent=4))
+            return None
 
     return None
 
@@ -141,7 +152,7 @@ def registrar_operaciones(simbolo, intervalo, operaciones):
     except Exception as e:
         logging.error(f"Error al registrar operaciones: {e}")
 
-imbolos = ["BTC/USDT", "ETH/USDT"]
+    simbolos = ["BTC/USDT", "ETH/USDT"]
     intervalos = ["5m", "15m", "1h", "4h"]
 
     ahora = int(time.time())
