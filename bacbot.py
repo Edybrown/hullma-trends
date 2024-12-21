@@ -106,7 +106,7 @@ def aplicar_estrategia(df, rsi_period_1=2, rsi_period_2=14, hma_period=20):
         logging.error("La columna 'Close' no está presente en el DataFrame.")
         return df, []
     
-   operaciones = []
+    operaciones = []
     try:
         df['RSI_1'] = talib.RSI(df['Close'], timeperiod=rsi_period_1)
         df['RSI_2'] = talib.RSI(df['Close'], timeperiod=rsi_period_2)
