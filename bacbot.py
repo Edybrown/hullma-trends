@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def obtener_tiempo_local():
     dt_utc = datetime.datetime.now(tz=pytz.utc)
     return dt_utc
+    
 def obtener_datos_coinex(simbolo, intervalo, limit=1000):
     intervalos_coinex = {
         "1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min",
@@ -27,51 +28,35 @@ def obtener_datos_coinex(simbolo, intervalo, limit=1000):
         logging.error(f"Intervalo no válido: {intervalo}. Intervalos válidos: {list(intervalos_coinex.keys())}")
         return None
 
-    intervalo_coinex = intervalos_coinex[intervalo] # Obtener el valor correcto del diccionario
+    intervalo_coinex = intervalos_coinex.get(intervalo) # Usar .get() para evitar KeyError
+    if intervalo_coinex is None: #Comprobar que el valor existe
+        logging.error(f"No se encontró la conversión para el intervalo: {intervalo}")
+        return None
+
     market = simbolo.replace("/", "")
     url = f"https://api.coinex.com/v2/spot/kline?market={market}&type={intervalo_coinex}&limit={limit}"
 
+    logging.info(f"URL de la API: {url}") # Imprimir la URL para depuración
+
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP
+        response.raise_for_status()
         data = response.json()
 
-        if data.get('code') == 0 and 'data' in data and data['data']:
-            klines = data['data']
-            if isinstance(klines, list):
-                if isinstance(klines[0], list):
-                    df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-                elif isinstance(klines[0], dict):
-                    df = pd.DataFrame(klines)
-                else:
-                    logging.error(f"Formato de datos kline inesperado: {type(klines[0])}")
-                    print(json.dumps(data, indent=4))
-                    return None
-            elif isinstance(klines, dict):
-                df = pd.DataFrame.from_dict(klines, orient='index', columns=['open', 'close', 'high', 'low', 'volume'])
-                df['time'] = df.index
-            else:
-                logging.error(f"Formato de datos kline inesperado: {type(klines)}")
-                print(json.dumps(data, indent=4))
-                return None
-            df['time'] = pd.to_datetime(df['time'], unit='s')
-            df.set_index('time', inplace=True)
-            df = df.apply(pd.to_numeric, errors='coerce')
-            df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'volume':'Volume'}, inplace=True)
-            return df
-        else:
-            mensaje_error = data.get('message', f"Código de error desconocido: {data.get('code', 'sin codigo')}")
-            logging.error(f"Error en la respuesta de la API: {mensaje_error}")
-            print(json.dumps(data, indent=4))
-            return None
+        # ... (resto del código para procesar la respuesta)
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Error al obtener datos de CoinEx: {e}")
+        if hasattr(e.response, 'text'): #Imprimir el texto de la respuesta si existe
+            logging.error(f"Respuesta del servidor: {e.response.text}")
         return None
     except (KeyError, IndexError, TypeError, ValueError) as e:
         logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
-        print(json.dumps(data, indent=4))
+        if 'data' in locals(): #Comprobar que data existe antes de imprimirlo
+            print(json.dumps(data, indent=4))
         return None
+
+
 def calcular_hma(data, period):
     """Calcula la Hull Moving Average."""
     wma1 = talib.WMA(data, period // 2)
