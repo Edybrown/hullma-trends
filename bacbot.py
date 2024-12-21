@@ -18,7 +18,7 @@ def obtener_tiempo_local():
     dt_utc = datetime.datetime.now(tz=pytz.utc)
     return dt_utc
     
-ef obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
+def obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
     intervalos_coinex = {
         "5m": "5min", "15m": "15min", "1h": "1hour", "4h": "4hour"
     }
