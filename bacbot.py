@@ -9,7 +9,7 @@ import pytz
 import numpy as np
 import json
 import random
-
+import time
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -136,12 +136,11 @@ def aplicar_estrategia(df, rsi_period_1=2, rsi_period_2=14, hma_period=20):
                 operaciones.append([df.index[i], "VENTA", precio_actual])
                 logging.info(f"Señal de VENTA en {df.index[i]}: Precio {precio_actual}, HMA {hma_actual}, RSI1 {rsi_1_actual}, RSI2 {rsi_2_actual}")
 
-        return df, operaciones
+          return df, operaciones
     except Exception as e:
         logging.error(f"Error al aplicar la estrategia: {e}")
         return df, []
-        print  (df, [])
-        print(operaciones )
+
 def registrar_operaciones(simbolo, intervalo, operaciones):
     nombre_archivo = f"registros/{simbolo}_{intervalo}.csv"
     os.makedirs("registros", exist_ok=True) # Crea el directorio si no existe.
@@ -155,21 +154,31 @@ def registrar_operaciones(simbolo, intervalo, operaciones):
         logging.error(f"Error al registrar operaciones: {e}")
 
     simbolos = ["BTC/USDT", "ETH/USDT"]
-    intervalos = ["5m", "15m", "1h", "4h"]
+intervalos = ["5m", "15m", "1h", "4h"]
 
-    ahora = int(time.time())
-    siete_dias_atras = ahora - (7 * 24 * 60 * 60)
+ahora = int(time.time())
+siete_dias_atras = ahora - (7 * 24 * 60 * 60)
 
-    for simbolo in simbolos:
-        for intervalo in intervalos:
-            logging.info(f"Descargando datos de {simbolo} en {intervalo}...")
-            df = obtener_datos_coinex(simbolo, intervalo, siete_dias_atras, ahora)
-            if df is not None and not df.empty: #Comprobar que el DataFrame no sea None y no este vacio
-                print(f"Datos de {simbolo} en {intervalo}:")
-                print(df.head())
-                # Aquí va tu código para procesar los datos
-            elif df is not None and df.empty:
-                logging.warning(f"No hay datos disponibles para {simbolo} en {intervalo} en el periodo seleccionado")
+for simbolo in simbolos:
+    for intervalo in intervalos:
+        logging.info(f"Descargando datos de {simbolo} en {intervalo}...")
+        df = obtener_datos_coinex(simbolo, intervalo, siete_dias_atras, ahora)
+        if df is not None and not df.empty:
+            print(f"Datos de {simbolo} en {intervalo}:")
+            print(df.head())
+
+            # APLICAR ESTRATEGIA Y REGISTRAR OPERACIONES (CORRECCIÓN IMPORTANTE)
+            df, operaciones = aplicar_estrategia(df)
+            if operaciones: # Comprobar que hay operaciones antes de registrarlas
+                registrar_operaciones(simbolo, intervalo, operaciones)
+                print(f"Operaciones para {simbolo} en {intervalo}:")
+                for operacion in operaciones:
+                    print(operacion)
             else:
-                logging.error(f"No se pudieron obtener datos para {simbolo} en {intervalo} después de {3} reintentos")
-            time.sleep(1) # Pausa después de cada intento, independientemente del resultado
+                print(f"No hubo operaciones para {simbolo} en {intervalo}")
+
+        elif df is not None and df.empty:
+            logging.warning(f"No hay datos disponibles para {simbolo} en {intervalo} en el periodo seleccionado")
+        else:
+            logging.error(f"No se pudieron obtener datos para {simbolo} en {intervalo} después de {3} reintentos")
+        time.sleep(1)
