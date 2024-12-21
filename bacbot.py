@@ -12,7 +12,7 @@ import pytz  # Para el manejo de zonas horarias
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def obtener_tiempo_servidor_coinex():
-    url = "https://api.coinex.com/v1/common/time"  # Endpoint para el tiempo del servidor
+    url = "https://api.coinex.com/v2/common/time"  # Endpoint para el tiempo del servidor
     try:
         response = requests.get(url)
         response.raise_for_status()
