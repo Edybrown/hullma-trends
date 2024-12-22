@@ -34,10 +34,10 @@ def strategy(df, rsi_fast_period=8, rsi_slow_period=14, hull_period=12, stop_los
 
     df['Signal'] = 0  # 1: Compra, -1: Vende
 
-    # Condiciones para compra
+    # Confirmar señales de compra al cierre de la vela
     df.loc[(df['RSI_fast'] < 30) & (df['RSI_slow'] < 30) & (df['Hull'] > df['close']), 'Signal'] = 1
     
-    # Condiciones para venta (cuando el precio se mueve en contra un 1% o cuando los indicadores marcan venta)
+    # Confirmar señales de venta al cierre de la vela
     df.loc[(df['RSI_fast'] > 70) | (df['RSI_slow'] > 70) | (df['Hull'] < df['close']), 'Signal'] = -1
 
     df['Stop_loss'] = df['close'] * (1 - stop_loss_pct)  # Precio de stop loss al 1% de la compra
@@ -59,7 +59,7 @@ def backtest(df, initial_balance=1000, trade_size=1):
         signal = df['Signal'].iloc[i]
         stop_loss = df['Stop_loss'].iloc[i]
         
-        # Ejecutar compra
+        # Confirmar si la señal de compra es válida al cierre
         if signal == 1 and position == 0:  # Comprar
             position = trade_size
             buy_price = price
@@ -67,7 +67,7 @@ def backtest(df, initial_balance=1000, trade_size=1):
             trades += 1
             print(f"Compra en {price}")
 
-        # Ejecutar venta o stop loss
+        # Confirmar si la señal de venta es válida al cierre
         elif position > 0:  # Vender
             if price <= stop_loss:  # Si el precio cae un 1%
                 balance += position * price
