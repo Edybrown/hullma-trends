@@ -49,7 +49,7 @@ def main():
             table_name = f"{symbol.replace('/', '_')}_{timeframe}"
             save_to_database(df, table_name, db_name)
 
-    print("Directorio actual:", os.getcwd()
+    print("Directorio actual:", os.getcwd())
 
 if __name__ == "__main__":
     main()
