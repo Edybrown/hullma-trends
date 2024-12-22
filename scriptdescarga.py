@@ -2,6 +2,7 @@ import ccxt
 import pandas as pd
 import sqlite3
 from datetime import datetime
+import os
 
 # Configura el exchange
 def fetch_data(symbol, timeframe, since=None, limit=1000):
@@ -47,6 +48,8 @@ def main():
             df = ohlcv_to_dataframe(data)
             table_name = f"{symbol.replace('/', '_')}_{timeframe}"
             save_to_database(df, table_name, db_name)
+
+    print("Directorio actual:", os.getcwd()
 
 if __name__ == "__main__":
     main()
