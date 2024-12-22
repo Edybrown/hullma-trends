@@ -48,7 +48,7 @@ def strategy(df, rsi_fast_period=8, rsi_slow_period=14, hull_period=12, stop_los
 def backtest(df, initial_balance=1000, trade_size=1):
     balance = initial_balance
     position = 0  # Estado actual de la posición
-    equity_curve = []  # Para guardar el balance en cada paso
+    equity_curve = [initial_balance] * len(df)  # Inicializamos la equity curve con el balance inicial
     trades = 0
     winning_trades = 0
     losing_trades = 0
@@ -82,9 +82,9 @@ def backtest(df, initial_balance=1000, trade_size=1):
         
         # Calcular el equity
         equity = balance + position * price
-        equity_curve.append(equity)
+        equity_curve[i] = equity  # Asignamos el valor de equity en la posición correspondiente
 
-    df['Equity'] = equity_curve
+    df['Equity'] = equity_curve  # Asignar la columna 'Equity' con la lista completa
     total_profit = df['Equity'].iloc[-1] - initial_balance
     profit_pct = (total_profit / initial_balance) * 100
     win_pct = (winning_trades / trades) * 100 if trades > 0 else 0
