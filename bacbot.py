@@ -143,7 +143,7 @@ def analyze_assets_and_timeframes(assets, timeframes, db_name="crypto_data.db"):
 
 # Script principal
 if __name__ == "__main__":
-    assets = ["BTC_USDT", "ETH_USDT", "XRP_USDT"]  # Ejemplo de activos
+    assets = ["BTC_USDT", "ETH_USDT", "BNB_USDT"]  # Ejemplo de activos
     timeframes = ["5m", "15m", "1h"]  # Ejemplo de temporalidades
     results_df = analyze_assets_and_timeframes(assets, timeframes)
     
