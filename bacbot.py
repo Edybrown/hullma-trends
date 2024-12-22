@@ -1,182 +1,126 @@
-import requests
 import pandas as pd
-import talib
-import os
-import logging
-import csv
-import datetime
-import pytz
+import sqlite3
 import numpy as np
-import json
-import random
-import time
+import matplotlib.pyplot as plt
 
-# Configuración de logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Cargar los datos desde la base de datos
+def load_data(table_name, db_name="crypto_data.db"):
+    with sqlite3.connect(db_name) as conn:
+        query = f"SELECT * FROM {table_name} ORDER BY timestamp ASC"
+        df = pd.read_sql(query, conn)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])  # Asegurar formato de fecha
+    return df
 
-def obtener_tiempo_local():
-    dt_utc = datetime.datetime.now(tz=pytz.utc)
-    return dt_utc
+# Calcular RSI
+def calculate_rsi(df, period=14):
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+# Calcular Hull Moving Average
+def calculate_hull(df, period=12):
+    wma_half = df['close'].rolling(window=period // 2).mean()
+    wma_full = df['close'].rolling(window=period).mean()
+    hull = (2 * wma_half - wma_full).rolling(window=int(np.sqrt(period))).mean()
+    return hull
+
+# Implementar la estrategia: RSI y HullTrend
+def strategy(df, rsi_fast_period=8, rsi_slow_period=14, hull_period=12, stop_loss_pct=0.01):
+    df['RSI_fast'] = calculate_rsi(df, rsi_fast_period)
+    df['RSI_slow'] = calculate_rsi(df, rsi_slow_period)
+    df['Hull'] = calculate_hull(df, hull_period)
+
+    df['Signal'] = 0  # 1: Compra, -1: Vende
+
+    # Condiciones para compra
+    df.loc[(df['RSI_fast'] < 30) & (df['RSI_slow'] < 30) & (df['Hull'] > df['close']), 'Signal'] = 1
     
-def obtener_datos_coinex(simbolo, intervalo, desde, hasta, max_retries=3):
-    intervalos_coinex = {
-        "5m": "5min", "15m": "15min", "1h": "1hour", "4h": "4hour"
-    }
+    # Condiciones para venta (cuando el precio se mueve en contra un 1% o cuando los indicadores marcan venta)
+    df.loc[(df['RSI_fast'] > 70) | (df['RSI_slow'] > 70) | (df['Hull'] < df['close']), 'Signal'] = -1
 
-    if intervalo not in intervalos_coinex:
-        logging.error(f"Intervalo no válido: {intervalo}. Intervalos válidos: {list(intervalos_coinex.keys())}")
-        return None
+    df['Stop_loss'] = df['close'] * (1 - stop_loss_pct)  # Precio de stop loss al 1% de la compra
 
-    intervalo_coinex = intervalos_coinex[intervalo]
-    market = simbolo.replace("/", "")
-    url = f"https://api.coinex.com/v2/spot/kline?market={market}&type={intervalo_coinex}&from={desde}&to={hasta}"
+    return df
 
-    logging.info(f"URL de la API: {url}")
+# Simular las operaciones
+def backtest(df, initial_balance=1000, trade_size=1):
+    balance = initial_balance
+    position = 0  # Estado actual de la posición
+    equity_curve = []  # Para guardar el balance en cada paso
+    trades = 0
+    winning_trades = 0
+    losing_trades = 0
+    total_profit = 0
 
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            data = response.json()
+    for i in range(1, len(df)):
+        price = df['close'].iloc[i]
+        signal = df['Signal'].iloc[i]
+        stop_loss = df['Stop_loss'].iloc[i]
+        
+        # Ejecutar compra
+        if signal == 1 and position == 0:  # Comprar
+            position = trade_size
+            buy_price = price
+            balance -= position * buy_price
+            trades += 1
+            print(f"Compra en {price}")
 
-            if data.get('code') == 0 and 'data' in data and data['data']:
-                klines = data['data']
-                if klines: #Comprobar que klines no este vacio
-                    if isinstance(klines[0], list):
-                        df = pd.DataFrame(klines, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-                    elif isinstance(klines[0], dict):
-                        df = pd.DataFrame(klines)
-                    else:
-                        logging.error(f"Formato de datos kline inesperado: {type(klines[0])}")
-                        print(json.dumps(data, indent=4))
-                        return None
-                elif isinstance(klines, dict): #Si viene como diccionario
-                    df = pd.DataFrame.from_dict(klines, orient='index', columns=['open', 'close', 'high', 'low', 'volume'])
-                    df['time'] = df.index
-                else: #Si klines no es ni lista ni diccionario
-                    logging.warning(f"No se encontraron datos para {simbolo} en {intervalo} entre {desde} y {hasta}")
-                    return pd.DataFrame()
-                
-                df['time'] = pd.to_datetime(df['time'], unit='s')
-                df.set_index('time', inplace=True)
-                df = df.apply(pd.to_numeric, errors='coerce')
-                df.rename(columns={'open':'Open', 'close':'Close', 'high':'High', 'low':'Low', 'volume':'Volume'}, inplace=True)
-                return df
-            else:
-                mensaje_error = data.get('message', f"Código de error desconocido: {data.get('code', 'sin codigo')}")
-                logging.error(f"Error en la respuesta de la API: {mensaje_error}")
-                print(json.dumps(data, indent=4))
-                if attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + random.random()
-                    logging.info(f"Reintentando en {wait_time:.2f} segundos...")
-                    time.sleep(wait_time)
-                else:
-                    return None
+        # Ejecutar venta o stop loss
+        elif position > 0:  # Vender
+            if price <= stop_loss:  # Si el precio cae un 1%
+                balance += position * price
+                position = 0
+                losing_trades += 1
+                print(f"Stop loss: Venta en {price}")
+            elif signal == -1:  # Señal de venta
+                balance += position * price
+                position = 0
+                winning_trades += 1
+                print(f"Venta en {price}")
+        
+        # Calcular el equity
+        equity = balance + position * price
+        equity_curve.append(equity)
 
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Intento {attempt+1}/{max_retries} fallido al obtener datos de CoinEx: {e}")
-            if hasattr(e.response, 'text'):
-                logging.error(f"Respuesta del servidor: {e.response.text}")
-            if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) + random.random()
-                logging.info(f"Reintentando en {wait_time:.2f} segundos...")
-                time.sleep(wait_time)
-            else:
-                return None
-        except (KeyError, IndexError, TypeError, ValueError) as e:
-            logging.error(f"Error al procesar datos de CoinEx, posible cambio en formato de API: {e}")
-            if 'data' in locals():
-                print(json.dumps(data, indent=4))
-            return None
+    df['Equity'] = equity_curve
+    total_profit = df['Equity'].iloc[-1] - initial_balance
+    profit_pct = (total_profit / initial_balance) * 100
+    win_pct = (winning_trades / trades) * 100 if trades > 0 else 0
+    loss_pct = (losing_trades / trades) * 100 if trades > 0 else 0
 
-    return None
-
-def calcular_hma(data, period):
-    """Calcula la Hull Moving Average."""
-    wma1 = talib.WMA(data, period // 2)
-    wma2 = talib.WMA(data, period)
-    delta_wma = 2 * wma1 - wma2
-    hma = talib.WMA(delta_wma, int(np.sqrt(period)))
-    return hma
-
-def aplicar_estrategia(df, rsi_period_1=2, rsi_period_2=14, hma_period=20):
-    """Aplica la estrategia de trading basada en Doble RSI y HMA."""
-
-    if 'Close' not in df.columns:
-        logging.error("La columna 'Close' no está presente en el DataFrame.")
-        return df, []
+    # Resultados finales
+    print(f"\nBalance final: {df['Equity'].iloc[-1]:.2f} USDT")
+    print(f"Operaciones totales: {trades}")
+    print(f"Operaciones positivas: {winning_trades}")
+    print(f"Operaciones negativas: {losing_trades}")
+    print(f"Ganancia total: {total_profit:.2f} USDT")
+    print(f"Porcentaje de ganancias: {profit_pct:.2f}%")
+    print(f"Porcentaje de operaciones ganadoras: {win_pct:.2f}%")
+    print(f"Porcentaje de operaciones perdedoras: {loss_pct:.2f}%")
     
-    operaciones = []
-    try:
-        df['RSI_1'] = talib.RSI(df['Close'], timeperiod=rsi_period_1)
-        df['RSI_2'] = talib.RSI(df['Close'], timeperiod=rsi_period_2)
-        df['HMA'] = calcular_hma(df['Close'], hma_period)
+    return df
 
-        for i in range(1, len(df)):
-            precio_actual = df['Close'][i]
-            hma_actual = df['HMA'][i]
-            rsi_1_actual = df['RSI_1'][i]
-            rsi_2_actual = df['RSI_2'][i]
-            rsi_1_anterior = df['RSI_1'][i-1]
+# Graficar resultados
+def plot_results(df):
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['timestamp'], df['close'], label="Precio", color="blue")
+    plt.plot(df['timestamp'], df['Hull'], label="Hull Trend", color="red")
+    plt.title("Estrategia: RSI y Hull Trend")
+    plt.legend()
+    plt.show()
 
-            if rsi_1_actual > 30 and rsi_1_anterior <= 30 and rsi_2_actual > 50 and precio_actual > hma_actual:
-                operaciones.append([df.index[i], "COMPRA", precio_actual])
-                logging.info(f"Señal de COMPRA en {df.index[i]}: Precio {precio_actual}, HMA {hma_actual}, RSI1 {rsi_1_actual}, RSI2 {rsi_2_actual}")
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['timestamp'], df['Equity'], label="Curva de Equity", color="purple")
+    plt.title("Curva de Equity")
+    plt.legend()
+    plt.show()
 
-            elif rsi_1_actual < 70 and rsi_1_anterior >= 70 and rsi_2_actual < 50 and precio_actual < hma_actual:
-                operaciones.append([df.index[i], "VENTA", precio_actual])
-                logging.info(f"Señal de VENTA en {df.index[i]}: Precio {precio_actual}, HMA {hma_actual}, RSI1 {rsi_1_actual}, RSI2 {rsi_2_actual}")
-
-        return df, operaciones  # CORRECTO: Fuera del bucle for, dentro del try
-    except Exception as e:
-        logging.error(f"Error al aplicar la estrategia: {e}")
-        return df, []
-
-
-
-def registrar_operaciones(simbolo, intervalo, operaciones):
-    nombre_archivo = f"registros/{simbolo}_{intervalo}.csv"
-    os.makedirs("registros", exist_ok=True) # Crea el directorio si no existe.
-    try:
-        with open(nombre_archivo, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["Fecha", "Tipo", "Precio"]) # Encabezado del CSV
-            for operacion in operaciones:
-                writer.writerow(operacion)
-    except Exception as e:
-        logging.error(f"Error al registrar operaciones: {e}")
-
-    simbolos = ["BTC/USDT", "ETH/USDT"]
-intervalos = ["5m", "15m", "1h", "4h"]
-
-ahora = int(time.time())
-siete_dias_atras = ahora - (7 * 24 * 60 * 60)
-
-simbolos = ["BTC/USDT", "ETH/USDT"]  # Definición MOVIDA ARRIBA (SOLUCIÓN)
-intervalos = ["5m", "15m", "1h", "4h"]  # Definición MOVIDA ARRIBA
-ahora = int(time.time()) # Definición MOVIDA ARRIBA
-siete_dias_atras = ahora - (7 * 24 * 60 * 60) # Definición MOVIDA ARRIBA
-
-for simbolo in simbolos:  # Ahora simbolos está definida, NO HAY ERROR
-    for intervalo in intervalos:
-        logging.info(f"Descargando datos de {simbolo} en {intervalo}...")
-        df = obtener_datos_coinex(simbolo, intervalo, siete_dias_atras, ahora)
-        if df is not None and not df.empty:
-            print(f"Datos de {simbolo} en {intervalo}:")
-            print(df.head())
-
-            # APLICAR ESTRATEGIA Y REGISTRAR OPERACIONES (CORRECCIÓN IMPORTANTE)
-            df, operaciones = aplicar_estrategia(df)
-            if operaciones: # Comprobar que hay operaciones antes de registrarlas
-                registrar_operaciones(simbolo, intervalo, operaciones)
-                print(f"Operaciones para {simbolo} en {intervalo}:")
-                for operacion in operaciones:
-                    print(operacion)
-            else:
-                print(f"No hubo operaciones para {simbolo} en {intervalo}")
-
-        elif df is not None and df.empty:
-            logging.warning(f"No hay datos disponibles para {simbolo} en {intervalo} en el periodo seleccionado")
-        else:
-            logging.error(f"No se pudieron obtener datos para {simbolo} en {intervalo} después de {3} reintentos")
-        time.sleep(1)
+# Script principal
+if __name__ == "__main__":
+    table_name = "BTC_USDT_5m"  # Tabla con los datos históricos
+    df = load_data(table_name)
+    df = strategy(df)
+    df = backtest(df)
+    plot_results(df)
