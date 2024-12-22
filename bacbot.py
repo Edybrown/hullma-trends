@@ -117,10 +117,36 @@ def plot_results(df):
     plt.legend()
     plt.show()
 
+# Función para analizar múltiples activos y temporalidades
+def analyze_assets_and_timeframes(assets, timeframes, db_name="crypto_data.db"):
+    results = []
+
+    for asset in assets:
+        for timeframe in timeframes:
+            table_name = f"{asset}_{timeframe}"
+            print(f"\nAnalizando {asset} en temporalidad {timeframe}")
+            df = load_data(table_name, db_name)
+            df = strategy(df)
+            df = backtest(df)
+            results.append({
+                'Asset': asset,
+                'Timeframe': timeframe,
+                'Total Operations': len(df),
+                'Positive Trades': df[df['Signal'] == 1].shape[0],
+                'Negative Trades': df[df['Signal'] == -1].shape[0],
+                'Total Profit': df['Equity'].iloc[-1] - 1000,  # Suponiendo que la inversión inicial es 1000
+                'Profit Percentage': (df['Equity'].iloc[-1] - 1000) / 1000 * 100
+            })
+            plot_results(df)
+
+    return pd.DataFrame(results)
+
 # Script principal
 if __name__ == "__main__":
-    table_name = "BTC_USDT_5m"  # Tabla con los datos históricos
-    df = load_data(table_name)
-    df = strategy(df)
-    df = backtest(df)
-    plot_results(df)
+    assets = ["BTC_USDT", "ETH_USDT", "XRP_USDT"]  # Ejemplo de activos
+    timeframes = ["5m", "15m", "1h"]  # Ejemplo de temporalidades
+    results_df = analyze_assets_and_timeframes(assets, timeframes)
+    
+    # Mostrar resultados finales
+    print("\nResultados de análisis:")
+    print(results_df)
