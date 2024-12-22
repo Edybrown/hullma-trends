@@ -26,7 +26,7 @@ def calculate_hull(df, period=12):
     hull = (2 * wma_half - wma_full).rolling(window=int(np.sqrt(period))).mean()
     return hull
 
-# Implementar la estrategia: RSI y HullTrend
+# Implementar la estrategia: Cruce de RSI y HullTrend
 def strategy(df, rsi_fast_period=8, rsi_slow_period=14, hull_period=12, stop_loss_pct=0.01):
     df['RSI_fast'] = calculate_rsi(df, rsi_fast_period)
     df['RSI_slow'] = calculate_rsi(df, rsi_slow_period)
@@ -34,11 +34,11 @@ def strategy(df, rsi_fast_period=8, rsi_slow_period=14, hull_period=12, stop_los
 
     df['Signal'] = 0  # 1: Compra, -1: Vende
 
-    # Confirmar señales de compra al cierre de la vela
-    df.loc[(df['RSI_fast'] < 30) & (df['RSI_slow'] < 30) & (df['Hull'] > df['close']), 'Signal'] = 1
+    # Condiciones para compra (cuando RSI rápido cruza hacia arriba RSI lento y el precio está por debajo de Hull)
+    df.loc[(df['RSI_fast'] > df['RSI_slow']) & (df['RSI_fast'].shift(1) <= df['RSI_slow'].shift(1)) & (df['close'] < df['Hull']), 'Signal'] = 1
     
-    # Confirmar señales de venta al cierre de la vela
-    df.loc[(df['RSI_fast'] > 70) | (df['RSI_slow'] > 70) | (df['Hull'] < df['close']), 'Signal'] = -1
+    # Condiciones para venta (cuando RSI rápido cruza hacia abajo RSI lento y el precio está por encima de Hull)
+    df.loc[(df['RSI_fast'] < df['RSI_slow']) & (df['RSI_fast'].shift(1) >= df['RSI_slow'].shift(1)) & (df['close'] > df['Hull']), 'Signal'] = -1
 
     df['Stop_loss'] = df['close'] * (1 - stop_loss_pct)  # Precio de stop loss al 1% de la compra
 
@@ -59,7 +59,7 @@ def backtest(df, initial_balance=1000, trade_size=1):
         signal = df['Signal'].iloc[i]
         stop_loss = df['Stop_loss'].iloc[i]
         
-        # Confirmar si la señal de compra es válida al cierre
+        # Ejecutar compra
         if signal == 1 and position == 0:  # Comprar
             position = trade_size
             buy_price = price
@@ -67,7 +67,7 @@ def backtest(df, initial_balance=1000, trade_size=1):
             trades += 1
             print(f"Compra en {price}")
 
-        # Confirmar si la señal de venta es válida al cierre
+        # Ejecutar venta o stop loss
         elif position > 0:  # Vender
             if price <= stop_loss:  # Si el precio cae un 1%
                 balance += position * price
@@ -107,7 +107,7 @@ def plot_results(df):
     plt.figure(figsize=(12, 6))
     plt.plot(df['timestamp'], df['close'], label="Precio", color="blue")
     plt.plot(df['timestamp'], df['Hull'], label="Hull Trend", color="red")
-    plt.title("Estrategia: RSI y Hull Trend")
+    plt.title("Estrategia: Cruce de RSI y Hull Trend")
     plt.legend()
     plt.show()
 
