@@ -176,6 +176,15 @@ def on_open(ws):
         "id": 1
     }
     ws.send(json.dumps(subscribe_message))
+  
+def on_error(ws, error):
+    logging.error(f"Error en la conexión WebSocket: {error}")  
+
+def on_close(ws, close_status_code, close_msg):
+    logging.info("Conexión WebSocket cerrada")
+    if close_status_code or close_msg:
+        logging.info(f"Código de cierre: {close_status_code}, Mensaje de cierre: {close_msg}")
+
 
 def connect_websocket():
     global ws
@@ -185,13 +194,14 @@ def connect_websocket():
                                 on_message=on_message,
                                 on_error=on_error,
                                 on_close=on_close)
-    while True: #Reconexión automática
+    while True:
         try:
-            ws.run_forever(ping_interval=30)  # Envía pings cada 30 segundos
+            ws.run_forever(ping_interval=30)
         except Exception as e:
             logging.error(f"Error en la conexión WebSocket: {e}")
-            time.sleep(5)  # Espera 5 segundos antes de reintentar
+            time.sleep(5)
             logging.info("Reintentando conexión WebSocket...")
+
 
 def main():
     try:
