@@ -103,21 +103,30 @@ def backtest(df, initial_balance=1000, trade_size=1):
     return df
 
 # Graficar resultados
-def plot_results(df):
+def plot_results(df, output_dir="."):
+    """
+    Genera y guarda las gráficas de resultados en el directorio especificado.
+
+    Args:
+        df (pd.DataFrame): DataFrame con los resultados del análisis.
+        output_dir (str): Directorio donde se guardarán las imágenes.
+    """
+    # Graficar precio y Hull Trend
     plt.figure(figsize=(12, 6))
     plt.plot(df['timestamp'], df['close'], label="Precio", color="blue")
     plt.plot(df['timestamp'], df['Hull'], label="Hull Trend", color="red")
     plt.title("Estrategia: Cruce de RSI y Hull Trend")
     plt.legend()
-    plt.show()
+    plt.savefig(f"{output_dir}/hull_trend_strategy.png")  # Guardar la gráfica
+    plt.close()  # Cerrar para evitar sobrecarga
 
+    # Graficar curva de equity
     plt.figure(figsize=(12, 6))
     plt.plot(df['timestamp'], df['Equity'], label="Curva de Equity", color="purple")
     plt.title("Curva de Equity")
     plt.legend()
-    plt.show()
-
-# Función para analizar múltiples activos y temporalidades
+    plt.savefig(f"{output_dir}/equity_curve.png")  # Guardar la gráfica
+    plt.close()
 def analyze_assets_and_timeframes(assets, timeframes, db_name="crypto_data.db"):
     results = []
 
