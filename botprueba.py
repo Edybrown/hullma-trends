@@ -10,6 +10,8 @@ import sys
 import gzip
 import pandas as pd
 import ta  # Asegúrate de instalar: pip install ta
+import random
+
 
 # Configuración (¡REEMPLAZA CON TUS CREDENCIALES!)
 API_KEY = "2A8AE2B7B0D0458CBF00F06620FA4E7C"
@@ -194,13 +196,17 @@ def connect_websocket():
                                 on_message=on_message,
                                 on_error=on_error,
                                 on_close=on_close)
+    retry_delay = 1
     while True:
         try:
             ws.run_forever(ping_interval=30)
+            retry_delay = 1
         except Exception as e:
             logging.error(f"Error en la conexión WebSocket: {e}")
-            time.sleep(5)
-            logging.info("Reintentando conexión WebSocket...")
+            time.sleep(retry_delay + random.uniform(0,1))
+            retry_delay = min(retry_delay * 2, 60)
+            logging.info(f"Reintentando conexión WebSocket en {retry_delay} segundos...")
+
 
 
 def main():
