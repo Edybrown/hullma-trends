@@ -51,7 +51,7 @@ def get_coinex_signature(data, secret_key):
     return m.hexdigest().upper()
 
 def coinex_api_request(method, path, params=None):
-    url = f"https://api.coinex.com/{path}"
+    url = f"https://api.coinex.com/v2/{path}"
     headers = {'Content-Type': 'application/json'}
     if params:
         params['access_id'] = API_KEY
@@ -103,7 +103,7 @@ def place_order(side, amount):
         logging.error(f"Excepción al colocar la orden: {e}")
         return None
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
-    path = "/spot/kline"
+    path = "spot/kline"
     params = { #Construir los parametros en un diccionario
         "market": "BTCUSDT",
         "limit": 200,
