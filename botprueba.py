@@ -143,6 +143,20 @@ def calculate_indicators(df):
         return None
 
 # Funciones del WebSocket
+def on_open(ws): #Definicion de on_open ANTES de usarlo
+    logging.info("Conexión WebSocket abierta")
+    subscribe_message_ticker = {
+        "method": "subscribe",
+        "params": ["ticker.BTCUSDT"],
+        "id": 1
+    }
+    ws.send(json.dumps(subscribe_message_ticker))
+    subscribe_message_kline = {
+        "method": "subscribe",
+        "params": ["kline_1hour.BTCUSDT"],
+        "id": 2
+    }
+    ws.send(json.dumps(subscribe_message_kline))
 
 def on_message(ws, message):
     global order_in_progress, last_buy_price, df_historical, candles
@@ -179,38 +193,6 @@ def on_message(ws, message):
     except (json.JSONDecodeError, UnicodeDecodeError, gzip.BadGzipFile) as e:
         logging.error(f"Error al procesar mensaje: {e}")
 
-def check_signals(df):
-    global order_in_progress, last_buy_price
-    if order_in_progress or len(df) < 2:
-        return
-
-    last_row = df.iloc[-1]
-    previous_row = df.iloc[-2]
-    balance = get_balance()
-
-    if balance is None:
-        logging.error("No se pudo obtener el saldo. Imposible operar.")
-        return
-
-    if (last_row['rsi_fast'] > last_row['rsi_slow'] and
-            previous_row['rsi_fast'] <= previous_row['rsi_slow'] and
-            last_row['close'] > last_row['hma'] and last_buy_price is None):
-        amount_usdt = balance
-        if amount_usdt is not None:  # Verificar que balance no sea None
-            amount_btc = amount_usdt / last_row['close']
-            if amount_btc * last_row['close'] > 0.0001:
-                order_in_progress = True
-                order_id = place_order('buy', amount_btc)
-                if order_id:
-                    logging.info(f"Compra ejecutada con order_id: {order_id}")
-                    last_buy_price = last_row['close'] #Actualizar el precio de compra
-                else:
-                    logging.error("Fallo al ejecutar la compra")
-                order_in_progress = False #Resetear la variable
-            else:
-                logging.info("Cantidad de compra demasiado pequeña.")
-        else:
-            logging.error("No se pudo obtener el balance para calcular la cantidad de compra")
 
 def check_signals(df):
     global order_in_progress, last_buy_price
