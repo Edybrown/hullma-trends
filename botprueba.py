@@ -180,7 +180,9 @@ def on_open(ws):
     ws.send(json.dumps(subscribe_message))
   
 def on_error(ws, error):
-    logging.error(f"Error en la conexión WebSocket: {error}")  
+    logging.error(f"Error en la conexión WebSocket: {error}")
+    logging.error(f"WebSocket state: {ws.keep_running}")
+
 
 def on_close(ws, close_status_code, close_msg):
     logging.info("Conexión WebSocket cerrada")
@@ -198,14 +200,13 @@ def connect_websocket():
                                 on_close=on_close)
     retry_delay = 1
     while True:
+            while True:
         try:
-            ws.run_forever(ping_interval=30)
-            retry_delay = 1
+            ws.run_forever(ping_interval=60)  # Ajusta el ping interval
         except Exception as e:
             logging.error(f"Error en la conexión WebSocket: {e}")
-            time.sleep(retry_delay + random.uniform(0,1))
-            retry_delay = min(retry_delay * 2, 60)
-            logging.info(f"Reintentando conexión WebSocket en {retry_delay} segundos...")
+            logging.error(f"Intentando reconectar en 5 segundos...")
+            time.sleep(5
 
 
 
