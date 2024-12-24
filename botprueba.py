@@ -39,8 +39,9 @@ server_time_offset = 0
 candles = {}
 df_historical = pd.DataFrame()
 ws = None
-order_in_progress = False  # Para evitar múltiples órdenes simultáneas
+order_in_progress = False  # To avoid multiple orders simultaneously
 last_buy_price = None  # Precio de la última compra
+
 
 # Funciones de la API de CoinEx
 def get_coinex_signature(data, secret_key):
@@ -121,6 +122,7 @@ def on_message(ws, message):
     try:
         decompressed_message = gzip.decompress(message).decode('utf-8') if isinstance(message, bytes) else message.decode('utf-8')
         data = json.loads(decompressed_message)
+
         if data.get('method') == 'state.update':
             state_list = data.get('data', {}).get('state_list', [])
             for state in state_list:
@@ -140,10 +142,12 @@ def on_message(ws, message):
                 df.index = pd.to_datetime(df.index, unit='s')
                 df.index.name = 'time'
                 df_historical = pd.concat([df_historical, df]).drop_duplicates().sort_index()
-                df_historical = df_historical.last(MAX_CANDLES)
-                df_with_indicators = calculate_indicators(df_historical.copy())
+                df_historical = df_historical.last(MAX_CANDLES)  # Maintain latest candles
+                df_with_indicators = calculate_indicators(df_historical.copy())  # Avoid modifying original DataFrame
                 if df_with_indicators is not None:
-                    check_signals(df_with_indicators)
+                    check_signals(df_with_indicators, last_price)  # Pass the spot price
+                    # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
     except (json.JSONDecodeError, UnicodeDecodeError, gzip.BadGzipFile) as e:
         logging.error(f"Error al procesar mensaje: {e}")
 
