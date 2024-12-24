@@ -115,6 +115,7 @@ def calculate_indicators(df):
         return None
 
 # Funciones del WebSocket
+
 def on_message(ws, message):
     global order_in_progress, last_buy_price, df_historical, candles
     try:
@@ -193,21 +194,18 @@ def on_close(ws, close_status_code, close_msg):
 def connect_websocket():
     global ws
     websocket_url = "wss://socket.coinex.com/v2/spot"
-    ws = websocket.WebSocketApp(websocket_url,
-                                on_open=on_open,
-                                on_message=on_message,
-                                on_error=on_error,
-                                on_close=on_close)
-    retry_delay = 1
     while True:
-            while True:
         try:
-            ws.run_forever(ping_interval=60)  # Ajusta el ping interval
+            ws = websocket.WebSocketApp(websocket_url,
+                                        on_open=on_open,
+                                        on_message=on_message,
+                                        on_error=on_error,
+                                        on_close=on_close)
+            ws.run_forever(ping_interval=30)
         except Exception as e:
             logging.error(f"Error en la conexión WebSocket: {e}")
-            logging.error(f"Intentando reconectar en 5 segundos...")
-            time.sleep(5
-
+            logging.info("Intentando reconectar en 5 segundos...")
+            time.sleep(5)
 
 
 def main():
