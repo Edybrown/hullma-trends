@@ -105,7 +105,7 @@ def place_order(side, amount):
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
     path = "/spot/kline"
     params = { #Construir los parametros en un diccionario
-        "market": BTC,
+        "market": "BTCUSDT",
         "limit": 200,
         "period": "1hour"
     }
