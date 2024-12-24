@@ -277,14 +277,23 @@ def get_balance_btc(): #Funcion para obtener el balance en btc
         logging.error(f"Excepción al obtener el balance: {e}")
         return None
       
-def on_open(ws):
-    logging.info("Conexión WebSocket abierta")
-    subscribe_message = {
-        "method": "state.subscribe",
-        "params": [MARKET],
-        "id": 1
-    }
-    ws.send(json.dumps(subscribe_message))
+def on_message(ws, message):
+    try:
+        data = json.loads(message)
+        if "method" in data:
+            if data["method"] == "ticker.BTCUSDT": #Recibe la informacion del ticker
+                ticker_data = data["params"][0]
+                current_price = float(ticker_data["last"])
+                logging.info(f"Precio actual de BTCUSDT: {current_price}")
+                # ... (Aquí puedes usar current_price para tu lógica de trading)
+            elif data["method"] == "kline_1hour.BTCUSDT": #Recibe la informacion de las velas de 1 hora
+                kline_data = data["params"]
+                logging.info(f"Datos de velas de 1 hora de BTCUSDT: {kline_data}")
+                # ... (Aquí puedes usar kline_data para tu lógica de trading)
+        else:
+            logging.debug(f"Mensaje recibido: {message}")
+    except json.JSONDecodeError:
+        logging.error(f"Error al decodificar mensaje JSON: {message}")
 
 def on_error(ws, error):
     logging.error(f"Error en la conexión WebSocket: {error}")
