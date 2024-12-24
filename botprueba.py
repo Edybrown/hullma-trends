@@ -24,6 +24,8 @@ HMA_PERIOD = 12
 STOP_LOSS_PERCENT = 0.01  # 1% de stop loss
 MAX_CANDLES = 200  # Máximo número de velas a mantener en memoria
 LOG_DIR = "logs"
+CANDLES_FILE = "historical_candles.csv"  # Nombre del archivo para guardar las velas
+
 
 # Configuración de Logging
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -56,7 +58,7 @@ def coinex_api_request(method, path, params=None):
         params['tonce'] = int(time.time() * 1000)
         data = ""
         for key in sorted(params):
-            data+= str(key) + "=" + str(params[key]) + "&"
+            data += str(key) + "=" + str(params[key]) + "&"
         data = data[:-1]
         signature = get_coinex_signature(data, SECRET_KEY)
         params['signature'] = signature
@@ -65,7 +67,7 @@ def coinex_api_request(method, path, params=None):
             response = requests.get(url, params=params, headers=headers)
         elif method == 'POST':
             response = requests.post(url, json=params, headers=headers)
-        response.raise_for_status()
+        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la API de CoinEx: {e}. Response: {response.text if 'response' in locals() else 'No response'}")
@@ -73,9 +75,9 @@ def coinex_api_request(method, path, params=None):
 
 def get_balance():
     try:
-        response = coinex_api_request('GET', 'balance', {'asset': MARKET.replace('USDT','')})
+        response = coinex_api_request('GET', 'balance', {'asset': MARKET.replace('USDT', '')})
         if response and response['code'] == 0:
-            return float(response['data'][MARKET.replace('USDT','')]['available'])
+            return float(response['data'][MARKET.replace('USDT', '')]['available'])
         else:
             logging.error(f"Error al obtener el balance: {response}")
             return None
@@ -83,17 +85,15 @@ def get_balance():
         logging.error(f"Excepción al obtener el balance: {e}")
         return None
 
+
 def place_order(side, amount):
     try:
         params = {
             'market': MARKET,
-            'type': 'market',  # Tipo de orden: market
+            'type': 'market',
             'amount': amount,
         }
-        if side == 'buy':
-            response = coinex_api_request('POST', 'order/market', params)
-        elif side == 'sell':
-            response = coinex_api_request('POST', 'order/market', params)
+        response = coinex_api_request('POST', 'order/market', params)
         if response and response['code'] == 0:
             return response['data']['order_id']
         else:
@@ -102,6 +102,20 @@ def place_order(side, amount):
     except Exception as e:
         logging.error(f"Excepción al colocar la orden: {e}")
         return None
+def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
+    path = f"market/kline?market={market}&type={timeframe}&limit={limit}"
+    response = coinex_api_request('GET', path)
+    if response and response['code'] == 0:
+        data = response['data']
+        df = pd.DataFrame(data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
+        df['time'] = pd.to_datetime(df['time'], unit='s')
+        df = df.set_index('time')
+        df = df.astype(float)
+        return df
+    else:
+        logging.error(f"Error al obtener velas históricas: {response}")
+        return None
+      
 
 def calculate_indicators(df):
     if len(df) < max(RSI_FAST_PERIOD, RSI_SLOW_PERIOD, HMA_PERIOD):
@@ -128,7 +142,7 @@ def on_message(ws, message):
             for state in state_list:
                 if state.get('market') == MARKET:
                     last_price = float(state.get('last', 0))
-                    timestamp = int(time.time()) // 3600 * 3600
+                    timestamp = int(time.time()) // 3600 * 3600 #tiempo de la vela
                     if timestamp not in candles:
                         candles[timestamp] = {'open': last_price, 'high': last_price, 'low': last_price, 'close': last_price, 'volume': 0}
                     else:
@@ -142,11 +156,12 @@ def on_message(ws, message):
                 df.index = pd.to_datetime(df.index, unit='s')
                 df.index.name = 'time'
                 df_historical = pd.concat([df_historical, df]).drop_duplicates().sort_index()
-                df_historical = df_historical.last(MAX_CANDLES)  # Maintain latest candles
-                df_with_indicators = calculate_indicators(df_historical.copy())  # Avoid modifying original DataFrame
+                df_historical = df_historical.last(MAX_CANDLES)
+
+                df_historical.to_csv(CANDLES_FILE) #Guardar el archivo csv
+                df_with_indicators = calculate_indicators(df_historical.copy())
                 if df_with_indicators is not None:
-                    check_signals(df_with_indicators, last_price)  # Pass the spot price
-                    # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    check_signals(df_with_indicators)
 
     except (json.JSONDecodeError, UnicodeDecodeError, gzip.BadGzipFile) as e:
         logging.error(f"Error al procesar mensaje: {e}")
@@ -165,15 +180,25 @@ def check_signals(df):
         return
 
     if (last_row['rsi_fast'] > last_row['rsi_slow'] and
-        previous_row['rsi_fast'] <= previous_row['rsi_slow'] and
-        last_row['close'] > last_row['hma'] and last_buy_price is None):
+            previous_row['rsi_fast'] <= previous_row['rsi_slow'] and
+            last_row['close'] > last_row['hma'] and last_buy_price is None):
         amount_usdt = balance
-        amount_btc = amount_usdt / last_row['close']
-        if amount_btc * last_row['close'] > 0.0001:
-            order_in_progress = True
-            order_id = place_order('buy', amount_btc)
-            if order_id:
-                logging.info(f"Compra ejecutada")          
+        if amount_usdt is not None:  # Verificar que balance no sea None
+            amount_btc = amount_usdt / last_row['close']
+            if amount_btc * last_row['close'] > 0.0001:
+                order_in_progress = True
+                order_id = place_order('buy', amount_btc)
+                if order_id:
+                    logging.info(f"Compra ejecutada con order_id: {order_id}")
+                    last_buy_price = last_row['close'] #Actualizar el precio de compra
+                else:
+                    logging.error("Fallo al ejecutar la compra")
+                order_in_progress = False #Resetear la variable
+            else:
+                logging.info("Cantidad de compra demasiado pequeña.")
+        else:
+            logging.error("No se pudo obtener el balance para calcular la cantidad de compra")
+
 
 def on_open(ws):
     logging.info("Conexión WebSocket abierta")
@@ -183,17 +208,14 @@ def on_open(ws):
         "id": 1
     }
     ws.send(json.dumps(subscribe_message))
-  
+
 def on_error(ws, error):
     logging.error(f"Error en la conexión WebSocket: {error}")
-    logging.error(f"WebSocket state: {ws.keep_running}")
-
 
 def on_close(ws, close_status_code, close_msg):
     logging.info("Conexión WebSocket cerrada")
     if close_status_code or close_msg:
         logging.info(f"Código de cierre: {close_status_code}, Mensaje de cierre: {close_msg}")
-
 
 def connect_websocket():
     global ws
@@ -211,11 +233,33 @@ def connect_websocket():
             logging.info("Intentando reconectar en 5 segundos...")
             time.sleep(5)
 
-
 def main():
     try:
         logging.info("Iniciando bot de trading en CoinEx...")
+
+        global df_historical
+        if os.path.exists(CANDLES_FILE):  # Carga el archivo si existe
+            try:
+                df_historical = pd.read_csv(CANDLES_FILE, index_col='time', parse_dates=True)
+                logging.info(f"Cargadas {len(df_historical)} velas desde {CANDLES_FILE}.")
+
+            except pd.errors.EmptyDataError:
+                logging.warning(f"El archivo {CANDLES_FILE} está vacío.")
+            except FileNotFoundError:
+                logging.warning(f"No se encontró el archivo {CANDLES_FILE}.")
+            except Exception as e:
+                logging.error(f"Error al leer el archivo {CANDLES_FILE}: {e}")
+
+        if df_historical.empty: #Si esta vacio pide el historico
+            df_historical = get_historical_candles(MARKET, TIMEFRAME)
+            if df_historical is None or df_historical.empty:
+                logging.error("No se pudieron obtener datos históricos. Saliendo...")
+                sys.exit(1)
+            else:
+                logging.info(f"Se obtuvieron {len(df_historical)} velas históricas.")
+                df_historical.to_csv(CANDLES_FILE)
         connect_websocket()
+
     except KeyboardInterrupt:
         logging.info("Cerrando el bot...")
         if ws:
@@ -227,8 +271,6 @@ def main():
             ws.close()
         sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # ¡Esta línea es crucial!
     main()
-
-          
               
