@@ -102,18 +102,22 @@ def place_order(side, amount):
     except Exception as e:
         logging.error(f"Excepción al colocar la orden: {e}")
         return None
-
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
-    path = f"/spot/kline?market={market}&limit={limit}&period={timeframe}" #Ruta y parametro corregidos
-    response = coinex_api_request('GET', path)
+    path = "/spot/kline"
+    params = { #Construir los parametros en un diccionario
+        "market": BTC,
+        "limit": 200,
+        "period": "1hour"
+    }
+    response = coinex_api_request('GET', path, params=params) #Pasar los parametros a la funcion
 
     if response and response['code'] == 0:
         data = response['data']
         if data:
-            df = pd.DataFrame(data, columns=['market','created_at','open', 'close', 'high', 'low', 'volume','value']) #Añadido los campos faltantes
-            df['created_at'] = pd.to_datetime(df['created_at'], unit='ms') #Corregido a milisegundos
+            df = pd.DataFrame(data, columns=['market','created_at','open', 'close', 'high', 'low', 'volume','value'])
+            df['created_at'] = pd.to_datetime(df['created_at'], unit='ms')
             df = df.set_index('created_at')
-            df = df[['open', 'close', 'high', 'low', 'volume','value']].astype(float) #Seleccionado solo las columnas necesarias y convertidas a float
+            df = df[['open', 'close', 'high', 'low', 'volume','value']].astype(float)
             return df
         else:
             logging.warning("La respuesta de la API contiene datos vacíos.")
