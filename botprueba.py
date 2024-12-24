@@ -102,20 +102,29 @@ def place_order(side, amount):
     except Exception as e:
         logging.error(f"Excepción al colocar la orden: {e}")
         return None
+
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
-    path = f"market/kline?market={market}&type={timeframe}&limit={limit}"
+    path = f"/spot/kline?market={market}&limit={limit}&period={timeframe}" #Ruta y parametro corregidos
     response = coinex_api_request('GET', path)
+
     if response and response['code'] == 0:
         data = response['data']
-        df = pd.DataFrame(data, columns=['time', 'open', 'close', 'high', 'low', 'volume'])
-        df['time'] = pd.to_datetime(df['time'], unit='s')
-        df = df.set_index('time')
-        df = df.astype(float)
-        return df
+        if data:
+            df = pd.DataFrame(data, columns=['market','created_at','open', 'close', 'high', 'low', 'volume','value']) #Añadido los campos faltantes
+            df['created_at'] = pd.to_datetime(df['created_at'], unit='ms') #Corregido a milisegundos
+            df = df.set_index('created_at')
+            df = df[['open', 'close', 'high', 'low', 'volume','value']].astype(float) #Seleccionado solo las columnas necesarias y convertidas a float
+            return df
+        else:
+            logging.warning("La respuesta de la API contiene datos vacíos.")
+            return pd.DataFrame()
     else:
-        logging.error(f"Error al obtener velas históricas: {response}")
+        if response is not None and 'msg' in response:
+            logging.error(f"Error al obtener velas históricas: {response['msg']}")
+        else:
+            logging.error(f"Error desconocido al obtener velas históricas: {response}")
         return None
-      
+
 
 def calculate_indicators(df):
     if len(df) < max(RSI_FAST_PERIOD, RSI_SLOW_PERIOD, HMA_PERIOD):
