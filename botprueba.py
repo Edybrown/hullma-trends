@@ -51,7 +51,7 @@ def get_coinex_signature(data, secret_key):
     return m.hexdigest().upper()
 
 def coinex_api_request(method, path, params=None):
-    url = f"https://api.coinex.com/v2/{path}"
+    url = f"https://api.coinex.com/{path}"
     headers = {'Content-Type': 'application/json'}
     if params:
         params['access_id'] = API_KEY
@@ -212,7 +212,71 @@ def check_signals(df):
         else:
             logging.error("No se pudo obtener el balance para calcular la cantidad de compra")
 
+def check_signals(df):
+    global order_in_progress, last_buy_price
+    if order_in_progress or len(df) < 2:
+        return
 
+    last_row = df.iloc[-1]
+    previous_row = df.iloc[-2]
+    balance = get_balance()
+
+    if balance is None:
+        logging.error("No se pudo obtener el saldo. Imposible operar.")
+        return
+
+    # Lógica de COMPRA (sin cambios)
+    if (last_row['rsi_fast'] > last_row['rsi_slow'] and
+            previous_row['rsi_fast'] <= previous_row['rsi_slow'] and
+            last_row['close'] > last_row['hma'] and last_buy_price is None):
+        amount_usdt = balance
+        if amount_usdt is not None:
+            amount_btc = amount_usdt / last_row['close']
+            if amount_btc * last_row['close'] > 0.0001:
+                order_in_progress = True
+                order_id = place_order('buy', amount_btc)
+                if order_id:
+                    logging.info(f"Compra ejecutada con order_id: {order_id}")
+                    last_buy_price = last_row['close']
+                else:
+                    logging.error("Fallo al ejecutar la compra")
+                order_in_progress = False
+            else:
+                logging.info("Cantidad de compra demasiado pequeña.")
+        else:
+            logging.error("No se pudo obtener el balance para calcular la cantidad de compra")
+    # Nueva Lógica de VENTA
+    elif last_buy_price is not None:  # Solo si se ha comprado antes
+        current_price = last_row['close']
+        stop_loss_price = last_buy_price * (1 - STOP_LOSS_PERCENT)
+        if current_price <= stop_loss_price or (last_row['rsi_fast'] < last_row['rsi_slow'] and previous_row['rsi_fast'] >= previous_row['rsi_slow']): #Se añade la condicion del rsi para vender
+            amount_btc = get_balance_btc() #Funcion para obtener el balance en btc
+            if amount_btc is not None and amount_btc > 0:
+                order_in_progress = True
+                order_id = place_order('sell', amount_btc)
+                if order_id:
+                    logging.info(f"Venta ejecutada con order_id: {order_id} a precio {current_price}. Stop loss activado a {stop_loss_price if current_price <= stop_loss_price else 'señal RSI'}")
+                    last_buy_price = None  # Resetear el precio de compra
+                else:
+                    logging.error("Fallo al ejecutar la venta")
+                order_in_progress = False
+            else:
+                logging.info("No hay BTC para vender o saldo muy bajo.")
+        else:
+            logging.info(f"Esperando señal de venta. Precio actual: {current_price}, Stop Loss: {stop_loss_price}")
+
+def get_balance_btc(): #Funcion para obtener el balance en btc
+    try:
+        response = coinex_api_request('GET', 'balance', {'asset': MARKET.replace('USDT', '')})
+        if response and response['code'] == 0:
+            return float(response['data'][MARKET.replace('USDT', '')]['available'])
+        else:
+            logging.error(f"Error al obtener el balance: {response}")
+            return None
+    except Exception as e:
+        logging.error(f"Excepción al obtener el balance: {e}")
+        return None
+      
 def on_open(ws):
     logging.info("Conexión WebSocket abierta")
     subscribe_message = {
