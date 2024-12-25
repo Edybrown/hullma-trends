@@ -240,59 +240,44 @@ def on_message(ws, message):
         logging.error(f"Error al procesar mensaje: {e}")
 
 
-def get_historical_candles(market, timeframe):
-  """
-  Obtiene velas históricas para un mercado y timeframe específico.
-  Excluyendo la última vela (incompleta) y manejando potenciales errores.
 
-  Args:
-      market (str): Nombre del mercado (ej: "BTCUSDT").
-      timeframe (str): Período de las velas (ej: "1hour").
-
-  Returns:
-      pandas.DataFrame: DataFrame con las velas históricas o vacío si hay errores.
-  """  
-
-  path = "spot/kline"
-  params = {
-      "market": "BTCUSDT",
-      "limit": 200,  # Solicita 200 velas
-      "period": "1hour" }
-
-  try:
-      response = coinex_api_request('GET', path, params=params)
-
-      if response and 'data' in response and response['data']:
-          data = response['data']
-          df = pd.DataFrame(data, columns=['open', 'close', 'high', 'low', 'volume', 'value', 'created_at'])
-
-          numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'value']
-          df[numeric_cols] = df[numeric_cols].astype(float)
-
-          # *** Manejo del orden y exclusión de la última vela: ***
-          df['timestamp'] = pd.to_datetime(df['created_at'], unit='s', errors='coerce')
-          df.set_index('timestamp', inplace=True)
-
-          # Invertir el DataFrame si las velas vienen en orden ascendente (consulta la API)
-          # df = df.iloc[::-1]  # Descomenta si es necesario
-
-          # Excluir la última vela (incompleta)
-          df = df.iloc[:-1]  # Selecciona todas las filas excepto la última
-
-          if df.empty:
-              logging.warning(f"No hay suficientes datos para calcular indicadores despues de eliminar la ultima vela incompleta para {market} {timeframe}.")
-              return pd.DataFrame()
-              
-def get_balance_btc(): #Funcion para obtener el balance en btc
+def get_balance_btc():
+    """Obtiene el balance disponible de BTC."""
     try:
         response = coinex_api_request('GET', 'balance', {'asset': MARKET.replace('USDT', '')})
-        if response and response['code'] == 0:
-            return float(response['data'][MARKET.replace('USDT', '')]['available'])
+
+        if response:  # Verifica si la respuesta existe
+            if response.get('code') == 0:  # Usa .get() para evitar KeyError
+                data = response.get('data')
+                if data: #Verifica si existen datos dentro de la respuesta
+                    asset_name = MARKET.replace('USDT', '')
+                    asset_data = data.get(asset_name)
+                    if asset_data: #Verifica si existen datos del asset dentro de la respuesta
+                        available_balance = asset_data.get('available')
+                        if available_balance is not None:
+                            try:
+                                return float(available_balance)
+                            except ValueError:
+                                logging.error(f"Error al convertir el balance a float: {available_balance}")
+                                return None
+                        else:
+                            logging.error(f"No se encontró 'available' en los datos del asset: {data}")
+                            return None
+                    else:
+                        logging.error(f"No se encontraron datos para el asset {asset_name} en la respuesta: {data}")
+                        return None
+                else:
+                    logging.error("No se encontraron datos en la respuesta")
+                    return None
+            else:
+                logging.error(f"Error en la respuesta de la API: {response.get('msg', response)}") #Muestra el mensaje de error de la API si existe
+                return None
         else:
-            logging.error(f"Error al obtener el balance: {response}")
+            logging.error("No se recibió respuesta de la API.")
             return None
+
     except Exception as e:
-        logging.error(f"Excepción al obtener el balance: {e}")
+        logging.exception(f"Excepción inesperada al obtener el balance: {e}")
         return None
       
 def on_message(ws, message):
