@@ -63,16 +63,28 @@ def get_historical_candles(market, timeframe):
     params = {
         "market": market,
         "limit": 200,
-        "period": "1hour"
+        "period":"1hour"
     }
     response = coinex_api_request('GET', path, params=params)
     if response and 'data' in response:
-        df = pd.DataFrame(response['data'], columns=['time', 'open', 'close', 'high', 'low', 'volume', 'amount'])
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        # Asumimos que los datos vienen en este orden: [timestamp, open, close, high, low, volume, amount]
+        df = pd.DataFrame(response['data'], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'amount'])
+        
+        # Convertir el timestamp a datetime
+        df['time'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
         df.set_index('time', inplace=True)
-        df = df.astype(float)
+        
+        # Convertir las columnas numéricas a float
+        numeric_columns = ['open', 'close', 'high', 'low', 'volume', 'amount']
+        df[numeric_columns] = df[numeric_columns].astype(float)
+        
+        # Eliminar la columna 'timestamp' original ya que ahora tenemos 'time' como índice
+        df = df.drop(columns=['timestamp'])
+        
         return df.sort_index()
-    return pd.DataFrame()
+    else:
+        logging.error(f"No se pudieron obtener datos históricos: {response}")
+        return pd.DataFrame()
 
 def calculate_hma(data, period):
     half_period = int(period / 2)
@@ -184,7 +196,7 @@ def run_websocket():
                                 on_open=on_open)
     ws.run_forever()
 
-if __name__ == "__main__":
+def main():
     try:
         logging.info("Iniciando bot de trading en CoinEx...")
         
@@ -199,10 +211,18 @@ if __name__ == "__main__":
             logging.info(f"Se obtuvieron {len(df_historical)} velas históricas.")
             df_historical.to_csv(CANDLES_FILE)
         
+        # Asegurarse de que tenemos todas las columnas necesarias
+        required_columns = ['open', 'close', 'high', 'low', 'volume', 'amount']
+        missing_columns = [col for col in required_columns if col not in df_historical.columns]
+        if missing_columns:
+            logging.error(f"Faltan las siguientes columnas en los datos históricos: {missing_columns}")
+            sys.exit(1)
+        
         run_websocket()
-    except KeyboardInterrupt:
-        logging.info("Cerrando el bot...")
-        sys.exit(0)
     except Exception as e:
-        logging.error(f"Error inesperado: {e}")
+        logging.error(f"Error inesperado: {e}", exc_info=True)
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+
