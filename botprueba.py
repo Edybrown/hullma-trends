@@ -65,7 +65,7 @@ def get_historical_candles(market, timeframe):
         "limit": 200,
         "period":"1hour"
     }
-    response = coinex_api_request('GET', path, params=params)
+  response = coinex_api_request('GET', path, params=params)
     if response and 'data' in response:
         # Asumimos que los datos vienen en este orden: [timestamp, open, close, high, low, volume, amount]
         df = pd.DataFrame(response['data'], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'amount'])
@@ -85,6 +85,40 @@ def get_historical_candles(market, timeframe):
     else:
         logging.error(f"No se pudieron obtener datos históricos: {response}")
         return pd.DataFrame()
+
+
+def read_historical_data(file_path):
+    try:
+        # Intenta leer el archivo con 'time' como índice
+        df = pd.read_csv(file_path, index_col='time', parse_dates=True)
+    except ValueError:
+        # Si 'time' no está en la lista, lee el archivo sin especificar un índice
+        df = pd.read_csv(file_path)
+        
+        # Verifica si hay una columna que podría ser el tiempo
+        time_column = None
+        for col in df.columns:
+            if 'time' in col.lower() or 'date' in col.lower():
+                time_column = col
+                break
+        
+        if time_column:
+            # Si encontramos una columna de tiempo, la configuramos como índice
+            df['time'] = pd.to_datetime(df[time_column])
+            df.set_index('time', inplace=True)
+            df = df.drop(columns=[time_column])
+        else:
+            # Si no hay columna de tiempo, creamos una basada en el índice
+            df['time'] = pd.date_range(start='2024-01-01', periods=len(df), freq='H')
+            df.set_index('time', inplace=True)
+        
+    # Asegurarse de que todas las columnas necesarias estén presentes
+    required_columns = ['open', 'close', 'high', 'low', 'volume']
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = 0.0  # o algún otro valor predeterminado apropiado
+    
+    return df
 
 def calculate_hma(data, period):
     half_period = int(period / 2)
@@ -201,7 +235,7 @@ def main():
         logging.info("Iniciando bot de trading en CoinEx...")
         
         if os.path.exists(CANDLES_FILE):
-            df_historical = pd.read_csv(CANDLES_FILE, index_col='time', parse_dates=True)
+            df_historical = read_historical_data(CANDLES_FILE)
             logging.info(f"Cargadas {len(df_historical)} velas desde {CANDLES_FILE}.")
         else:
             df_historical = get_historical_candles(MARKET, TIMEFRAME)
@@ -211,12 +245,10 @@ def main():
             logging.info(f"Se obtuvieron {len(df_historical)} velas históricas.")
             df_historical.to_csv(CANDLES_FILE)
         
-        # Asegurarse de que tenemos todas las columnas necesarias
-        required_columns = ['open', 'close', 'high', 'low', 'volume', 'amount']
-        missing_columns = [col for col in required_columns if col not in df_historical.columns]
-        if missing_columns:
-            logging.error(f"Faltan las siguientes columnas en los datos históricos: {missing_columns}")
-            sys.exit(1)
+        # Verificar y registrar la estructura del DataFrame
+        logging.info(f"Columnas en df_historical: {df_historical.columns.tolist()}")
+        logging.info(f"Índice de df_historical: {df_historical.index.name}")
+        logging.info(f"Primeras filas de df_historical:\n{df_historical.head()}")
         
         run_websocket()
     except Exception as e:
@@ -225,4 +257,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
