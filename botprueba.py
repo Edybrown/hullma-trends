@@ -104,30 +104,41 @@ def place_order(side, amount):
         return None
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
     path = "spot/kline"
-    params = { #Construir los parametros en un diccionario
-        "market": "BTCUSDT",
-        "limit": 200,
-        "period": "1hour"
+    params = {
+        "market": "BTCUSDT,  # Utiliza el mercado pasado como argumento
+        "limit": 200,  # Número máximo de velas a obtener
+        "period": "1hour"  # Periodo o intervalo de tiempo (ejemplo: "1hour")
     }
-    response = coinex_api_request('GET', path, params=params) #Pasar los parametros a la funcion
+
+    # Solicitar datos a la API
+    response = coinex_api_request('GET', path, params=params)
 
     if response and response['code'] == 0:
         data = response['data']
         if data:
-            df = pd.DataFrame(data, columns=['market','created_at','open', 'close', 'high', 'low', 'volume','value'])
+            # Crear el DataFrame con las columnas relevantes
+            df = pd.DataFrame(data, columns=['created_at', 'open', 'close', 'high', 'low', 'volume', 'value'])
+            
+            # Convertir la columna 'created_at' a un formato datetime legible
             df['created_at'] = pd.to_datetime(df['created_at'], unit='ms')
-            df = df.set_index('created_at')
-            df = df[['open', 'close', 'high', 'low', 'volume','value']].astype(float)
+            df = df.set_index('created_at')  # Establecer 'created_at' como índice
+
+            # Convertir columnas numéricas a tipo float
+            df = df[['open', 'close', 'high', 'low', 'volume', 'value']].astype(float)
+            logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market}.")
             return df
         else:
             logging.warning("La respuesta de la API contiene datos vacíos.")
             return pd.DataFrame()
     else:
-        if response is not None and 'msg' in response:
+        # Manejo de errores en la respuesta
+        if response and 'msg' in response:
             logging.error(f"Error al obtener velas históricas: {response['msg']}")
         else:
-            logging.error(f"Error desconocido al obtener velas históricas: {response}")
+            logging.error("Error desconocido al obtener velas históricas.")
         return None
+df = get_historical_candles("BTCUSDT", "1hour", limit=200)
+print(df.head())      
 
 
 def calculate_indicators(df):
