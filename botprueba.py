@@ -106,51 +106,43 @@ def place_order(side, amount):
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
     path = "spot/kline"
     params = {
-        "market": "BTCUSDT",  # Utiliza el mercado pasado como argumento
-        "limit": 200,  # Número máximo de velas a obtener
-        "period": "1hour"  # Periodo o intervalo de tiempo (ejemplo: "1hour")
+        "market": market,
+        "limit": limit,
+        "period": timeframe
     }
 
-    # Solicitar datos a la API
-    response = coinex_api_request('GET', path, params=params)
+    try:
+        response = coinex_api_request('GET', path, params=params)
 
-    if response and 'data' in response and response['data']: # Verifica que 'response' existe, contiene 'data' y que 'data' no está vacío
+        if response and 'data' in response and response['data']:
             data = response['data']
-            df = pd.DataFrame(data, columns=['open', 'close', 'high', 'low', 'volume', 'value', 'created_at']) # Ajusta el orden de las columnas
+            df = pd.DataFrame(data, columns=['open', 'close', 'high', 'low', 'volume', 'value', 'created_at'])
 
-            # Convertir la columna 'created_at' a datetime (asumiendo que está en segundos)
-            df['timestamp'] = pd.to_datetime(df['created_at'], unit='s')
+            df['timestamp'] = pd.to_datetime(df['created_at'], unit='s') # o unit='ms' si son milisegundos
             df.set_index('timestamp', inplace=True)
 
             numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'value']
             df[numeric_cols] = df[numeric_cols].astype(float)
 
-            if df.empty: # Comprueba si el DataFrame está vacío después de la conversión
+            if df.empty:
                 logging.warning(f"No se recibieron datos de velas para {market} {timeframe}.")
-                return pd.DataFrame() # Devuelve un DataFrame vacío en lugar de None
+                return pd.DataFrame()
             else:
                 logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market} {timeframe}.")
                 return df
-    elif response and 'msg' in response:
+        elif response and 'msg' in response:
             logging.error(f"Error al obtener velas históricas para {market} {timeframe}: {response['msg']}")
-            return pd.DataFrame() # Devuelve un DataFrame vacío en lugar de None
-    else:
+            return pd.DataFrame()
+        else:
             logging.error(f"Respuesta inesperada de la API para {market} {timeframe}: {response}")
-            return pd.DataFrame() # Devuelve un DataFrame vacío en lugar de None
+            return pd.DataFrame()
 
     except Exception as e:
-        logging.exception(f"Excepción al obtener velas para {market} {timeframe}: {e}") # Loguea la excepción completa
-        return pd.DataFrame() # Devuelve un DataFrame vacío en lugar de None
+        logging.exception(f"Excepción al obtener velas para {market} {timeframe}: {e}")
+        return pd.DataFrame()
 
-# Configuración del logging (recomendable)
+# Configuración del logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Ejemplo de uso
-df = get_historical_candles("BTCUSDT", "1hour", limit=200)
-if not df.empty:
-    print(df.head())
-else:
-    print("No se pudieron obtener datos.")
 
 def calculate_indicators(df):
     if len(df) < max(RSI_FAST_PERIOD, RSI_SLOW_PERIOD, HMA_PERIOD):
