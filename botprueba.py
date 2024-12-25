@@ -113,20 +113,25 @@ def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
     # Solicitar datos a la API
     response = coinex_api_request('GET', path, params=params)
 
-    if response and response['code'] == 0:
-        data = response['data']
-        if data:
-            # Crear el DataFrame con las columnas relevantes
-            df = pd.DataFrame(data, columns=['created_at', 'open', 'close', 'high', 'low', 'volume', 'value'])
-            
-            # Convertir la columna 'created_at' a un formato datetime legible
-            df['created_at'] = pd.to_datetime(df['created_at'], unit='ms')
-            df = df.set_index('created_at')  # Establecer 'created_at' como índice
+    if data:
+        # Crear el DataFrame con las columnas relevantes
+        df = pd.DataFrame(data, columns=['created_at', 'open', 'close', 'high', 'low', 'volume', 'value'])
 
-            # Convertir columnas numéricas a tipo float
-            df = df[['open', 'close', 'high', 'low', 'volume', 'value']].astype(float)
-            logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market}.")
-            return df
+        # Convertir la columna 'created_at' a un formato datetime legible
+        # Ajusta el formato según la salida de la exchange
+        df['timestamp'] = pd.to_datetime(df['created_at'], unit='ms', format='%Y-%m-%d %H:%M:%S')
+        df.set_index('timestamp', inplace=True)
+
+        # Convertir columnas numéricas a tipo float
+        numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'value']
+        df[numeric_cols] = df[numeric_cols].astype(float)
+
+        # Validación adicional (opcional)
+        if df.shape[0] != df.shape[1]:
+            logging.warning("El DataFrame tiene dimensiones inconsistentes.")
+
+        logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market}.")
+        return df
         else:
             logging.warning("La respuesta de la API contiene datos vacíos.")
             return pd.DataFrame()
