@@ -66,7 +66,7 @@ def get_historical_candles(market, timeframe):
         "period":"1hour"
     }
     response = coinex_api_request('GET', path, params=params)
-   if response and 'data' in response:
+    if response and 'data' in response:
         # Asumimos que los datos vienen en este orden: [timestamp, open, close, high, low, volume, amount]
         df = pd.DataFrame(response['data'], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'amount'])
 
