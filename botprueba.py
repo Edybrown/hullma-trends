@@ -103,13 +103,6 @@ def place_order(side, amount):
         logging.error(f"Excepción al colocar la orden: {e}")
         return None
       
-import pandas as pd
-import logging
-from tu_modulo import coinex_api_request
-import talib # Importa talib para RSI
-import numpy as np
-
-MAX_CANDLES = 200  # Limite de velas a solicitar
 
 def get_historical_candles(market, timeframe):
   """
