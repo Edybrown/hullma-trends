@@ -13,6 +13,8 @@ import numpy as np
 from ta.momentum import RSIIndicator
 from ta.trend import SMAIndicator
 import talib
+from websocket import WebSocketConnectionClosedException
+
 
 # Configuración
 API_KEY = "2A8AE2B7B0D0458CBF00F06620FA4E7C"
