@@ -61,32 +61,33 @@ def coinex_api_request(method, path, params=None):
 def get_historical_candles(market, timeframe):
     path = "spot/kline"
     params = {
-        "market": market,
+        "market": "BTCUSDT",
         "limit": 200,
         "period":"1hour"
     }
     response = coinex_api_request('GET', path, params=params)
-    if response and 'data' in response:
+   if response and 'data' in response:
         # Asumimos que los datos vienen en este orden: [timestamp, open, close, high, low, volume, amount]
         df = pd.DataFrame(response['data'], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'amount'])
-        
-        # Convertir el timestamp a datetime
-        df['time'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
+
+        # Convertir el timestamp a datetime, manejando valores NaN
+        df['time'] = pd.to_datetime(df['timestamp'].dropna(), unit='s', errors='coerce')
+        df.dropna(subset=['time'], inplace=True) # Eliminar filas con NaT en 'time'
+
         df.set_index('time', inplace=True)
-        
+
         # Convertir las columnas numéricas a float
         numeric_columns = ['open', 'close', 'high', 'low', 'volume', 'amount']
         df[numeric_columns] = df[numeric_columns].astype(float)
-        
-        # Eliminar la columna 'timestamp' original ya que ahora tenemos 'time' como índice
+
+        # Eliminar la columna 'timestamp' original
         df = df.drop(columns=['timestamp'])
-        
+
         return df.sort_index()
     else:
         logging.error(f"No se pudieron obtener datos históricos: {response}")
         return pd.DataFrame()
-
-
+      
 def read_historical_data(file_path):
     try:
         # Intenta leer el archivo con 'time' como índice
