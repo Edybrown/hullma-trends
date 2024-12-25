@@ -131,10 +131,10 @@ def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
             else:
                 logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market} {timeframe}.")
                 return df
-        elif response and 'msg' in response:
+    elif response and 'msg' in response:
             logging.error(f"Error al obtener velas históricas para {market} {timeframe}: {response['msg']}")
             return pd.DataFrame() # Devuelve un DataFrame vacío en lugar de None
-        else:
+            else:
             logging.error(f"Respuesta inesperada de la API para {market} {timeframe}: {response}")
             return pd.DataFrame() # Devuelve un DataFrame vacío en lugar de None
 
