@@ -103,47 +103,86 @@ def place_order(side, amount):
         logging.error(f"Excepción al colocar la orden: {e}")
         return None
       
-def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
-    path = "spot/kline"
-    params = {
-        "market": market,
-        "limit": limit,
-        "period": timeframe
-    }
+import pandas as pd
+import logging
+from tu_modulo import coinex_api_request
+import talib # Importa talib para RSI
+import numpy as np
 
-    try:
-        response = coinex_api_request('GET', path, params=params)
+MAX_CANDLES = 200  # Limite de velas a solicitar
 
-        if response and 'data' in response and response['data']:
-            data = response['data']
-            df = pd.DataFrame(data, columns=['open', 'close', 'high', 'low', 'volume', 'value', 'created_at'])
+def get_historical_candles(market, timeframe):
+  """
+  Obtiene velas históricas para un mercado y timeframe específico.
+  Excluyendo la última vela (incompleta) y manejando potenciales errores.
 
-            df['timestamp'] = pd.to_datetime(df['created_at'], unit='s') # o unit='ms' si son milisegundos
-            df.set_index('timestamp', inplace=True)
+  Args:
+      market (str): Nombre del mercado (ej: "BTCUSDT").
+      timeframe (str): Período de las velas (ej: "1hour").
 
-            numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'value']
-            df[numeric_cols] = df[numeric_cols].astype(float)
+  Returns:
+      pandas.DataFrame: DataFrame con las velas históricas o vacío si hay errores.
+  """  
 
-            if df.empty:
-                logging.warning(f"No se recibieron datos de velas para {market} {timeframe}.")
-                return pd.DataFrame()
-            else:
-                logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market} {timeframe}.")
-                return df
-        elif response and 'msg' in response:
-            logging.error(f"Error al obtener velas históricas para {market} {timeframe}: {response['msg']}")
-            return pd.DataFrame()
-        else:
-            logging.error(f"Respuesta inesperada de la API para {market} {timeframe}: {response}")
-            return pd.DataFrame()
+  path = "spot/kline"
+  params = {
+      "market": market,
+      "limit": MAX_CANDLES,  # Solicita 200 velas
+      "period": timeframe
+  }
 
-    except Exception as e:
-        logging.exception(f"Excepción al obtener velas para {market} {timeframe}: {e}")
-        return pd.DataFrame()
+  try:
+      response = coinex_api_request('GET', path, params=params)
 
-# Configuración del logging
+      if response and 'data' in response and response['data']:
+          data = response['data']
+          df = pd.DataFrame(data, columns=['open', 'close', 'high', 'low', 'volume', 'value', 'created_at'])
+
+          numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'value']
+          df[numeric_cols] = df[numeric_cols].astype(float)
+
+          # *** Manejo del orden y exclusión de la última vela: ***
+          df['timestamp'] = pd.to_datetime(df['created_at'], unit='s', errors='coerce')
+          df.set_index('timestamp', inplace=True)
+
+          # Invertir el DataFrame si las velas vienen en orden ascendente (consulta la API)
+          # df = df.iloc[::-1]  # Descomenta si es necesario
+
+          # Excluir la última vela (incompleta)
+          df = df.iloc[:-1]  # Selecciona todas las filas excepto la última
+
+          if df.empty:
+              logging.warning(f"No hay suficientes datos para calcular indicadores despues de eliminar la ultima vela incompleta para {market} {timeframe}.")
+              return pd.DataFrame()
+
+          # Calcular RSI y MHull (ejemplo con RSI)
+          df['rsi'] = talib.RSI(df['close'], timeperiod=14)
+
+          # Cálculo de MHull (ejemplo simplificado, necesitas implementar la lógica completa)
+          def hull_moving_average(data, window):
+              wma1 = pd.Series(data).rolling(window=window).apply(lambda x: np.average(x, weights=np.arange(1, window+1)))
+              wma2 = pd.Series(data).rolling(window=window*2).apply(lambda x: np.average(x, weights=np.arange(1, window*2+1)))
+              diff = wma1 * 2 - wma2
+              sqrt_window = int(np.sqrt(window))
+              hma = pd.Series(diff).rolling(window=sqrt_window).apply(lambda x: np.average(x, weights=np.arange(1, sqrt_window+1)))
+              return hma
+          df['mhull'] = hull_moving_average(df['close'], 14)
+
+          logging.info(f"Se procesaron {len(df)} velas históricas correctamente para {market} {timeframe}.")
+          return df
+      elif response and 'msg' in response:
+          logging.error(f"Error al obtener velas históricas para {market} {timeframe}: {response['msg']}")
+          return pd.DataFrame()
+      else:
+          logging.error(f"Respuesta inesperada de la API para {market} {timeframe}: {response}")
+          return pd.DataFrame()
+
+  except Exception as e:
+      logging.exception(f"Excepción al obtener velas para {market} {timeframe}: {e}")
+      return pd.DataFrame()
+
+# Configuración del logging (puedes modificarla)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 def calculate_indicators(df):
     if len(df) < max(RSI_FAST_PERIOD, RSI_SLOW_PERIOD, HMA_PERIOD):
         return None
