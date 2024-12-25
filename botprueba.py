@@ -119,10 +119,9 @@ def get_historical_candles(market, timeframe):
 
   path = "spot/kline"
   params = {
-      "market": market,
-      "limit": MAX_CANDLES,  # Solicita 200 velas
-      "period": timeframe
-  }
+      "market": "BTCUSDT",
+      "limit": 200,  # Solicita 200 velas
+      "period": "1hour" }
 
   try:
       response = coinex_api_request('GET', path, params=params)
