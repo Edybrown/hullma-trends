@@ -1,4 +1,3 @@
-import websocket
 import json
 import time
 import hmac
@@ -13,7 +12,6 @@ import numpy as np
 from ta.momentum import RSIIndicator
 from ta.trend import SMAIndicator
 import talib
-from websocket import WebSocketConnectionClosedException
 
 
 # Configuración
@@ -159,83 +157,12 @@ def execute_trade(side, amount):
         logging.error(f"Error al ejecutar orden {side}: {response}")
         return None
 
-def on_message(ws, message):
-    global df_historical
-    try:
-        data = json.loads(gzip.decompress(message).decode('utf-8'))
-        if 'method' in data:
-            if data['method'] == 'ticker.update':
-                ticker = data['params'][0]
-                last_price = float(ticker['last'])
-                logging.info(f"Último precio de {MARKET}: {last_price}")
-                
-                # Actualizar la última vela
-                current_time = pd.Timestamp.now().floor('H')
-                if current_time not in df_historical.index:
-                    new_candle = pd.DataFrame(index=[current_time], data={
-                        'open': last_price,
-                        'high': last_price,
-                        'low': last_price,
-                        'close': last_price,
-                        'volume': float(ticker['volume'])
-                    })
-                    df_historical = pd.concat([df_historical, new_candle]).sort_index()
-                else:
-                    df_historical.loc[current_time, 'close'] = last_price
-                    df_historical.loc[current_time, 'high'] = max(df_historical.loc[current_time, 'high'], last_price)
-                    df_historical.loc[current_time, 'low'] = min(df_historical.loc[current_time, 'low'], last_price)
-                    df_historical.loc[current_time, 'volume'] = float(ticker['volume'])
-                
-                df_historical = df_historical.last(MAX_CANDLES)
-                df_with_indicators = calculate_indicators(df_historical.copy())
-                df_with_signals = generate_signals(df_with_indicators)
-                
-                last_signal = df_with_signals['signal'].iloc[-1]
-                if last_signal != 0:
-                    balance = float(coinex_api_request('GET', 'balance')['data']['USDT']['available'])
-                    if last_signal == 1 and balance > 0:
-                        amount = balance / last_price * 0.99  # 99% del balance disponible
-                        execute_trade('buy', amount)
-                    elif last_signal == -1:
-                        balance_btc = float(coinex_api_request('GET', 'balance')['data']['BTC']['available'])
-                        if balance_btc > 0:
-                            execute_trade('sell', balance_btc)
-                
-                df_historical.to_csv(CANDLES_FILE)
-                logging.info(f"Datos actualizados y guardados. Última señal: {last_signal}")
-    except Exception as e:
-        logging.error(f"Error al procesar mensaje: {e}")
 
-def on_error(ws, error):
-    logging.error(f"Error en WebSocket: {error}")
-
-def on_close(ws, close_status_code, close_msg):
-    logging.info(f"Conexión WebSocket cerrada: {close_status_code} - {close_msg}")
-
-def on_open(ws):
-    logging.info("Conexión WebSocket abierta")
-    subscribe_message = {
-        "method": "subscribe",
-        "params": [
-            "ticker.BTCUSDT"
-        ],
-        "id": 1
-    }
-    ws.send(json.dumps(subscribe_message))
-
-def run_websocket():
-    websocket.enableTrace(True)
-    ws = websocket.WebSocketApp("wss://socket.coinex.com/",
-                                on_message=on_message,
-                                on_error=on_error,
-                                on_close=on_close,
-                                on_open=on_open)
-    ws.run_forever()
 
 def main():
     try:
         logging.info("Iniciando bot de trading en CoinEx...")
-        
+
         if os.path.exists(CANDLES_FILE):
             df_historical = read_historical_data(CANDLES_FILE)
             logging.info(f"Cargadas {len(df_historical)} velas desde {CANDLES_FILE}.")
@@ -246,13 +173,50 @@ def main():
                 sys.exit(1)
             logging.info(f"Se obtuvieron {len(df_historical)} velas históricas.")
             df_historical.to_csv(CANDLES_FILE)
-        
+
         # Verificar y registrar la estructura del DataFrame
         logging.info(f"Columnas en df_historical: {df_historical.columns.tolist()}")
         logging.info(f"Índice de df_historical: {df_historical.index.name}")
         logging.info(f"Primeras filas de df_historical:\n{df_historical.head()}")
-        
-        run_websocket()
+
+        while True:  # Bucle principal del bot
+            # Obtener datos históricos actualizados (cada hora)
+            df_historical = get_historical_candles(MARKET, TIMEFRAME)
+            if df_historical.empty:
+              logging.warning("No hay datos para procesar en este ciclo.")
+              time.sleep(3600)
+              continue
+
+            df_with_indicators = calculate_indicators(df_historical.copy())
+            df_with_signals = generate_signals(df_with_indicators)
+            
+            last_signal = df_with_signals['signal'].iloc[-1]
+            last_price = df_historical['close'].iloc[-1]
+
+            if last_signal != 0:
+                balance = coinex_api_request('GET', 'balance')
+                if balance and balance['code'] == 0:
+                    balance_data = balance['data']
+                    if last_signal == 1: # Señal de compra
+                        available_usdt = float(balance_data.get('USDT', {'available': 0})['available'])
+                        if available_usdt > 0:
+                            amount = available_usdt / last_price * 0.99
+                            order_id = execute_trade('buy', amount)
+                            if order_id:
+                                logging.info(f"Orden de COMPRA ejecutada. Order ID: {order_id}")
+                    elif last_signal == -1: # Señal de venta
+                        available_btc = float(balance_data.get('BTC', {'available': 0})['available'])
+                        if available_btc > 0:
+                            order_id = execute_trade('sell', available_btc)
+                            if order_id:
+                                logging.info(f"Orden de VENTA ejecutada. Order ID: {order_id}")
+                else:
+                    logging.error(f"Error al obtener balance: {balance}")
+            else:
+                logging.info("Sin señal.")
+                
+            time.sleep(3600)  # Esperar una hora antes de la siguiente iteración
+
     except Exception as e:
         logging.error(f"Error inesperado: {e}", exc_info=True)
         sys.exit(1)
