@@ -105,7 +105,7 @@ def place_order(side, amount):
 def get_historical_candles(market, timeframe, limit=MAX_CANDLES):
     path = "spot/kline"
     params = {
-        "market": "BTCUSDT,  # Utiliza el mercado pasado como argumento
+        "market": "BTCUSDT",  # Utiliza el mercado pasado como argumento
         "limit": 200,  # Número máximo de velas a obtener
         "period": "1hour"  # Periodo o intervalo de tiempo (ejemplo: "1hour")
     }
