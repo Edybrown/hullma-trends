@@ -12,6 +12,7 @@ import numpy as np
 from ta.momentum import RSIIndicator
 from ta.trend import SMAIndicator
 import talib
+import datetime
 
 
 # Configuración
@@ -158,9 +159,32 @@ def execute_trade(side, amount):
         logging.error(f"Error al ejecutar orden {side}: {response}")
         return None
 
+def esperar_cierre_vela():
+    """Espera hasta el cierre de la vela de 1 hora."""
 
+    ahora_utc = datetime.datetime.utcnow()
+    segundos_restantes = (60 - ahora_utc.minute) * 60 - ahora_utc.second
+
+    print(f"Esperando {segundos_restantes:.2f} segundos hasta el cierre de la vela de 1 hora.")
+    time.sleep(segundos_restantes)
+
+
+def esperar_cierre_vela():
+    """Espera hasta el cierre de la vela de 1 hora."""
+    ahora_utc = datetime.datetime.utcnow()
+    segundos_restantes = (60 - ahora_utc.minute) * 60 - ahora_utc.second
+    print(f"Esperando {segundos_restantes:.2f} segundos hasta el cierre de la vela de 1 hora.")
+    time.sleep(segundos_restantes)
 
 def main():
+    """Función principal para el bot de trading de CoinEx."""
+
+    logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
+    CANDLES_FILE = 'historical_candles.csv'
+    MARKET = 'YOUR_MARKET_PAIR'  # Reemplaza con tu par de trading
+    TIMEFRAME = '1hour'
+
     try:
         logging.info("Iniciando bot de trading en CoinEx...")
 
@@ -175,22 +199,21 @@ def main():
             logging.info(f"Se obtuvieron {len(df_historical)} velas históricas.")
             df_historical.to_csv(CANDLES_FILE)
 
-        # Verificar y registrar la estructura del DataFrame
         logging.info(f"Columnas en df_historical: {df_historical.columns.tolist()}")
         logging.info(f"Índice de df_historical: {df_historical.index.name}")
         logging.info(f"Primeras filas de df_historical:\n{df_historical.head()}")
 
-        while True:  # Bucle principal del bot
-            # Obtener datos históricos actualizados (cada hora)
+        while True:
+            esperar_cierre_vela()  # Sincronización con el cierre de la vela
+
             df_historical = get_historical_candles(MARKET, TIMEFRAME)
             if df_historical.empty:
-              logging.warning("No hay datos para procesar en este ciclo.")
-              time.sleep(3600)
-              continue
+                logging.warning("No hay datos para procesar en este ciclo.")
+                continue
 
             df_with_indicators = calculate_indicators(df_historical.copy())
             df_with_signals = generate_signals(df_with_indicators)
-            
+
             last_signal = df_with_signals['signal'].iloc[-1]
             last_price = df_historical['close'].iloc[-1]
 
@@ -198,15 +221,15 @@ def main():
                 balance = coinex_api_request('GET', 'balance')
                 if balance and balance['code'] == 0:
                     balance_data = balance['data']
-                    if last_signal == 1: # Señal de compra
+                    if last_signal == 1:  # Señal de compra
                         available_usdt = float(balance_data.get('USDT', {'available': 0})['available'])
                         if available_usdt > 0:
                             amount = available_usdt / last_price * 0.99
                             order_id = execute_trade('buy', amount)
                             if order_id:
                                 logging.info(f"Orden de COMPRA ejecutada. Order ID: {order_id}")
-                    elif last_signal == -1: # Señal de venta
-                        available_btc = float(balance_data.get('BTC', {'available': 0})['available'])
+                    elif last_signal == -1:  # Señal de venta
+                        available_btc = float(balance_data.get('BTC', {'available': 0})['available']) #Asegúrate que la moneda sea la correcta
                         if available_btc > 0:
                             order_id = execute_trade('sell', available_btc)
                             if order_id:
@@ -215,8 +238,6 @@ def main():
                     logging.error(f"Error al obtener balance: {balance}")
             else:
                 logging.info("Sin señal.")
-                
-            time.sleep(3600)  # Esperar una hora antes de la siguiente iteración
 
     except Exception as e:
         logging.error(f"Error inesperado: {e}", exc_info=True)
