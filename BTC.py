@@ -178,31 +178,44 @@ print(df_test.head(30)) #Imprime las primeras 30 filas para ver los NaN
 print(len(df_test))
 
 
+filename = "datos_BTC/XBTUSDT_15m.csv"  # Ruta al archivo
 
-filename = "datos_BTC/XBTUSDT_15m.csv" # Ruta al archivo de prueba
 try:
     df = pd.read_csv(filename, index_col='time', parse_dates=True)
-    print(f"DataFrame leído correctamente. Longitud: {len(df)}")
+    print(f"DataFrame leído. Longitud: {len(df)}")
+    print("Primeras 5 filas del DataFrame:")
+    print(df.head())
+    print("Últimas 5 filas del DataFrame:")
+    print(df.tail())
+    print("Tipos de datos del DataFrame:")
+    print(df.dtypes)
+    print("Información del DataFrame:")
+    df.info() #Muestra informacion del dataframe, como valores nulos y tipos de datos
 
-    if len(df) >= 26:
-        df = calcular_rsi(df)
-        df = calcular_bandas_bollinger(df)
-        df = calcular_macd(df)
-        df = calcular_hulma(df)
-        print("Indicadores calculados.")
-        print(df.tail(5)) #Imprime las ultimas 5 filas
+    # Conviertir la columna 'close' a numérica, manejando errores
+    df['close'] = pd.to_numeric(df['close'], errors='coerce')
+    print("Tipos de datos DESPUÉS de la conversión:")
+    print(df.dtypes)
+    print("Valores nulos en la columna 'close':")
+    print(df['close'].isnull().sum()) # Cuenta cuantos valores nulos hay en la columna close
+    if df['close'].isnull().sum() > 0:
+        print("¡ATENCIÓN! Hay valores nulos en la columna 'close'. Revise su archivo CSV.")
+        df.dropna(inplace=True) #Elimina las filas con valores nulos
+
+    if len(df) >= 26: #Comprueba si hay suficientes datos DESPUÉS de la limpieza
+      df = calcular_rsi(df)
+      df = calcular_bandas_bollinger(df)
+      df = calcular_macd(df)
+      df = calcular_hulma(df)
+      print("Indicadores calculados.")
+      print(df.tail(10)) #Imprime las ultimas 10 filas para ver si se han calculado bien
+      df.to_csv("test_con_indicadores.csv")
+      print("DataFrame con indicadores guardado en test_con_indicadores.csv")
     else:
-        print("No hay suficientes datos para calcular los indicadores.")
-
-    df.to_csv("test_con_indicadores.csv") # Guarda el resultado en un nuevo archivo
-    print("DataFrame con indicadores guardado en test_con_indicadores.csv")
+        print("No hay suficientes datos para calcular los indicadores DESPUÉS de la limpieza.")
 except FileNotFoundError:
     print(f"Archivo {filename} no encontrado.")
 except Exception as e:
     print(f"Error: {e}")
     import traceback
     traceback.print_exc()
-df_test = calcular_hulma(df_test)
-print("\nDataFrame con HULMA:")
-print(df_test.head(20)) #Imprime las primeras 20 filas para ver los NaN
-print(len(df_test))
