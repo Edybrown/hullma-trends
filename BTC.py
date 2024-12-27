@@ -177,7 +177,16 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
         df = cargar_dataframe(filename)
 
         if df is not None:
-            df_original = df.copy() #Crea una copia del DataFrame original
+            # Asegurarse de que 'time' sea el índice y esté en formato DatetimeIndex
+            df.set_index('time', inplace=True)
+            if not isinstance(df.index, pd.DatetimeIndex):
+                try:
+                    df.index = pd.to_datetime(df.index)
+                except Exception as e:
+                    print(f"Error al convertir el índice a DatetimeIndex en {filename}: {e}")
+                    continue  # Saltar a la siguiente temporalidad si hay un error
+
+            df_original = df.copy()
 
             df = calcular_rsi(df)
             df = calcular_bandas_bollinger(df)
@@ -188,10 +197,13 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
                 print(f"DataFrame con indicadores para {filename_suffix}:")
                 print(df.tail())
 
-                # Unir los indicadores al DataFrame original
+                #Alinear indices antes del join
+                df = df.reindex(df_original.index)
+
+                # Unir los indicadores al DataFrame original, evitando duplicados
                 df_original = df_original.join(df.drop(columns=df_original.columns, errors='ignore'), how='left')
 
-                guardar_dataframe(df_original, filename) #Guarda el DataFrame modificado en el archivo original
+                guardar_dataframe(df_original, filename)
             else:
                 print(f"No se pudieron calcular los indicadores para {filename_suffix}")
         else:
