@@ -1,43 +1,40 @@
 import requests
 import pandas as pd
-import datetime
 import time
+import datetime
 
-def obtener_ohlc_coingecko(coin_id, vs_currency, desde, hasta):
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc?vs_currency={vs_currency}&days=max"
-    retries = 3  # Número máximo de reintentos
+def obtener_ohlc_kraken(pair, since=None, interval=1):
+    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
+    if since:
+        url += f"&since={since}"
+    retries = 3
     for i in range(retries):
         try:
             response = requests.get(url)
-            response.raise_for_status()  # Lanza una excepción para códigos de error HTTP (incluido 401 si realmente ocurriera)
+            response.raise_for_status()
             data = response.json()
-            if not data: # Verifica si la respuesta está vacía
-                print("La respuesta de CoinGecko está vacía.")
+            if data['error']:
+                print(f"Error de Kraken: {data['error']}")
                 return None
-            df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df = df.set_index('timestamp')
-            df = df[desde:hasta]
+            df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+            df = df.set_index('time')
+            df = df.astype(float)
             return df
         except requests.exceptions.RequestException as e:
-            if response.status_code == 429:  # Código de error para Rate Limit
-                retry_after = int(response.headers.get('Retry-After', 60))  # Obtener tiempo de espera o usar un valor predeterminado
-                print(f"Rate limit alcanzado. Reintentando en {retry_after} segundos... (Intento {i+1}/{retries})")
-                time.sleep(retry_after)
-            else:
-                print(f"Error en la petición a CoinGecko: {e}")
-                return None
+            print(f"Error al obtener datos de Kraken: {e}")
+            time.sleep(5)  # Esperar antes de reintentar
     print("Número máximo de reintentos alcanzado.")
     return None
 
 # Ejemplo de uso:
-desde = datetime.datetime(2023, 1, 1)
-hasta = datetime.datetime(2024, 1, 1)
+pair = "XBTUSDT"  # Par BTC/USDT en Kraken (XBT es el símbolo de BTC en Kraken)
+#Obtener datos desde una fecha especifica
+desde = datetime.datetime(2023, 1, 1).timestamp()
+df_ohlc_kraken = obtener_ohlc_kraken(pair, since=desde, interval=1440) #Intervalo de 1440 minutos = 1 dia
 
-df_ohlc = obtener_ohlc_coingecko("bitcoin", "usd", desde, hasta)
-
-if df_ohlc is not None:
-    print(df_ohlc.head())
-    print(df_ohlc.tail()) #Imprime la cola para verificar los datos mas recientes
+if df_ohlc_kraken is not None:
+    print(df_ohlc_kraken.head())
+    print(df_ohlc_kraken.tail())
 else:
-    print("No se pudieron obtener datos OHLC de CoinGecko.")
+    print("No se pudieron obtener datos OHLC de Kraken.")
