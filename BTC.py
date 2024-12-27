@@ -116,39 +116,51 @@ while True:
     actualizar_archivos(pair, carpeta_datos)
     print(f"Datos actualizados. Esperando {frecuencia_actualizacion} segundos...")
     time.sleep(frecuencia_actualizacion)
+
 def calcular_rsi(df, periodo=14):
+    print("Entrando en calcular_rsi")
     if len(df) < periodo:
-        print(f"Se necesitan al menos {periodo} datos para calcular el RSI.")
-        return df  # Devuelve el DataFrame original SIN MODIFICAR si no hay suficientes datos
+        print(f"No hay suficientes datos para calcular el RSI ({len(df)} datos). Se necesitan al menos {periodo}.")
+        return df
     df['RSI'] = talib.RSI(df['close'], timeperiod=periodo)
+    print(f"RSI calculado: {df['RSI'].iloc[-1]}")
+    print("Saliendo de calcular_rsi")
     return df
 
 def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
+    print("Entrando en calcular_bandas_bollinger")
     if len(df) < periodo:
-        print(f"Se necesitan al menos {periodo} datos para calcular las Bandas de Bollinger.")
-        return df  # Devuelve el DataFrame original SIN MODIFICAR
-    df['BB_MIDDLE'], df['BB_UPPER'], df['BB_LOWER'] = talib.BBANDS(df['close'], timeperiod=periodo, nbdevup=desviaciones, nbdevdn=desviaciones, matype=0)
+        print(f"No hay suficientes datos para calcular las Bandas de Bollinger ({len(df)} datos). Se necesitan al menos {periodo}.")
+        return df
+    bbands = talib.BBANDS(df['close'], timeperiod=periodo, nbdevup=desviaciones, nbdevdn=desviaciones, matype=0)
+    df['BB_UPPER'] = bbands[0]
+    df['BB_MIDDLE'] = bbands[1]
+    df['BB_LOWER'] = bbands[2]
+    print("Saliendo de calcular_bandas_bollinger")
     return df
 
 def calcular_macd(df, rapido=12, lento=26, senal=9):
+    print("Entrando en calcular_macd")
     if len(df) < lento:
-        print(f"Se necesitan al menos {lento} datos para calcular el MACD.")
-        return df  # Devuelve el DataFrame original SIN MODIFICAR
-    df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(df['close'], fastperiod=rapido, slowperiod=lento, signalperiod=senal)
+        print(f"No hay suficientes datos para calcular el MACD ({len(df)} datos). Se necesitan al menos {lento}.")
+        return df
+    macd = talib.MACD(df['close'], fastperiod=rapido, slowperiod=lento, signalperiod=senal)
+    df['MACD'] = macd[0]
+    df['MACD_signal'] = macd[1]
+    df['MACD_hist'] = macd[2]
+    print("Saliendo de calcular_macd")
     return df
 
 def calcular_hulma(df, periodo_base=9):
-    if len(df) < periodo_base:
-        print(f"Se necesitan al menos {periodo_base} datos para calcular la HULMA.")
-        return df  # Devuelve el DataFrame original SIN MODIFICAR
-    if len(df) < periodo_base*2: #Corrección para evitar error en el calculo de la HULMA
+    print("Entrando en calcular_hulma")
+    if len(df) < periodo_base * 2: # Se necesitan al menos el doble del periodo base
+        print(f"No hay suficientes datos para calcular la HULMA ({len(df)} datos). Se necesitan al menos {periodo_base * 2}.")
         return df
-    sqrt_periodo = int(periodo_base**0.5) #Se usa el periodo base para calcular la raiz cuadrada y no len(df)
+    sqrt_periodo = int(periodo_base**0.5)
     df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
     df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
+    print("Saliendo de calcular_hulma")
     return df
-
-# --- Función Principal para Calcular y Guardar Indicadores (CORRECCIONES FUNDAMENTALES) ---
 
 
 def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
@@ -162,46 +174,28 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
     for interval, filename_suffix in temporalidades.items():
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
         try:
-            # Cargar archivo CSV en DataFrame
-            df = pd.read_csv(filename, parse_dates=['time'])
-            df.set_index('time', inplace=True)
+            df = pd.read_csv(filename, index_col='time', parse_dates=True)
+            print(f"Procesando {filename}, longitud del dataframe: {len(df)}")
 
-            print(f"Procesando {filename}")
+            # --- CORRECCIÓN CRUCIAL: Calcular indicadores SOLO si hay suficientes datos ---
+            if len(df) >= 26: #El macd necesita 26 datos para calcularse
+                df = calcular_rsi(df)
+                df = calcular_bandas_bollinger(df)
+                df = calcular_macd(df)
+                df = calcular_hulma(df)
+                print("Indicadores calculados")
+            else:
+                print(f"No hay suficientes datos ({len(df)}) para calcular todos los indicadores en {filename}. Se necesitan al menos 26.")
 
-            # Calcular indicadores
-            df['RSI'] = talib.RSI(df['close'], timeperiod=14)
-            df['BB_MIDDLE'], df['BB_UPPER'], df['BB_LOWER'] = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-            df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-            
-            # Calcular HULMA
-            periodo_base = 9
-            sqrt_periodo = int(periodo_base**0.5)
-            df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
-            df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
-
-            # Guardar el DataFrame actualizado
             df.to_csv(filename)
-            print(f"Indicadores calculados y guardados en {filename}")
+            print(f"DataFrame (con o sin indicadores) guardado en {filename}")
 
+        except FileNotFoundError:
+            print(f"Archivo {filename} no encontrado. Se creará al actualizar los datos.")
         except Exception as e:
             print(f"Error procesando {filename}: {e}")
-
-# Ejemplo de uso
-pair = "XBTUSDT"
-carpeta_datos = "datos_BTC"
-calcular_y_guardar_indicadores(pair, carpeta_datos)
-
-# Verificar que los indicadores se han guardado correctamente
-for interval, filename_suffix in temporalidades.items():
-    filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
-    df = pd.read_csv(filename)
-    print(f"\nColumnas en {filename}:")
-    print(df.columns)
-    print(f"\nPrimeras filas de {filename}:")
-    print(df.head())
-
-print("Proceso completado.")
-
+            import traceback
+            traceback.print_exc() #Imprime la traza completa del error
 
 
 def cargar_dataframe(filename):
