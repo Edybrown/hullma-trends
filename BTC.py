@@ -89,7 +89,51 @@ def actualizar_dataframe(df, pair, interval):
         print(f"Error al obtener nuevos datos para el intervalo {interval}")
         return df
 
-def actualizar_archivos(pair, carpeta="datos_BTC"):
+def calcular_rsi(df, periodo=14):
+    """Calcula el RSI (Relative Strength Index)."""
+    if len(df) < periodo: # Verifica si hay suficientes datos
+        return pd.Series(index=df.index) # Devuelve una Serie vacía si no hay datos suficientes
+    delta = df['close'].diff()
+    up = delta.clip(lower=0)
+    down = -1 * delta.clip(upper=0)
+    ma_up = up.rolling(window=periodo).mean()
+    ma_down = down.rolling(window=periodo).mean()
+    rsi = 100 - (100 / (1 + ma_up / ma_down))
+    return rsi
+
+def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
+    """Calcula las Bandas de Bollinger."""
+    if len(df) < periodo:
+        return pd.Series(index=df.index), pd.Series(index=df.index), pd.Series(index=df.index)
+    media = df['close'].rolling(window=periodo).mean()
+    desviacion_estandar = df['close'].rolling(window=periodo).std()
+    banda_superior = media + desviaciones * desviacion_estandar
+    banda_inferior = media - desviaciones * desviacion_estandar
+    return banda_superior, media, banda_inferior
+
+def calcular_hulma(df, periodo=9):
+    """Calcula el Hull Moving Average (HMA)."""
+    if len(df) < periodo:
+        return pd.Series(index=df.index)
+    n = periodo
+    sqrt_n = int(np.sqrt(n))
+    wma1 = df['close'].rolling(window=int(n / 2)).apply(lambda x: np.average(x, weights=np.arange(1, len(x) + 1)))
+    wma2 = df['close'].rolling(window=n).apply(lambda x: np.average(x, weights=np.arange(1, len(x) + 1)))
+    hma = (2 * wma1 - wma2).rolling(window=sqrt_n).apply(lambda x: np.average(x, weights=np.arange(1, len(x) + 1)))
+    return hma
+
+def calcular_macd(df, periodo_corto=12, periodo_largo=26, periodo_senal=9):
+    """Calcula el MACD (Moving Average Convergence Divergence)."""
+    if len(df) < periodo_largo:
+        return pd.Series(index=df.index), pd.Series(index=df.index)
+    ema_corto = df['close'].ewm(span=periodo_corto, adjust=False).mean()
+    ema_largo = df['close'].ewm(span=periodo_largo, adjust=False).mean()
+    macd = ema_corto - ema_largo
+    senal = macd.ewm(span=periodo_senal, adjust=False).mean()
+    return macd, senal
+
+def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
+    """Calcula y guarda los indicadores para *cada* archivo CSV."""
     temporalidades = {
         15: "15m",
         60: "1h",
@@ -100,63 +144,27 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
         try:
             df = pd.read_csv(filename, index_col='time', parse_dates=True)
-        except FileNotFoundError:
-            print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
-            df = pd.DataFrame()
-        df = actualizar_dataframe(df, pair, interval)
-        guardar_dataframe(df, filename)
+            if not df.empty:
+                # ***Aquí está la clave: se asegura de que 'close' exista y se manejan los valores NaN***
+                if 'close' in df.columns: #Verifica que la columna close exista
+                    df['RSI'] = calcular_rsi(df).fillna(method='bfill') #Calcula el RSI y rellena los valores NaN
+                    banda_superior, media, banda_inferior = calcular_bandas_bollinger(df)
+                    df['Banda Superior'] = banda_superior.fillna(method='bfill')
+                    df['Banda Media'] = media.fillna(method='bfill')
+                    df['Banda Inferior'] = banda_inferior.fillna(method='bfill')
+                    df['HMA'] = calcular_hulma(df).fillna(method='bfill')
+                    macd, senal = calcular_macd(df)
+                    df['MACD'] = macd.fillna(method='bfill')
+                    df['Señal MACD'] = senal.fillna(method='bfill')
+                    guardar_dataframe(df, filename)
+                    print(f"Indicadores calculados y guardados en {filename}")
+                else:
+                    print(f"La columna 'close' no existe en {filename}. No se calcularon indicadores.")
 
-# Ejemplo de uso (bucle principal):
-pair = "XBTUSDT"
-carpeta_datos = "datos_BTC"
-frecuencia_actualizacion = 60  # Actualizar cada 60 segundos (1 minuto)
-
-while True:
-    print("Actualizando datos...")
-    actualizar_archivos(pair, carpeta_datos)
-    print(f"Datos actualizados. Esperando {frecuencia_actualizacion} segundos...")
-    time.sleep(frecuencia_actualizacion)
-
-def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
-    """Calcula y guarda los indicadores para *cada* archivo CSV."""
-    temporalidades = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
-    }
-    for interval, filename_suffix in temporalidades.items():  # Itera sobre las temporalidades
-        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-        try:
-            df = pd.read_csv(filename, index_col='time', parse_dates=True) # Lee el archivo CSV
-            if not df.empty: # Verifica que el DataFrame no esté vacío
-                # Calcula los indicadores y los añade como *nuevas columnas*
-                df['RSI'] = calcular_rsi(df)
-                banda_superior, media, banda_inferior = calcular_bandas_bollinger(df)
-                df['Banda Superior'] = banda_superior
-                df['Banda Media'] = media
-                df['Banda Inferior'] = banda_inferior
-                df['HMA'] = calcular_hulma(df)
-                macd, senal = calcular_macd(df)
-                df['MACD'] = macd
-                df['Señal MACD'] = senal
-
-                guardar_dataframe(df, filename) # Guarda el DataFrame *con los nuevos indicadores*
-                print(f"Indicadores calculados y guardados en {filename}")
             else:
                 print(f"DataFrame vacío para {filename}. No se calcularon indicadores.")
         except FileNotFoundError:
             print(f"Archivo {filename} no encontrado. No se calcularon indicadores.")
 
-# Ejemplo de uso (dentro del bucle principal):
-pair = "XBTUSDT"
-carpeta_datos = "datos_BTC"
-frecuencia_actualizacion = 60
 
-while True:
-    print("Actualizando datos...")
-    actualizar_archivos(pair, carpeta_datos)
-    print("Calculando y guardando indicadores...")
-    calcular_y_guardar_indicadores(pair, carpeta_datos) # Llama a la función que calcula Y GUARDA
-    print(f"Datos e indicadores actualizados. Esperando {frecuencia_actualizacion} segundos...")
-    time.sleep(frecuencia_actualizacion)
+
