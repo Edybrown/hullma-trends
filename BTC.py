@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import datetime
 import os
+import talib
 
 def obtener_ohlc_kraken(pair, interval, since=None):
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
