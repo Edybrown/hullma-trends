@@ -65,12 +65,6 @@ obtener_y_guardar_multiples_temporalidades(pair, desde, carpeta_datos)
 
 print("Proceso completado.")
 
-import requests
-import pandas as pd
-import time
-import datetime
-import os
-
 # (Las funciones obtener_ohlc_kraken y guardar_dataframe del código anterior se mantienen igual)
 
 def actualizar_dataframe(df, pair, interval):
@@ -121,3 +115,87 @@ while True:
     actualizar_archivos(pair, carpeta_datos)
     print(f"Datos actualizados. Esperando {frecuencia_actualizacion} segundos...")
     time.sleep(frecuencia_actualizacion)
+
+import pandas as pd
+import talib
+import os
+
+def calcular_rsi(df, periodo=14):
+    if len(df) < periodo:
+        print(f"Se necesitan al menos {periodo} datos para calcular el RSI.")
+        return None
+    df['RSI'] = talib.RSI(df['close'], timeperiod=periodo)
+    return df
+
+def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
+    if len(df) < periodo:
+        print(f"Se necesitan al menos {periodo} datos para calcular las Bandas de Bollinger.")
+        return None
+    df['BB_MIDDLE'], df['BB_UPPER'], df['BB_LOWER'] = talib.BBANDS(df['close'], timeperiod=periodo, nbdevup=desviaciones, nbdevdn=desviaciones, matype=0)
+    return df
+
+def calcular_macd(df, rapido=12, lento=26, senal=9):
+    if len(df) < lento:
+        print(f"Se necesitan al menos {lento} datos para calcular el MACD.")
+        return None
+    df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(df['close'], fastperiod=rapido, slowperiod=lento, signalperiod=senal)
+    return df
+
+def calcular_hulma(df, periodo_base=9):
+    if len(df) < periodo_base:
+        print(f"Se necesitan al menos {periodo_base} datos para calcular la HULMA.")
+        return None
+    sqrt_periodo = int(len(df)**0.5)
+    df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
+    df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
+    return df
+
+def cargar_dataframe(filename):
+    try:
+        df = pd.read_csv(filename, index_col='time', parse_dates=True)
+        return df
+    except FileNotFoundError:
+        print(f"Archivo {filename} no encontrado.")
+        return None
+
+def guardar_dataframe(df, filename):
+    if df is not None:
+        try:
+            df.to_csv(filename)
+            print(f"Datos guardados en {filename}")
+        except Exception as e:
+            print(f"Error al guardar el archivo: {e}")
+    else:
+        print("No hay datos para guardar.")
+
+def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+
+    for interval, filename_suffix in temporalidades.items():
+        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
+        df = cargar_dataframe(filename)
+
+        if df is not None:
+            df = calcular_rsi(df)
+            df = calcular_bandas_bollinger(df)
+            df = calcular_macd(df)
+            df = calcular_hulma(df)
+
+            if df is not None: #Verificar si todos los calculos fueron exitosos
+                print(f"DataFrame con indicadores para {filename_suffix}:")
+                print(df.tail())
+                guardar_dataframe(df,filename)
+            else:
+                print(f"No se pudieron calcular los indicadores para {filename_suffix}")
+        else:
+            print(f"No se pudo cargar el archivo {filename}")
+
+# Ejemplo de uso:
+pair = "XBTUSDT"
+carpeta_datos = "datos_BTC"
+calcular_y_guardar_indicadores(pair, carpeta_datos)
