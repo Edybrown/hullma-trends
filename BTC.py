@@ -2,8 +2,9 @@ import requests
 import pandas as pd
 import time
 import datetime
+import os
 
-def obtener_ohlc_kraken(pair, since=None, interval=1):
+def obtener_ohlc_kraken(pair, interval, since=None):
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
@@ -16,6 +17,9 @@ def obtener_ohlc_kraken(pair, since=None, interval=1):
             if data['error']:
                 print(f"Error de Kraken: {data['error']}")
                 return None
+            if not data['result']:
+                print("No hay datos disponibles para este intervalo.")
+                return None
             df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
             df['time'] = pd.to_datetime(df['time'], unit='s')
             df = df.set_index('time')
@@ -27,14 +31,36 @@ def obtener_ohlc_kraken(pair, since=None, interval=1):
     print("Número máximo de reintentos alcanzado.")
     return None
 
-# Ejemplo de uso:
-pair = "XBTUSDT"  # Par BTC/USDT en Kraken (XBT es el símbolo de BTC en Kraken)
-#Obtener datos desde una fecha especifica
-desde = datetime.datetime(2023, 1, 1).timestamp()
-df_ohlc_kraken = obtener_ohlc_kraken(pair, since=desde, interval=1440) #Intervalo de 1440 minutos = 1 dia
+def guardar_dataframe(df, filename):
+    if df is not None:
+        try:
+            df.to_csv(filename)
+            print(f"Datos guardados en {filename}")
+        except Exception as e:
+            print(f"Error al guardar el archivo: {e}")
+    else:
+        print("No hay datos para guardar.")
 
-if df_ohlc_kraken is not None:
-    print(df_ohlc_kraken.head())
-    print(df_ohlc_kraken.tail())
-else:
-    print("No se pudieron obtener datos OHLC de Kraken.")
+def obtener_y_guardar_multiples_temporalidades(pair, desde, carpeta="data"):
+    # Crear la carpeta si no existe
+    os.makedirs(carpeta, exist_ok=True)
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+    for interval, filename_suffix in temporalidades.items():
+        print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
+        df = obtener_ohlc_kraken(pair, interval, since=desde)
+        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
+        guardar_dataframe(df, filename)
+
+# Ejemplo de uso:
+pair = "XBTUSDT"  # Par BTC/USDT en Kraken
+desde = datetime.datetime(2023, 1, 1).timestamp()
+carpeta_datos = "datos_BTC" #Nombre de la carpeta donde se guardaran los archivos
+
+obtener_y_guardar_multiples_temporalidades(pair, desde, carpeta_datos)
+
+print("Proceso completado.")
