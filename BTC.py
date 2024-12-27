@@ -161,44 +161,33 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
         df_original = cargar_dataframe(filename)
 
-        if df_original is not None:
+        if df_original is not None and not df_original.empty:
             print(f"Procesando {filename}")
 
-            # 1. Asegurar que 'time' exista como columna
-            if 'time' not in df_original.columns:
-                print(f"Error: La columna 'time' no existe en {filename}")
-                continue
+            # Asegurar que el índice esté configurado correctamente
+            if not isinstance(df_original.index, pd.DatetimeIndex):
+                df_original.index = pd.to_datetime(df_original.index)
 
-            # 2. Convertir 'time' a DatetimeIndex y manejar errores
-            try:
-                df_original['time'] = pd.to_datetime(df_original['time'])
-                df_original.set_index('time', inplace=True)
-            except Exception as e:
-                print(f"Error al convertir 'time' a DatetimeIndex en {filename}: {e}")
-                continue
+            # Crear copia para cálculos
+            df_indicadores = df_original.copy()
 
-            # --- LA CLAVE: Calcular los indicadores en un NUEVO DataFrame ---
-            df_indicadores = df_original.copy()  # Crear una copia *SOLO* para los cálculos
-
+            # Calcular indicadores
             df_indicadores = calcular_rsi(df_indicadores)
             df_indicadores = calcular_bandas_bollinger(df_indicadores)
             df_indicadores = calcular_macd(df_indicadores)
             df_indicadores = calcular_hulma(df_indicadores)
 
-            # 3. Eliminar filas con NaN resultantes de los calculos de los indicadores
-            df_indicadores.dropna(inplace=True)
+            # Combinar DataFrames, manteniendo índices alineados
+            indicadores_unidos = df_original.join(
+                df_indicadores.drop(columns=df_original.columns, errors='ignore'),
+                how='left'
+            )
 
-            if not df_indicadores.empty: #Verificar que el dataframe no este vacio despues de eliminar los NaN
-                # 4. Unir los DataFrames (SOLO si hay datos de indicadores)
-                df_original = df_original.join(df_indicadores.drop(columns=df_original.columns, errors='ignore'), how='left')
-
-                # 5. Guardar
-                guardar_dataframe(df_original, filename)
-                print(f"Indicadores agregados y guardados en {filename}")
-            else:
-                print(f"No hay suficientes datos para calcular los indicadores en {filename}")
+            # Guardar los datos actualizados
+            guardar_dataframe(indicadores_unidos, filename)
+            print(f"Indicadores agregados y guardados en {filename}")
         else:
-            print(f"No se pudo cargar el archivo {filename}")
+            print(f"No se pudo cargar o procesar el archivo {filename}.")
 
 def cargar_dataframe(filename):
     try:
