@@ -177,19 +177,26 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
         df = cargar_dataframe(filename)
 
         if df is not None:
+            df_original = df.copy() #Crea una copia del DataFrame original
+
             df = calcular_rsi(df)
             df = calcular_bandas_bollinger(df)
             df = calcular_macd(df)
             df = calcular_hulma(df)
 
-            if df is not None: #Verificar si todos los calculos fueron exitosos
+            if df is not None:
                 print(f"DataFrame con indicadores para {filename_suffix}:")
                 print(df.tail())
-                guardar_dataframe(df,filename)
+
+                # Unir los indicadores al DataFrame original
+                df_original = df_original.join(df.drop(columns=df_original.columns, errors='ignore'), how='left')
+
+                guardar_dataframe(df_original, filename) #Guarda el DataFrame modificado en el archivo original
             else:
                 print(f"No se pudieron calcular los indicadores para {filename_suffix}")
         else:
             print(f"No se pudo cargar el archivo {filename}")
+
 
 def analizar_y_generar_alertas(df, temporalidad):
     alertas = []
