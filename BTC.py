@@ -115,36 +115,89 @@ while True:
     actualizar_archivos(pair, carpeta_datos)
     print(f"Datos actualizados. Esperando {frecuencia_actualizacion} segundos...")
     time.sleep(frecuencia_actualizacion)
-
 def calcular_rsi(df, periodo=14):
     if len(df) < periodo:
         print(f"Se necesitan al menos {periodo} datos para calcular el RSI.")
-        return None
+        return df  # Devuelve el DataFrame original SIN MODIFICAR si no hay suficientes datos
     df['RSI'] = talib.RSI(df['close'], timeperiod=periodo)
     return df
 
 def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
     if len(df) < periodo:
         print(f"Se necesitan al menos {periodo} datos para calcular las Bandas de Bollinger.")
-        return None
+        return df  # Devuelve el DataFrame original SIN MODIFICAR
     df['BB_MIDDLE'], df['BB_UPPER'], df['BB_LOWER'] = talib.BBANDS(df['close'], timeperiod=periodo, nbdevup=desviaciones, nbdevdn=desviaciones, matype=0)
     return df
 
 def calcular_macd(df, rapido=12, lento=26, senal=9):
     if len(df) < lento:
         print(f"Se necesitan al menos {lento} datos para calcular el MACD.")
-        return None
+        return df  # Devuelve el DataFrame original SIN MODIFICAR
     df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(df['close'], fastperiod=rapido, slowperiod=lento, signalperiod=senal)
     return df
 
 def calcular_hulma(df, periodo_base=9):
     if len(df) < periodo_base:
         print(f"Se necesitan al menos {periodo_base} datos para calcular la HULMA.")
-        return None
-    sqrt_periodo = int(len(df)**0.5)
+        return df  # Devuelve el DataFrame original SIN MODIFICAR
+    if len(df) < periodo_base*2: #Corrección para evitar error en el calculo de la HULMA
+        return df
+    sqrt_periodo = int(periodo_base**0.5) #Se usa el periodo base para calcular la raiz cuadrada y no len(df)
     df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
     df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
     return df
+
+# --- Función Principal para Calcular y Guardar Indicadores (CORRECCIONES FUNDAMENTALES) ---
+def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+
+    for interval, filename_suffix in temporalidades.items():
+        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
+        df_original = cargar_dataframe(filename)
+
+        if df_original is not None:
+            print(f"Procesando {filename}")
+
+            # 1. Asegurar que 'time' exista como columna
+            if 'time' not in df_original.columns:
+                print(f"Error: La columna 'time' no existe en {filename}")
+                continue
+
+            # 2. Convertir 'time' a DatetimeIndex y manejar errores
+            try:
+                df_original['time'] = pd.to_datetime(df_original['time'])
+                df_original.set_index('time', inplace=True)
+            except Exception as e:
+                print(f"Error al convertir 'time' a DatetimeIndex en {filename}: {e}")
+                continue
+
+            # --- LA CLAVE: Calcular los indicadores en un NUEVO DataFrame ---
+            df_indicadores = df_original.copy()  # Crear una copia *SOLO* para los cálculos
+
+            df_indicadores = calcular_rsi(df_indicadores)
+            df_indicadores = calcular_bandas_bollinger(df_indicadores)
+            df_indicadores = calcular_macd(df_indicadores)
+            df_indicadores = calcular_hulma(df_indicadores)
+
+            # 3. Eliminar filas con NaN resultantes de los calculos de los indicadores
+            df_indicadores.dropna(inplace=True)
+
+            if not df_indicadores.empty: #Verificar que el dataframe no este vacio despues de eliminar los NaN
+                # 4. Unir los DataFrames (SOLO si hay datos de indicadores)
+                df_original = df_original.join(df_indicadores.drop(columns=df_original.columns, errors='ignore'), how='left')
+
+                # 5. Guardar
+                guardar_dataframe(df_original, filename)
+                print(f"Indicadores agregados y guardados en {filename}")
+            else:
+                print(f"No hay suficientes datos para calcular los indicadores en {filename}")
+        else:
+            print(f"No se pudo cargar el archivo {filename}")
 
 def cargar_dataframe(filename):
     try:
@@ -164,68 +217,7 @@ def guardar_dataframe(df, filename):
     else:
         print("No hay datos para guardar.")
 
-def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
-    temporalidades = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
-    }
 
-    for interval, filename_suffix in temporalidades.items():
-        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-        df = cargar_dataframe(filename)
-
-        if df is not None:
-            print(f"Procesando {filename}")
-
-            # 1. Asegurar que 'time' exista como columna
-            if 'time' not in df.columns:
-                print(f"Error: La columna 'time' no existe en {filename}")
-                continue
-
-            # 2. Convertir 'time' a DatetimeIndex y manejar errores
-            try:
-                df['time'] = pd.to_datetime(df['time'])
-                df.set_index('time', inplace=True)
-            except Exception as e:
-                print(f"Error al convertir 'time' a DatetimeIndex en {filename}: {e}")
-                continue
-
-            df_original = df.copy()
-
-            df = calcular_rsi(df)
-            df = calcular_bandas_bollinger(df)
-            df = calcular_macd(df)
-            df = calcular_hulma(df)
-
-            if df is not None:
-                print(f"Calculo de indicadores exitoso para {filename}")
-
-                # 3. Alinear índices ANTES del join (CRUCIAL)
-                df = df.reindex(df_original.index)
-
-                # 4. Unir, evitando duplicados y mostrando información para depuración
-                print("Columnas en df_original antes del join:", df_original.columns)
-                print("Columnas en df (indicadores) antes del join:", df.columns)
-
-                df_original = df_original.join(df.drop(columns=df_original.columns, errors='ignore'), how='left')
-
-                print("Columnas en df_original DESPUÉS del join:", df_original.columns)
-
-                # 5. Guardar y verificar
-                guardar_dataframe(df_original, filename)
-
-                # Verificar si las columnas de indicadores existen DESPUÉS de guardar
-                df_verificado = cargar_dataframe(filename)
-                if df_verificado is not None:
-                    print("Columnas en el archivo guardado:", df_verificado.columns)
-                else:
-                    print("Error al verificar el archivo guardado.")
-            else:
-                print(f"No se pudieron calcular los indicadores para {filename}")
-        else:
-            print(f"No se pudo cargar el archivo {filename}")
 def analizar_y_generar_alertas(df, temporalidad):
     alertas = []
 
@@ -282,17 +274,10 @@ def calcular_y_analizar(pair, carpeta="datos_BTC"):
         df = cargar_dataframe(filename)
 
         if df is not None:
-            df = calcular_rsi(df)
-            df = calcular_bandas_bollinger(df)
-            df = calcular_macd(df)
-            df = calcular_hulma(df)
 
-            if df is not None:
-                alertas = analizar_y_generar_alertas(df, filename_suffix)
-                resultados[filename_suffix] = alertas #almacena las alertas en el diccionario
-                guardar_dataframe(df,filename)
-            else:
-                print(f"No se pudieron calcular los indicadores para {filename_suffix}")
+            alertas = analizar_y_generar_alertas(df, filename_suffix)
+            resultados[filename_suffix] = alertas #almacena las alertas en el diccionario
+            guardar_dataframe(df,filename)
         else:
             print(f"No se pudo cargar el archivo {filename}")
     return resultados
