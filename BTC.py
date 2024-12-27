@@ -163,6 +163,29 @@ def calcular_hulma(df, periodo_base=9):
     return df
 
 
+def calcular_indicadores(df): #Función para calcular todos los indicadores de una vez
+    if len(df) >= 26: #Comprueba que haya datos suficientes para el MACD
+        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+        bbands = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+        df['BB_UPPER'] = bbands[0]
+        df['BB_MIDDLE'] = bbands[1]
+        df['BB_LOWER'] = bbands[2]
+        macd = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        df['MACD'] = macd[0]
+        df['MACD_signal'] = macd[1]
+        df['MACD_hist'] = macd[2]
+        periodo_base = 9
+        if len(df) >= periodo_base * 2:
+            sqrt_periodo = int(periodo_base**0.5)
+            df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
+            df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
+        else:
+            print("No hay datos suficientes para calcular la HULMA.")
+    else:
+        print("No hay datos suficientes para calcular los indicadores.")
+    return df
+
+
 def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
     temporalidades = {
         15: "15m",
@@ -177,26 +200,18 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
             df = pd.read_csv(filename, index_col='time', parse_dates=True)
             print(f"Procesando {filename}, longitud del dataframe: {len(df)}")
 
-            # --- CORRECCIÓN CRUCIAL: Calcular indicadores SOLO si hay suficientes datos ---
-            if len(df) >= 26: #El macd necesita 26 datos para calcularse
-                df = calcular_rsi(df)
-                df = calcular_bandas_bollinger(df)
-                df = calcular_macd(df)
-                df = calcular_hulma(df)
-                print("Indicadores calculados")
-            else:
-                print(f"No hay suficientes datos ({len(df)}) para calcular todos los indicadores en {filename}. Se necesitan al menos 26.")
+            # --- Cálculo de indicadores ---
+            df = calcular_indicadores(df)
 
             df.to_csv(filename)
-            print(f"DataFrame (con o sin indicadores) guardado en {filename}")
+            print(f"DataFrame guardado en {filename}")
 
         except FileNotFoundError:
             print(f"Archivo {filename} no encontrado. Se creará al actualizar los datos.")
         except Exception as e:
             print(f"Error procesando {filename}: {e}")
             import traceback
-            traceback.print_exc() #Imprime la traza completa del error
-
+            traceback.print_exc()
 
 def cargar_dataframe(filename):
     try:
