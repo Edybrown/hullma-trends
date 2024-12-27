@@ -111,7 +111,7 @@ def read_historical_data(file_path):
             df = df.drop(columns=[time_column])
         else:
             # Si no hay columna de tiempo, creamos una basada en el índice
-            df['time'] = pd.date_range(start='2024-01-01', periods=len(df), freq='H')
+            df['time'] = pd.date_range(start='2024-01-01', periods=len(df), freq='h')
             df.set_index('time', inplace=True)
         
     # Asegurarse de que todas las columnas necesarias estén presentes
@@ -170,11 +170,21 @@ def esperar_cierre_vela():
 
 
 def esperar_cierre_vela():
-    """Espera hasta el cierre de la vela de 1 hora."""
-    ahora_utc = datetime.datetime.utcnow()
+    ahora_utc = datetime.datetime.now(datetime.UTC)
     segundos_restantes = (60 - ahora_utc.minute) * 60 - ahora_utc.second
     print(f"Esperando {segundos_restantes:.2f} segundos hasta el cierre de la vela de 1 hora.")
     time.sleep(segundos_restantes)
+
+    # Consultar la API varias veces con un pequeño intervalo
+    for _ in range(3):  # Intentar 3 veces
+        time.sleep(1.5)
+        # ... (Llamar a get_historical_candles aquí y verificar si hay nuevos datos)
+        df_historical = get_historical_candles(MARKET, "1hour")
+        if not df_historical.empty and len(df_historical)> 1: #Verificar que no este vacio y tenga mas de una vela
+            print("Datos obtenidos tras la espera adicional.")
+            return df_historical
+    print("No se obtuvieron datos después de varios intentos.")
+    return df_historical #Retornar el dataframe aunque este vacio
 
 def main():
     """Función principal para el bot de trading de CoinEx."""
