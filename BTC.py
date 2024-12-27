@@ -149,6 +149,7 @@ def calcular_hulma(df, periodo_base=9):
     return df
 
 # --- Función Principal para Calcular y Guardar Indicadores (CORRECCIONES FUNDAMENTALES) ---
+
 def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
     temporalidades = {
         15: "15m",
@@ -159,17 +160,15 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
 
     for interval, filename_suffix in temporalidades.items():
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-        df_original = cargar_dataframe(filename)
+        try:
+            # Cargar archivo CSV en DataFrame
+            df_original = pd.read_csv(filename, parse_dates=['time'])
+            df_original.set_index('time', inplace=True)
 
-        if df_original is not None and not df_original.empty:
             print(f"Procesando {filename}")
 
-            # Asegurar que el índice esté configurado correctamente
-            if not isinstance(df_original.index, pd.DatetimeIndex):
-                df_original.index = pd.to_datetime(df_original.index)
-
-            # Crear copia para cálculos
-            df_indicadores = df_original.copy()
+            # Copiar columna `close` para cálculos de indicadores
+            df_indicadores = df_original[['close']].copy()
 
             # Calcular indicadores
             df_indicadores = calcular_rsi(df_indicadores)
@@ -177,18 +176,15 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
             df_indicadores = calcular_macd(df_indicadores)
             df_indicadores = calcular_hulma(df_indicadores)
 
-            # Combinar DataFrames, manteniendo índices alineados
-            indicadores_unidos = df_original.join(
-                df_indicadores.drop(columns=df_original.columns, errors='ignore'),
-                how='left'
-            )
+            # Combinar indicadores con datos originales
+            df_actualizado = df_original.join(df_indicadores)
 
-            # Guardar los datos actualizados
-            guardar_dataframe(indicadores_unidos, filename)
-            print(f"Indicadores agregados y guardados en {filename}")
-        else:
-            print(f"No se pudo cargar o procesar el archivo {filename}.")
+            # Guardar el DataFrame actualizado
+            df_actualizado.to_csv(filename)
+            print(f"Indicadores calculados y guardados en {filename}")
 
+        except Exception as e:
+            print(f"Error procesando {filename}: {e}")
 def cargar_dataframe(filename):
     try:
         df = pd.read_csv(filename, index_col='time', parse_dates=True)
