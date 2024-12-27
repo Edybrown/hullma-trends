@@ -116,10 +116,6 @@ while True:
     print(f"Datos actualizados. Esperando {frecuencia_actualizacion} segundos...")
     time.sleep(frecuencia_actualizacion)
 
-import pandas as pd
-import talib
-import os
-
 def calcular_rsi(df, periodo=14):
     if len(df) < periodo:
         print(f"Se necesitan al menos {periodo} datos para calcular el RSI.")
@@ -195,7 +191,73 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
         else:
             print(f"No se pudo cargar el archivo {filename}")
 
-# Ejemplo de uso:
-pair = "XBTUSDT"
-carpeta_datos = "datos_BTC"
-calcular_y_guardar_indicadores(pair, carpeta_datos)
+def analizar_y_generar_alertas(df, temporalidad):
+    alertas = []
+
+    # Análisis del RSI
+    if df['RSI'].iloc[-1] >= 70:
+        alertas.append(f"RSI en sobrecompra en {temporalidad}. Posible señal de venta.")
+    elif df['RSI'].iloc[-1] <= 30:
+        alertas.append(f"RSI en sobreventa en {temporalidad}. Posible señal de compra.")
+
+    #Divergencias RSI (ejemplo básico, necesita mejora para detección robusta)
+    if len(df) >= 3:
+      if df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2]:
+          alertas.append(f"Posible divergencia alcista en RSI en {temporalidad}.")
+      elif df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2]:
+          alertas.append(f"Posible divergencia bajista en RSI en {temporalidad}.")
+
+
+    # Análisis de Bandas de Bollinger
+    if df['close'].iloc[-1] >= df['BB_UPPER'].iloc[-1]:
+        alertas.append(f"Precio tocando/sobrepasando la Banda de Bollinger superior en {temporalidad}.")
+    elif df['close'].iloc[-1] <= df['BB_LOWER'].iloc[-1]:
+        alertas.append(f"Precio tocando/sobrepasando la Banda de Bollinger inferior en {temporalidad}.")
+
+    # Analisis MACD
+    if df['MACD'].iloc[-1] > df['MACD_signal'].iloc[-1] and df['MACD'].iloc[-2] <= df['MACD_signal'].iloc[-2]:
+        alertas.append(f"Cruce alcista del MACD en {temporalidad}. Posible señal de compra.")
+    elif df['MACD'].iloc[-1] < df['MACD_signal'].iloc[-1] and df['MACD'].iloc[-2] >= df['MACD_signal'].iloc[-2]:
+        alertas.append(f"Cruce bajista del MACD en {temporalidad}. Posible señal de venta.")
+
+    if df['MACD'].iloc[-1] > 0 and df['MACD'].iloc[-2] <= 0:
+        alertas.append(f"MACD cruza por encima de cero en {temporalidad}. Refuerza señal alcista.")
+    elif df['MACD'].iloc[-1] < 0 and df['MACD'].iloc[-2] >= 0:
+        alertas.append(f"MACD cruza por debajo de cero en {temporalidad}. Refuerza señal bajista.")
+
+    # Analisis HULMA
+    if df['close'].iloc[-1] > df['HULMA'].iloc[-1]:
+        alertas.append(f"Precio por encima de la HULMA en {temporalidad}. Tendencia alcista según HULMA.")
+    elif df['close'].iloc[-1] < df['HULMA'].iloc[-1]:
+        alertas.append(f"Precio por debajo de la HULMA en {temporalidad}. Tendencia bajista según HULMA.")
+    #Retorna las alertas
+    return alertas
+
+def calcular_y_analizar(pair, carpeta="datos_BTC"):
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+    resultados = {} #diccionario para almacenar los resultados por temporalidad
+
+    for interval, filename_suffix in temporalidades.items():
+        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
+        df = cargar_dataframe(filename)
+
+        if df is not None:
+            df = calcular_rsi(df)
+            df = calcular_bandas_bollinger(df)
+            df = calcular_macd(df)
+            df = calcular_hulma(df)
+
+            if df is not None:
+                alertas = analizar_y_generar_alertas(df, filename_suffix)
+                resultados[filename_suffix] = alertas #almacena las alertas en el diccionario
+                guardar_dataframe(df,filename)
+            else:
+                print(f"No se pudieron calcular los indicadores para {filename_suffix}")
+        else:
+            print(f"No se pudo cargar el archivo {filename}")
+    return resultados
