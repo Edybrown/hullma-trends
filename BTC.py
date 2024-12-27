@@ -150,6 +150,7 @@ def calcular_hulma(df, periodo_base=9):
 
 # --- Función Principal para Calcular y Guardar Indicadores (CORRECCIONES FUNDAMENTALES) ---
 
+
 def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
     temporalidades = {
         15: "15m",
@@ -162,29 +163,47 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
         try:
             # Cargar archivo CSV en DataFrame
-            df_original = pd.read_csv(filename, parse_dates=['time'])
-            df_original.set_index('time', inplace=True)
+            df = pd.read_csv(filename, parse_dates=['time'])
+            df.set_index('time', inplace=True)
 
             print(f"Procesando {filename}")
 
-            # Copiar columna `close` para cálculos de indicadores
-            df_indicadores = df_original[['close']].copy()
-
             # Calcular indicadores
-            df_indicadores = calcular_rsi(df_indicadores)
-            df_indicadores = calcular_bandas_bollinger(df_indicadores)
-            df_indicadores = calcular_macd(df_indicadores)
-            df_indicadores = calcular_hulma(df_indicadores)
-
-            # Combinar indicadores con datos originales
-            df_actualizado = df_original.join(df_indicadores)
+            df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+            df['BB_MIDDLE'], df['BB_UPPER'], df['BB_LOWER'] = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+            df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+            
+            # Calcular HULMA
+            periodo_base = 9
+            sqrt_periodo = int(periodo_base**0.5)
+            df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
+            df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
 
             # Guardar el DataFrame actualizado
-            df_actualizado.to_csv(filename)
+            df.to_csv(filename)
             print(f"Indicadores calculados y guardados en {filename}")
 
         except Exception as e:
             print(f"Error procesando {filename}: {e}")
+
+# Ejemplo de uso
+pair = "XBTUSDT"
+carpeta_datos = "datos_BTC"
+calcular_y_guardar_indicadores(pair, carpeta_datos)
+
+# Verificar que los indicadores se han guardado correctamente
+for interval, filename_suffix in temporalidades.items():
+    filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
+    df = pd.read_csv(filename)
+    print(f"\nColumnas en {filename}:")
+    print(df.columns)
+    print(f"\nPrimeras filas de {filename}:")
+    print(df.head())
+
+print("Proceso completado.")
+
+
+
 def cargar_dataframe(filename):
     try:
         df = pd.read_csv(filename, index_col='time', parse_dates=True)
