@@ -118,17 +118,13 @@ while True:
     time.sleep(frecuencia_actualizacion)
 
 def calcular_rsi(df, periodo=14):
-    print("Entrando en calcular_rsi")
     if len(df) < periodo:
         print(f"No hay suficientes datos para calcular el RSI ({len(df)} datos). Se necesitan al menos {periodo}.")
         return df
     df['RSI'] = talib.RSI(df['close'], timeperiod=periodo)
-    print(f"RSI calculado: {df['RSI'].iloc[-1]}")
-    print("Saliendo de calcular_rsi")
     return df
 
 def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
-    print("Entrando en calcular_bandas_bollinger")
     if len(df) < periodo:
         print(f"No hay suficientes datos para calcular las Bandas de Bollinger ({len(df)} datos). Se necesitan al menos {periodo}.")
         return df
@@ -136,11 +132,9 @@ def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
     df['BB_UPPER'] = bbands[0]
     df['BB_MIDDLE'] = bbands[1]
     df['BB_LOWER'] = bbands[2]
-    print("Saliendo de calcular_bandas_bollinger")
     return df
 
 def calcular_macd(df, rapido=12, lento=26, senal=9):
-    print("Entrando en calcular_macd")
     if len(df) < lento:
         print(f"No hay suficientes datos para calcular el MACD ({len(df)} datos). Se necesitan al menos {lento}.")
         return df
@@ -148,150 +142,42 @@ def calcular_macd(df, rapido=12, lento=26, senal=9):
     df['MACD'] = macd[0]
     df['MACD_signal'] = macd[1]
     df['MACD_hist'] = macd[2]
-    print("Saliendo de calcular_macd")
     return df
 
 def calcular_hulma(df, periodo_base=9):
-    print("Entrando en calcular_hulma")
-    if len(df) < periodo_base * 2: # Se necesitan al menos el doble del periodo base
+    if len(df) < periodo_base * 2:
         print(f"No hay suficientes datos para calcular la HULMA ({len(df)} datos). Se necesitan al menos {periodo_base * 2}.")
         return df
     sqrt_periodo = int(periodo_base**0.5)
     df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
     df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
-    print("Saliendo de calcular_hulma")
     return df
 
+# Ejemplo de prueba (datos simulados):
+data = {'close': np.random.rand(50) * 100} #Genera 50 numeros aleatorios entre 0 y 100
+df_test = pd.DataFrame(data)
 
-def calcular_indicadores(df): #Función para calcular todos los indicadores de una vez
-    if len(df) >= 26: #Comprueba que haya datos suficientes para el MACD
-        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
-        bbands = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-        df['BB_UPPER'] = bbands[0]
-        df['BB_MIDDLE'] = bbands[1]
-        df['BB_LOWER'] = bbands[2]
-        macd = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        df['MACD'] = macd[0]
-        df['MACD_signal'] = macd[1]
-        df['MACD_hist'] = macd[2]
-        periodo_base = 9
-        if len(df) >= periodo_base * 2:
-            sqrt_periodo = int(periodo_base**0.5)
-            df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
-            df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
-        else:
-            print("No hay datos suficientes para calcular la HULMA.")
-    else:
-        print("No hay datos suficientes para calcular los indicadores.")
-    return df
+print("DataFrame original:")
+print(df_test.head())
+print(len(df_test))
+
+df_test = calcular_rsi(df_test)
+print("\nDataFrame con RSI:")
+print(df_test.head(20)) #Imprime las primeras 20 filas para ver los NaN
+print(len(df_test))
 
 
-def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
-    temporalidades = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
-    }
+df_test = calcular_bandas_bollinger(df_test)
+print("\nDataFrame con Bandas de Bollinger:")
+print(df_test.head(25)) #Imprime las primeras 25 filas para ver los NaN
+print(len(df_test))
 
-    for interval, filename_suffix in temporalidades.items():
-        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-        try:
-            df = pd.read_csv(filename, index_col='time', parse_dates=True)
-            print(f"Procesando {filename}, longitud del dataframe: {len(df)}")
+df_test = calcular_macd(df_test)
+print("\nDataFrame con MACD:")
+print(df_test.head(30)) #Imprime las primeras 30 filas para ver los NaN
+print(len(df_test))
 
-            # --- Cálculo de indicadores ---
-            df = calcular_indicadores(df)
-
-            df.to_csv(filename)
-            print(f"DataFrame guardado en {filename}")
-
-        except FileNotFoundError:
-            print(f"Archivo {filename} no encontrado. Se creará al actualizar los datos.")
-        except Exception as e:
-            print(f"Error procesando {filename}: {e}")
-            import traceback
-            traceback.print_exc()
-
-def cargar_dataframe(filename):
-    try:
-        df = pd.read_csv(filename, index_col='time', parse_dates=True)
-        return df
-    except FileNotFoundError:
-        print(f"Archivo {filename} no encontrado.")
-        return None
-
-def guardar_dataframe(df, filename):
-    if df is not None:
-        try:
-            df.to_csv(filename)
-            print(f"Datos guardados en {filename}")
-        except Exception as e:
-            print(f"Error al guardar el archivo: {e}")
-    else:
-        print("No hay datos para guardar.")
-
-
-def analizar_y_generar_alertas(df, temporalidad):
-    alertas = []
-
-    # Análisis del RSI
-    if df['RSI'].iloc[-1] >= 70:
-        alertas.append(f"RSI en sobrecompra en {temporalidad}. Posible señal de venta.")
-    elif df['RSI'].iloc[-1] <= 30:
-        alertas.append(f"RSI en sobreventa en {temporalidad}. Posible señal de compra.")
-
-    #Divergencias RSI (ejemplo básico, necesita mejora para detección robusta)
-    if len(df) >= 3:
-      if df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2]:
-          alertas.append(f"Posible divergencia alcista en RSI en {temporalidad}.")
-      elif df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2]:
-          alertas.append(f"Posible divergencia bajista en RSI en {temporalidad}.")
-
-
-    # Análisis de Bandas de Bollinger
-    if df['close'].iloc[-1] >= df['BB_UPPER'].iloc[-1]:
-        alertas.append(f"Precio tocando/sobrepasando la Banda de Bollinger superior en {temporalidad}.")
-    elif df['close'].iloc[-1] <= df['BB_LOWER'].iloc[-1]:
-        alertas.append(f"Precio tocando/sobrepasando la Banda de Bollinger inferior en {temporalidad}.")
-
-    # Analisis MACD
-    if df['MACD'].iloc[-1] > df['MACD_signal'].iloc[-1] and df['MACD'].iloc[-2] <= df['MACD_signal'].iloc[-2]:
-        alertas.append(f"Cruce alcista del MACD en {temporalidad}. Posible señal de compra.")
-    elif df['MACD'].iloc[-1] < df['MACD_signal'].iloc[-1] and df['MACD'].iloc[-2] >= df['MACD_signal'].iloc[-2]:
-        alertas.append(f"Cruce bajista del MACD en {temporalidad}. Posible señal de venta.")
-
-    if df['MACD'].iloc[-1] > 0 and df['MACD'].iloc[-2] <= 0:
-        alertas.append(f"MACD cruza por encima de cero en {temporalidad}. Refuerza señal alcista.")
-    elif df['MACD'].iloc[-1] < 0 and df['MACD'].iloc[-2] >= 0:
-        alertas.append(f"MACD cruza por debajo de cero en {temporalidad}. Refuerza señal bajista.")
-
-    # Analisis HULMA
-    if df['close'].iloc[-1] > df['HULMA'].iloc[-1]:
-        alertas.append(f"Precio por encima de la HULMA en {temporalidad}. Tendencia alcista según HULMA.")
-    elif df['close'].iloc[-1] < df['HULMA'].iloc[-1]:
-        alertas.append(f"Precio por debajo de la HULMA en {temporalidad}. Tendencia bajista según HULMA.")
-    #Retorna las alertas
-    return alertas
-
-def calcular_y_analizar(pair, carpeta="datos_BTC"):
-    temporalidades = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
-    }
-    resultados = {} #diccionario para almacenar los resultados por temporalidad
-
-    for interval, filename_suffix in temporalidades.items():
-        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-        df = cargar_dataframe(filename)
-
-        if df is not None:
-
-            alertas = analizar_y_generar_alertas(df, filename_suffix)
-            resultados[filename_suffix] = alertas #almacena las alertas en el diccionario
-            guardar_dataframe(df,filename)
-        else:
-            print(f"No se pudo cargar el archivo {filename}")
-    return resultados
+df_test = calcular_hulma(df_test)
+print("\nDataFrame con HULMA:")
+print(df_test.head(20)) #Imprime las primeras 20 filas para ver los NaN
+print(len(df_test))
