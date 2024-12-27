@@ -117,105 +117,46 @@ while True:
     print(f"Datos actualizados. Esperando {frecuencia_actualizacion} segundos...")
     time.sleep(frecuencia_actualizacion)
 
-def calcular_rsi(df, periodo=14):
-    if len(df) < periodo:
-        print(f"No hay suficientes datos para calcular el RSI ({len(df)} datos). Se necesitan al menos {periodo}.")
-        return df
-    df['RSI'] = talib.RSI(df['close'], timeperiod=periodo)
-    return df
+def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
+    """Calcula y guarda los indicadores para *cada* archivo CSV."""
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+    for interval, filename_suffix in temporalidades.items():  # Itera sobre las temporalidades
+        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
+        try:
+            df = pd.read_csv(filename, index_col='time', parse_dates=True) # Lee el archivo CSV
+            if not df.empty: # Verifica que el DataFrame no esté vacío
+                # Calcula los indicadores y los añade como *nuevas columnas*
+                df['RSI'] = calcular_rsi(df)
+                banda_superior, media, banda_inferior = calcular_bandas_bollinger(df)
+                df['Banda Superior'] = banda_superior
+                df['Banda Media'] = media
+                df['Banda Inferior'] = banda_inferior
+                df['HMA'] = calcular_hulma(df)
+                macd, senal = calcular_macd(df)
+                df['MACD'] = macd
+                df['Señal MACD'] = senal
 
-def calcular_bandas_bollinger(df, periodo=20, desviaciones=2):
-    if len(df) < periodo:
-        print(f"No hay suficientes datos para calcular las Bandas de Bollinger ({len(df)} datos). Se necesitan al menos {periodo}.")
-        return df
-    bbands = talib.BBANDS(df['close'], timeperiod=periodo, nbdevup=desviaciones, nbdevdn=desviaciones, matype=0)
-    df['BB_UPPER'] = bbands[0]
-    df['BB_MIDDLE'] = bbands[1]
-    df['BB_LOWER'] = bbands[2]
-    return df
+                guardar_dataframe(df, filename) # Guarda el DataFrame *con los nuevos indicadores*
+                print(f"Indicadores calculados y guardados en {filename}")
+            else:
+                print(f"DataFrame vacío para {filename}. No se calcularon indicadores.")
+        except FileNotFoundError:
+            print(f"Archivo {filename} no encontrado. No se calcularon indicadores.")
 
-def calcular_macd(df, rapido=12, lento=26, senal=9):
-    if len(df) < lento:
-        print(f"No hay suficientes datos para calcular el MACD ({len(df)} datos). Se necesitan al menos {lento}.")
-        return df
-    macd = talib.MACD(df['close'], fastperiod=rapido, slowperiod=lento, signalperiod=senal)
-    df['MACD'] = macd[0]
-    df['MACD_signal'] = macd[1]
-    df['MACD_hist'] = macd[2]
-    return df
+# Ejemplo de uso (dentro del bucle principal):
+pair = "XBTUSDT"
+carpeta_datos = "datos_BTC"
+frecuencia_actualizacion = 60
 
-def calcular_hulma(df, periodo_base=9):
-    if len(df) < periodo_base * 2:
-        print(f"No hay suficientes datos para calcular la HULMA ({len(df)} datos). Se necesitan al menos {periodo_base * 2}.")
-        return df
-    sqrt_periodo = int(periodo_base**0.5)
-    df['HULMA'] = talib.MA(df['close'], timeperiod=periodo_base).rolling(window=sqrt_periodo).mean()
-    df['HULMA'] = talib.MA(df['HULMA'], timeperiod=sqrt_periodo).rolling(window=sqrt_periodo).mean()
-    return df
-
-# Ejemplo de prueba (datos simulados):
-data = {'close': np.random.rand(50) * 100} #Genera 50 numeros aleatorios entre 0 y 100
-df_test = pd.DataFrame(data)
-
-print("DataFrame original:")
-print(df_test.head())
-print(len(df_test))
-
-df_test = calcular_rsi(df_test)
-print("\nDataFrame con RSI:")
-print(df_test.head(20)) #Imprime las primeras 20 filas para ver los NaN
-print(len(df_test))
-
-
-df_test = calcular_bandas_bollinger(df_test)
-print("\nDataFrame con Bandas de Bollinger:")
-print(df_test.head(25)) #Imprime las primeras 25 filas para ver los NaN
-print(len(df_test))
-
-df_test = calcular_macd(df_test)
-print("\nDataFrame con MACD:")
-print(df_test.head(30)) #Imprime las primeras 30 filas para ver los NaN
-print(len(df_test))
-
-
-filename = "datos_BTC/XBTUSDT_15m.csv"  # Ruta al archivo
-
-try:
-    df = pd.read_csv(filename, index_col='time', parse_dates=True)
-    print(f"DataFrame leído. Longitud: {len(df)}")
-    print("Primeras 5 filas del DataFrame:")
-    print(df.head())
-    print("Últimas 5 filas del DataFrame:")
-    print(df.tail())
-    print("Tipos de datos del DataFrame:")
-    print(df.dtypes)
-    print("Información del DataFrame:")
-    df.info() #Muestra informacion del dataframe, como valores nulos y tipos de datos
-
-    # Conviertir la columna 'close' a numérica, manejando errores
-    df['close'] = pd.to_numeric(df['close'], errors='coerce')
-    print("Tipos de datos DESPUÉS de la conversión:")
-    print(df.dtypes)
-    print("Valores nulos en la columna 'close':")
-    print(df['close'].isnull().sum()) # Cuenta cuantos valores nulos hay en la columna close
-    if df['close'].isnull().sum() > 0:
-        print("¡ATENCIÓN! Hay valores nulos en la columna 'close'. Revise su archivo CSV.")
-        df.dropna(inplace=True) #Elimina las filas con valores nulos
-
-    if len(df) >= 26: #Comprueba si hay suficientes datos DESPUÉS de la limpieza
-      df = calcular_rsi(df)
-      df = calcular_bandas_bollinger(df)
-      df = calcular_macd(df)
-      df = calcular_hulma(df)
-      print("Indicadores calculados.")
-      print(df.tail(10)) #Imprime las ultimas 10 filas para ver si se han calculado bien
-      df.to_csv("test_con_indicadores.csv")
-      print("DataFrame con indicadores guardado en test_con_indicadores.csv")
-    else:
-        print("No hay suficientes datos para calcular los indicadores DESPUÉS de la limpieza.")
-except FileNotFoundError:
-    print(f"Archivo {filename} no encontrado.")
-except Exception as e:
-    print(f"Error: {e}")
-    import traceback
-    traceback.print_exc()
+while True:
+    print("Actualizando datos...")
+    actualizar_archivos(pair, carpeta_datos)
+    print("Calculando y guardando indicadores...")
+    calcular_y_guardar_indicadores(pair, carpeta_datos) # Llama a la función que calcula Y GUARDA
+    print(f"Datos e indicadores actualizados. Esperando {frecuencia_actualizacion} segundos...")
+    time.sleep(frecuencia_actualizacion)
