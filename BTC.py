@@ -177,14 +177,20 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
         df = cargar_dataframe(filename)
 
         if df is not None:
-            # Asegurarse de que 'time' sea el índice y esté en formato DatetimeIndex
-            df.set_index('time', inplace=True)
-            if not isinstance(df.index, pd.DatetimeIndex):
-                try:
-                    df.index = pd.to_datetime(df.index)
-                except Exception as e:
-                    print(f"Error al convertir el índice a DatetimeIndex en {filename}: {e}")
-                    continue  # Saltar a la siguiente temporalidad si hay un error
+            print(f"Procesando {filename}")
+
+            # 1. Asegurar que 'time' exista como columna
+            if 'time' not in df.columns:
+                print(f"Error: La columna 'time' no existe en {filename}")
+                continue
+
+            # 2. Convertir 'time' a DatetimeIndex y manejar errores
+            try:
+                df['time'] = pd.to_datetime(df['time'])
+                df.set_index('time', inplace=True)
+            except Exception as e:
+                print(f"Error al convertir 'time' a DatetimeIndex en {filename}: {e}")
+                continue
 
             df_original = df.copy()
 
@@ -194,22 +200,32 @@ def calcular_y_guardar_indicadores(pair, carpeta="datos_BTC"):
             df = calcular_hulma(df)
 
             if df is not None:
-                print(f"DataFrame con indicadores para {filename_suffix}:")
-                print(df.tail())
+                print(f"Calculo de indicadores exitoso para {filename}")
 
-                #Alinear indices antes del join
+                # 3. Alinear índices ANTES del join (CRUCIAL)
                 df = df.reindex(df_original.index)
 
-                # Unir los indicadores al DataFrame original, evitando duplicados
+                # 4. Unir, evitando duplicados y mostrando información para depuración
+                print("Columnas en df_original antes del join:", df_original.columns)
+                print("Columnas en df (indicadores) antes del join:", df.columns)
+
                 df_original = df_original.join(df.drop(columns=df_original.columns, errors='ignore'), how='left')
 
+                print("Columnas en df_original DESPUÉS del join:", df_original.columns)
+
+                # 5. Guardar y verificar
                 guardar_dataframe(df_original, filename)
+
+                # Verificar si las columnas de indicadores existen DESPUÉS de guardar
+                df_verificado = cargar_dataframe(filename)
+                if df_verificado is not None:
+                    print("Columnas en el archivo guardado:", df_verificado.columns)
+                else:
+                    print("Error al verificar el archivo guardado.")
             else:
-                print(f"No se pudieron calcular los indicadores para {filename_suffix}")
+                print(f"No se pudieron calcular los indicadores para {filename}")
         else:
             print(f"No se pudo cargar el archivo {filename}")
-
-
 def analizar_y_generar_alertas(df, temporalidad):
     alertas = []
 
