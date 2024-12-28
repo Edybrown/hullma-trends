@@ -261,15 +261,15 @@ def detectar_divergencias_rsi(df):
     return divergencias_alcistas, divergencias_bajistas
 
 def detectar_divergencias_macd(df):
-    """Detecta divergencias alcistas y bajistas en el MACD."""
     divergencias_alcistas = []
     divergencias_bajistas = []
-    for i in range(2, len(df)):
-        if df['close'][i] < df['close'][i-1] and df['MACD'][i] > df['MACD'][i-1]:
-            divergencias_alcistas.append((df.index[i], df['close'][i], df['MACD'][i]))
-        if df['close'][i] > df['close'][i-1] and df['MACD'][i] < df['MACD'][i-1]:
-            divergencias_bajistas.append((df.index[i], df['close'][i], df['MACD'][i]))
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] < df['close'].iloc[i - 1] and df['MACD'].iloc[i] > df['MACD'].iloc[i - 1]:
+            divergencias_alcistas.append((df.index[i], df['close'].iloc[i], df['MACD'].iloc[i]))
+        if df['close'].iloc[i] > df['close'].iloc[i - 1] and df['MACD'].iloc[i] < df['MACD'].iloc[i - 1]:
+            divergencias_bajistas.append((df.index[i], df['close'].iloc[i], df['MACD'].iloc[i]))
     return divergencias_alcistas, divergencias_bajistas
+
 
 def analizar_rsi(df):
     try:
@@ -377,7 +377,7 @@ def generar_resumen(df, filename_suffix):
 def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
     """Función principal que analiza una temporalidad específica."""
     logging.info(f"Analizando {filename_suffix}...")
-    actualizar_archivos(pair, carpeta)
+    actualizar_archivos(pair, carpeta)  # Asegura que los datos estén actualizados
     nombre_archivo = f"{pair}_{filename_suffix}.csv"
     ruta_completa = os.path.join(carpeta, nombre_archivo)
     try:
@@ -391,15 +391,20 @@ def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
         df = calcular_macd(df)
         df = calcular_hulma(df)
 
-        resumen = generar_resumen(df, filename_suffix)
-        # Imprimir el resumen COMPLETO en la consola:
-        print(resumen)  # <--- Esta línea es la clave
-        logging.info(f"Resumen generado para {filename_suffix}: {resumen}")  # Loggea el resumen completo
+        # *** GENERAR EL RESUMEN DE TELEGRAM AQUÍ ***
+        resumen_telegram = generar_resumen_telegram(df, filename_suffix)
+        print(resumen_telegram)  # Imprime en la consola
+        logging.info(f"Resumen para Telegram generado para {filename_suffix}: {resumen_telegram}")
+
+        # Guardar el DataFrame actualizado (después de generar el resumen)
+        guardar_dataframe(df, ruta_completa) # Guarda el DataFrame DESPUÉS de generar el resumen
+        logging.info(f"Archivo {nombre_archivo} procesado y guardado correctamente.")
 
     except FileNotFoundError:
         logging.error(f"Archivo no encontrado: {ruta_completa}")
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
+
       
 def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
     """Calculates the time in seconds until the next candle close."""
@@ -413,16 +418,61 @@ def bucle_principal(pair, carpeta, intervalos):
     while True:
         for intervalo_segundos, filename_suffix in intervalos.items():
             tiempo_espera = calcular_tiempo_hasta_proximo_cierre(intervalo_segundos)
-            print(f"Esperando {tiempo_espera} segundos para {filename_suffix}...") # Mensaje en la consola
+            print(f"Esperando {tiempo_espera} segundos para {filename_suffix}...")
             logging.info(f"Esperando {tiempo_espera} segundos hasta el próximo cierre de vela de {filename_suffix}...")
             time.sleep(tiempo_espera)
 
-            print(f"Analizando {filename_suffix}...") # Mensaje en la consola
+            print(f"Analizando {filename_suffix}...")
             logging.info(f"Cierre de vela de {filename_suffix}. Iniciando análisis...")
             analizar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix)
 
-        print("Ciclo completo. Esperando el próximo ciclo...") # Mensaje en la consola
-        logging.info("Ciclo completo. Esperando el próximo ciclo...")
+        # *** SE ELIMINA LA ESPERA GLOBAL ***
+        # print("Ciclo completo. Esperando el próximo ciclo...")
+        # logging.info("Ciclo completo. Esperando el próximo ciclo...")
+
+def generar_resumen_telegram(df, filename_suffix):
+    """Genera un resumen conciso para Telegram."""
+
+    try:
+        ultimo_precio = df['close'].iloc[-1]
+    except IndexError:
+        return f"Resumen Técnico ({filename_suffix}):\nDatos insuficientes para el análisis."
+    
+    tendencia = analizar_precio(df)
+    analisis_bb = analizar_bandas_bollinger(df)
+    analisis_volumen = analizar_volumen(df)
+    ultimo_vwap = df['vwap'].iloc[-1] if not df['vwap'].empty else "Sin datos"
+
+    try:
+        ultimo_rsi = df['RSI'].iloc[-1]
+        rsi_str = f"RSI: {ultimo_rsi:.2f}"
+    except (IndexError, KeyError):
+        rsi_str = "RSI: N/A"
+
+    try:
+        ultimo_macd = df['MACD'].iloc[-1]
+        ultimo_macd_signal = df['MACD_signal'].iloc[-1]
+        macd_str = f"MACD: {ultimo_macd:.2f}, Señal: {ultimo_macd_signal:.2f}"
+    except (IndexError, KeyError):
+        macd_str = "MACD: N/A"
+
+    try:
+        ultimo_hulma = df['HMA'].iloc[-1]
+        hulma_str = f"HMA: {ultimo_hulma:.2f}"
+    except (IndexError, KeyError):
+        hulma_str = "HMA: N/A"
+    
+    resumen = f"*{filename_suffix}*\n"  # Formato Markdown para Telegram (negrita)
+    resumen += f"Precio: {ultimo_precio:.2f}\n"
+    resumen += f"Tendencia: {tendencia}\n"
+    resumen += f"VWAP: {ultimo_vwap}\n"
+    resumen += f"{rsi_str}\n"
+    resumen += f"{macd_str}\n"
+    resumen += f"{hulma_str}\n"
+    resumen += f"{analisis_bb}\n"
+    resumen += f"{analisis_volumen}"
+
+    return resumen
 
 def main():
     pair = "XBTUSDT"
