@@ -106,6 +106,8 @@ def actualizar_dataframe(df, pair, interval):
         return df
 
 # Función que se ejecutará en un hilo separado para procesar el CSV
+
+
 def procesar_csv(pair, interval, carpeta="datos_BTC"):
     nombre_archivo = f"{pair}_{interval}.csv"
     ruta_completa = os.path.join(carpeta, nombre_archivo)
@@ -116,28 +118,58 @@ def procesar_csv(pair, interval, carpeta="datos_BTC"):
         print(f"No se pudo procesar el archivo {nombre_archivo}.")
 
 def main():
-    pair = "XBTUSDT"
-    carpeta_datos = "datos_BTC"
+    print("Iniciando el bot...")
+    directorio_script_bot = os.path.dirname(os.path.abspath(__file__))
     temporalidades = {
         15: "15m",
         60: "1h",
         240: "4h",
         1440: "1d"
     }
-    
+
     while True:
+        print("Actualizando datos...")
         for interval, filename_suffix in temporalidades.items():
-            print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
-            df = obtener_ohlc_kraken(pair, interval)
-            if df is not None:
-                filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
-                guardar_dataframe(df, filename)
-                
-                # Crear un hilo para procesar el CSV
-                threading.Thread(target=procesar_csv, args=(pair, filename_suffix)).start()
+            nombre_archivo = f"XBTUSDT_{filename_suffix}.csv"
+            ruta_completa = os.path.join(directorio_script_bot, "datos_BTC", nombre_archivo)
+
+            print(f"[main - DEBUG] Ruta completa: {ruta_completa}") #Imprime la ruta
+
+            try:
+                data = obtener_ohlc_kraken("XBT/USDT", interval)
+                if data is not None:
+                    guardar_dataframe(data, ruta_completa)
+                    print(f"Datos guardados en {ruta_completa}")
+
+                    # ***ESTE ES EL PUNTO CLAVE: LECTURA DESPUÉS DE GUARDAR***
+                    if os.path.exists(ruta_completa): #Verifica si el archivo existe
+                        print(f"[main - DEBUG] El archivo EXISTE.")
+                        dataframe_procesado = leer_y_procesar_csv(ruta_completa)
+                        if dataframe_procesado is not None:
+                            print(f"[main] DataFrame de {nombre_archivo} procesado correctamente.")
+                            # ***AQUÍ USAS EL DATAFRAME***
+                            print(dataframe_procesado.tail().to_string()) #Imprime las ultimas lineas del dataframe
+                            print(dataframe_procesado.dtypes) #Imprime los tipos de datos
+                            #Ejemplo de uso de talib
+                            dataframe_procesado['RSI'] = talib.RSI(dataframe_procesado['close'], timeperiod=14)
+                            print(f"[main] RSI calculado (últimas 5 filas):\n{dataframe_procesado['RSI'].tail().to_string()}")
+                        else:
+                            print(f"[main] No se pudo procesar el DataFrame de {nombre_archivo}.")
+                    else:
+                        print(f"[main - ERROR] El archivo NO existe después de guardar.")
+
+                else:
+                    print(f"No se pudieron obtener datos para {interval}")
+
+            except requests.exceptions.RequestException as e:
+                print(f"Error en la solicitud a Kraken: {e}")
+            except Exception as e:
+                print(f"Ocurrió un error general: {e}")
 
         print("Datos actualizados. Esperando 60 segundos...")
         time.sleep(60)
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
