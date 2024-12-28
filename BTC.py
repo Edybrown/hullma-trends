@@ -122,59 +122,67 @@ import pandas as pd
 import os
 
 def leer_y_procesar_csv(ruta_archivo):
-    """Lee un archivo CSV, lo imprime y realiza el procesamiento (ejemplo)."""
+    """Lee un archivo CSV, lo imprime (opcional) y lo procesa."""
     try:
-        print(f"Intentando leer el archivo: {ruta_archivo}")
+        print(f"[leer_y_procesar_csv] Intentando leer el archivo: {ruta_archivo}") #Mensaje adicional
+        if not os.path.exists(ruta_archivo): #Verifica si el archivo existe ANTES de intentar leerlo
+            print(f"[leer_y_procesar_csv] ERROR: El archivo NO existe en la ruta: {ruta_archivo}")
+            return None
+
+        print(f"[leer_y_procesar_csv] Archivo EXISTE. Procediendo con la lectura...") #Mensaje adicional
         df = pd.read_csv(ruta_archivo, index_col='time', parse_dates=True,
                          dtype={'open': float, 'high': float, 'low': float, 'close': float, 'vwap': float, 'volume': float, 'count': float})
 
-        print(f"DataFrame leído (primeras 5 filas):\n{df.head(5).to_string()}")
-        print(f"Tipos de datos:\n{df.dtypes}")
+        print(f"[leer_y_procesar_csv] DataFrame leído (primeras 5 filas):\n{df.head(5).to_string()}")
+        print(f"[leer_y_procesar_csv] Tipos de datos:\n{df.dtypes}")
 
         if df.empty:
-            print(f"DataFrame vacío en {ruta_archivo}. No se puede procesar.")
-            return None #Devuelve None si el DataFrame está vacío
+            print(f"[leer_y_procesar_csv] DataFrame VACÍO en {ruta_archivo}. No se puede procesar.")
+            return None
 
-        if not all(col in df.columns for col in ['open', 'close']):
-            print(f"ERROR: Faltan columnas 'open' o 'close' en {ruta_archivo}. No se puede calcular la diferencia.")
-            return None #Devuelve None si faltan las columnas necesarias
+        #Ejemplo de uso de talib
+        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+        print(f"[leer_y_procesar_csv] RSI calculado (primeras 5 filas):\n{df['RSI'].head().to_string()}")
+        return df
 
-        df['Diferencia'] = df['close'] - df['open'] #Calcula la diferencia
-        print(f"Diferencias calculadas (primeras 5):\n{df['Diferencia'].head().to_string()}")
-        return df #Devuelve el DataFrame procesado
-
-    except FileNotFoundError:
-        print(f"ERROR: Archivo no encontrado en la ruta: {ruta_archivo}")
+    except FileNotFoundError: #Este error ya no debería ocurrir gracias a la comprobación anterior
+        print(f"[leer_y_procesar_csv] ERROR: Archivo no encontrado en la ruta: {ruta_archivo}")
         return None
     except pd.errors.ParserError as e:
-        print(f"ERROR al leer el CSV: {e}")
+        print(f"[leer_y_procesar_csv] ERROR al leer el CSV: {e}")
         return None
     except KeyError as e:
-        print(f"ERROR de clave (posible problema con el índice o columnas): {e}")
+        print(f"[leer_y_procesar_csv] ERROR de clave (posible problema con el índice o columnas): {e}")
         return None
     except Exception as e:
-        print(f"Ocurrió un error general: {e}")
+        print(f"[leer_y_procesar_csv] Ocurrió un error general: {e}")
         return None
 
-def main(): #Función main
+def main():
     print("Iniciando el bot...")
+
     directorio_script_bot = os.path.dirname(os.path.abspath(__file__))
     nombre_archivo = "XBTUSDT_15m.csv"
     ruta_completa = os.path.join(directorio_script_bot, "datos_BTC", nombre_archivo)
-    print(f"Ruta completa al archivo (desde el bot): {ruta_completa}")
+    print(f"[main] Ruta completa al archivo: {ruta_completa}") #Mensaje dentro de main
 
-    dataframe_procesado = leer_y_procesar_csv(ruta_completa) #Llama a la función de lectura y guarda el resultado
-    if dataframe_procesado is not None: #Verifica si se obtuvo un DataFrame
-        #Aquí puedes usar el dataframe_procesado para lo que necesites en tu bot
-        print("DataFrame procesado correctamente. Continuando con la lógica del bot...")
+    dataframe_procesado = leer_y_procesar_csv(ruta_completa)
+    if dataframe_procesado is not None:
+        print("[main] DataFrame procesado correctamente.")
+        print("\n[main] Ejemplo de uso del DataFrame:")
+        print(f"[main] Número de filas: {len(dataframe_procesado)}")
+        if not dataframe_procesado.empty: #Añadido para evitar error si el DataFrame está vacio
+            print(f"[main] Última fecha en los datos: {dataframe_procesado.index[-1]}")
+            print(f"[main] Primer valor de 'close': {dataframe_procesado['close'][0]}")
+            print(f"[main] Primer valor de RSI: {dataframe_procesado['RSI'][0]}")
     else:
-        print("No se pudo procesar el DataFrame. Deteniendo el bot.")
-        return #Sale de la función main si no se pudo procesar el DataFrame
+        print("[main] No se pudo procesar el DataFrame. Deteniendo el bot.")
+        return
 
     print("Bot en ejecución (simulado)...")
     while True:
         print("Bot haciendo cosas...")
         time.sleep(5)
 
-if __name__ == "__main__": #Condicional para ejecutar la función main
+if __name__ == "__main__":
     main()
