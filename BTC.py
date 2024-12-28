@@ -125,26 +125,31 @@ def calcular_diferencia_apertura_cierre(filename):
     """Calcula la diferencia entre la apertura y el cierre de cada vela y la guarda en el mismo archivo."""
     try:
         df = pd.read_csv(filename, index_col='time', parse_dates=True)
+        
         if df.empty:
             print(f"DataFrame vacío en {filename}. No se calcularon diferencias.")
             return
 
         if 'open' not in df.columns or 'close' not in df.columns:
-            print(f"Las columnas 'open' o 'close' no existen en {filename}. No se calcularon diferencias.")
+            print(f"Las columnas 'open' o 'close' no existen en {filename}. Columnas disponibles: {df.columns}. No se calcularon diferencias.")
             return
 
         df['Diferencia'] = df['close'] - df['open']  # Calcula la diferencia y crea una nueva columna
+        
+        # Verifica si la columna 'Diferencia' se ha agregado correctamente
+        if 'Diferencia' in df.columns:
+            print(f"Diferencia calculada para {filename}:")
+            print(df[['open', 'close', 'Diferencia']].tail())  # Imprime las últimas filas para verificar
+        else:
+            print(f"No se pudo calcular la diferencia en {filename}.")
+
         df.to_csv(filename)  # Guarda el DataFrame modificado en el mismo archivo
         print(f"Diferencias calculadas y guardadas en {filename}")
-
-        #Imprime las diferencias para verificar
-        print("Diferencias calculadas:\n", df['Diferencia'])
 
     except FileNotFoundError:
         print(f"Archivo {filename} no encontrado.")
     except Exception as e:
         print(f"Ocurrió un error al procesar el archivo: {e}")
-
 
 def procesar_todos_archivos(carpeta="datos_BTC"):
     """Procesa todos los archivos CSV en la carpeta especificada."""
@@ -155,9 +160,8 @@ def procesar_todos_archivos(carpeta="datos_BTC"):
         1440: "1d"
     }
     for interval, filename_suffix in temporalidades.items():
-        filename = os.path.join(carpeta, f"XBTUSDT_{filename_suffix}.csv") #Nombre fijo del archivo
-        calcular_diferencia_apertura_cierre(filename)
-
-# Ejemplo de uso:
-carpeta_datos = "datos_BTC"
-procesar_todos_archivos(carpeta_datos)
+        filename = os.path.join(carpeta, f"XBTUSDT_{filename_suffix}.csv")  # Nombre fijo del archivo
+        if os.path.exists(filename):
+            calcular_diferencia_apertura_cierre(filename)
+        else:
+            print(f"Archivo no encontrado: {filename}")
