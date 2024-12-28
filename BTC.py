@@ -364,8 +364,8 @@ def generar_resumen(df, filename_suffix):
 
 
 def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
-    """Function that analyzes a specific timeframe."""
-    logging.info(f"Analyzing {filename_suffix}...")
+    """Función principal que analiza una temporalidad específica."""
+    logging.info(f"Analizando {filename_suffix}...")
     actualizar_archivos(pair, carpeta)
     nombre_archivo = f"{pair}_{filename_suffix}.csv"
     ruta_completa = os.path.join(carpeta, nombre_archivo)
@@ -374,21 +374,22 @@ def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
         df['close'] = df['close'].astype(float)
         df['vwap'] = df['vwap'].astype(float)
 
-        # Calculate indicators
+        # Calcular indicadores
         df = calcular_rsi(df)
         df = calcular_bandas_bollinger(df)
         df = calcular_macd(df)
         df = calcular_hulma(df)
 
         resumen = generar_resumen(df, filename_suffix)
-        resumen_string = json.dumps(resumen, indent=4)
-        print(f"Resumen de {filename_suffix}:\n{resumen_string}")
-        logging.info(f"Resumen generado para {filename_suffix}: {resumen_string}")  # Log the summary in JSON format
+        # Imprimir el resumen COMPLETO en la consola:
+        print(resumen)  # <--- Esta línea es la clave
+        logging.info(f"Resumen generado para {filename_suffix}: {resumen}")  # Loggea el resumen completo
+
     except FileNotFoundError:
         logging.error(f"Archivo no encontrado: {ruta_completa}")
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
-
+      
 def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
     """Calculates the time in seconds until the next candle close."""
     ahora = datetime.datetime.now(datetime.UTC)  # Fix for deprecation warning
@@ -398,16 +399,18 @@ def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
     return segundos_hasta_cierre
 
 def bucle_principal(pair, carpeta, intervalos):
-    """Bucle principal sincronizado con el cierre de velas."""
     while True:
         for intervalo_segundos, filename_suffix in intervalos.items():
             tiempo_espera = calcular_tiempo_hasta_proximo_cierre(intervalo_segundos)
+            print(f"Esperando {tiempo_espera} segundos para {filename_suffix}...") # Mensaje en la consola
             logging.info(f"Esperando {tiempo_espera} segundos hasta el próximo cierre de vela de {filename_suffix}...")
             time.sleep(tiempo_espera)
 
+            print(f"Analizando {filename_suffix}...") # Mensaje en la consola
             logging.info(f"Cierre de vela de {filename_suffix}. Iniciando análisis...")
             analizar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix)
 
+        print("Ciclo completo. Esperando el próximo ciclo...") # Mensaje en la consola
         logging.info("Ciclo completo. Esperando el próximo ciclo...")
 
 def main():
