@@ -364,8 +364,8 @@ def generar_resumen(df, filename_suffix):
 
 
 def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
-    """Función principal que analiza una temporalidad específica."""
-    logging.info(f"Analizando {filename_suffix}...")
+    """Function that analyzes a specific timeframe."""
+    logging.info(f"Analyzing {filename_suffix}...")
     actualizar_archivos(pair, carpeta)
     nombre_archivo = f"{pair}_{filename_suffix}.csv"
     ruta_completa = os.path.join(carpeta, nombre_archivo)
@@ -374,7 +374,7 @@ def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
         df['close'] = df['close'].astype(float)
         df['vwap'] = df['vwap'].astype(float)
 
-        # Calcular indicadores
+        # Calculate indicators
         df = calcular_rsi(df)
         df = calcular_bandas_bollinger(df)
         df = calcular_macd(df)
@@ -383,15 +383,15 @@ def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
         resumen = generar_resumen(df, filename_suffix)
         resumen_string = json.dumps(resumen, indent=4)
         print(f"Resumen de {filename_suffix}:\n{resumen_string}")
-        logging.info(f"Resumen generado para {filename_suffix}: {resumen_string}") #Loggea el resumen en formato json
+        logging.info(f"Resumen generado para {filename_suffix}: {resumen_string}")  # Log the summary in JSON format
     except FileNotFoundError:
         logging.error(f"Archivo no encontrado: {ruta_completa}")
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
 
 def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
-    """Calcula el tiempo en segundos hasta el próximo cierre de vela."""
-    ahora = datetime.datetime.utcnow()
+    """Calculates the time in seconds until the next candle close."""
+    ahora = datetime.datetime.now(datetime.UTC)  # Fix for deprecation warning
     minutos_actuales = ahora.minute
     segundos_actuales = ahora.second
     segundos_hasta_cierre = (intervalo_segundos - (minutos_actuales * 60 + segundos_actuales) % intervalo_segundos)
