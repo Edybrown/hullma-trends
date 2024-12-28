@@ -6,7 +6,7 @@ import datetime
 import os
 import talib
 import logging
-
+import json
 
 # Configuración del logging
 logging.basicConfig(filename='btc_analisis.log', level=logging.INFO, 
@@ -363,27 +363,70 @@ def generar_resumen(df, filename_suffix):
 
 
 
+def analizar_temporalidad(pair, carpeta, interval, filename_suffix):
+    """Función principal que analiza una temporalidad específica."""
+    logging.info(f"Analizando {filename_suffix}...")
+    actualizar_archivos(pair, carpeta)
+    nombre_archivo = f"{pair}_{filename_suffix}.csv"
+    ruta_completa = os.path.join(carpeta, nombre_archivo)
+    try:
+        df = pd.read_csv(ruta_completa, index_col='time', parse_dates=True)
+        df['close'] = df['close'].astype(float)
+        df['vwap'] = df['vwap'].astype(float)
+
+        # Calcular indicadores
+        df = calcular_rsi(df)
+        df = calcular_bandas_bollinger(df)
+        df = calcular_macd(df)
+        df = calcular_hulma(df)
+
+        resumen = generar_resumen(df, filename_suffix)
+        resumen_string = json.dumps(resumen, indent=4)
+        print(f"Resumen de {filename_suffix}:\n{resumen_string}")
+        logging.info(f"Resumen generado para {filename_suffix}: {resumen_string}") #Loggea el resumen en formato json
+    except FileNotFoundError:
+        logging.error(f"Archivo no encontrado: {ruta_completa}")
+    except Exception as e:
+        logging.exception(f"Error al procesar {ruta_completa}: {e}")
+
+def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
+    """Calcula el tiempo en segundos hasta el próximo cierre de vela."""
+    ahora = datetime.datetime.utcnow()
+    minutos_actuales = ahora.minute
+    segundos_actuales = ahora.second
+    segundos_hasta_cierre = (intervalo_segundos - (minutos_actuales * 60 + segundos_actuales) % intervalo_segundos)
+    return segundos_hasta_cierre
+
+def bucle_principal(pair, carpeta, intervalos):
+    """Bucle principal sincronizado con el cierre de velas."""
+    while True:
+        for intervalo_segundos, filename_suffix in intervalos.items():
+            tiempo_espera = calcular_tiempo_hasta_proximo_cierre(intervalo_segundos)
+            logging.info(f"Esperando {tiempo_espera} segundos hasta el próximo cierre de vela de {filename_suffix}...")
+            time.sleep(tiempo_espera)
+
+            logging.info(f"Cierre de vela de {filename_suffix}. Iniciando análisis...")
+            analizar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix)
+
+        logging.info("Ciclo completo. Esperando el próximo ciclo...")
+
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
     os.makedirs(carpeta_datos, exist_ok=True)
-    temporalidades = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
+    intervalos = {
+        15 * 60: "15m",
+        60 * 60: "1h",
+        4 * 60 * 60: "4h",
+        24 * 60 * 60: "1d"
     }
 
+    hilo_bucle = threading.Thread(target=bucle_principal, args=(pair, carpeta_datos, intervalos))
+    hilo_bucle.daemon = True
+    hilo_bucle.start()
+
     while True:
-        for interval, filename_suffix in temporalidades.items():
-            logging.info(f"Actualizando datos para {filename_suffix}...")
-            actualizar_archivos(pair, carpeta_datos)
-
-            logging.info(f"Procesando {filename_suffix} en un hilo...")
-            threading.Thread(target=procesar_csv, args=(pair, filename_suffix, carpeta_datos)).start()
-
-        logging.info(f"Datos actualizados y procesados. Esperando {frecuencia_actualizacion} segundos...")
-        time.sleep(frecuencia_actualizacion)
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
