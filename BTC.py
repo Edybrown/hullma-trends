@@ -272,47 +272,58 @@ def detectar_divergencias_macd(df):
     return divergencias_alcistas, divergencias_bajistas
 
 def analizar_rsi(df):
-    """Analiza el RSI, incluyendo divergencias."""
-    if df['RSI'].empty:
-        return "Sin datos de RSI"
+    try:
+        df = calcular_rsi(df)
+        divergencias_alcistas, divergencias_bajistas = detectar_divergencias_rsi(df) # Usa tu función existente para RSI
+        if divergencias_alcistas:
+            ultima_divergencia = divergencias_alcistas[-1] # Obtiene la última divergencia alcista
+            fecha, precio, rsi = ultima_divergencia
+            print(f"Última divergencia alcista en RSI detectada en: {fecha} (Precio: {precio}, RSI: {rsi}).")
+            logging.info(f"Última divergencia alcista en RSI detectada en: {fecha} (Precio: {precio}, RSI: {rsi}).")
+        else:
+            print("No se encontraron divergencias alcistas en RSI.")
+            logging.info("No se encontraron divergencias alcistas en RSI.")
 
-    ultimo_rsi = df['RSI'].iloc[-1]
-    sobrecompra = ultimo_rsi > 70
-    sobreventa = ultimo_rsi < 30
-    divergencias_alcistas, divergencias_bajistas = detectar_divergencias_rsi(df)
-
-    analisis = f"RSI: {ultimo_rsi:.2f}. "
-    if sobrecompra:
-        analisis += "En sobrecompra. "
-    elif sobreventa:
-        analisis += "En sobreventa. "
-    if divergencias_alcistas:
-      analisis += f"Divergencias alcistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_alcistas]}."
-    if divergencias_bajistas:
-      analisis += f"Divergencias bajistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_bajistas]}."
-    return analisis
+        if divergencias_bajistas:
+            ultima_divergencia = divergencias_bajistas[-1] # Obtiene la última divergencia bajista
+            fecha, precio, rsi = ultima_divergencia
+            print(f"Última divergencia bajista en RSI detectada en: {fecha} (Precio: {precio}, RSI: {rsi}).")
+            logging.info(f"Última divergencia bajista en RSI detectada en: {fecha} (Precio: {precio}, RSI: {rsi}).")
+        else:
+            print("No se encontraron divergencias bajistas en RSI.")
+            logging.info("No se encontraron divergencias bajistas en RSI.")
+        return df
+    except Exception as e:
+        logging.error(f"Error al analizar RSI: {e}")
+        print(f"Error al analizar RSI: {e}")
+        return df
 
 def analizar_macd(df):
-    """Analiza el MACD, incluyendo cruces y divergencias."""
-    if df['MACD'].empty or df['MACD_signal'].empty:
-        return "Sin datos de MACD"
+    try:
+        df = calcular_macd(df)
+        divergencias_alcistas, divergencias_bajistas = detectar_divergencias_macd(df)  # Usa tu función existente para MACD
+        if divergencias_alcistas:
+            ultima_divergencia = divergencias_alcistas[-1]  # Obtiene la última divergencia alcista
+            fecha, precio, macd = ultima_divergencia
+            print(f"Última divergencia alcista en MACD detectada en: {fecha} (Precio: {precio}, MACD: {macd}).")
+            logging.info(f"Última divergencia alcista en MACD detectada en: {fecha} (Precio: {precio}, MACD: {macd}).")
+        else:
+            print("No se encontraron divergencias alcistas en MACD.")
+            logging.info("No se encontraron divergencias alcistas en MACD.")
 
-    ultimo_macd = df['MACD'].iloc[-1]
-    ultima_senal_macd = df['MACD_signal'].iloc[-1]
-    cruce_alcista = ultimo_macd > ultima_senal_macd and df['MACD'].iloc[-2] <= df['MACD_signal'].iloc[-2]
-    cruce_bajista = ultimo_macd < ultima_senal_macd and df['MACD'].iloc[-2] >= df['MACD_signal'].iloc[-2]
-    divergencias_alcistas, divergencias_bajistas = detectar_divergencias_macd(df)
-    
-    analisis = f"MACD: {ultimo_macd:.2f}, Señal: {ultima_senal_macd:.2f}. "
-    if cruce_alcista:
-        analisis += "Cruce alcista detectado. "
-    elif cruce_bajista:
-        analisis += "Cruce bajista detectado. "
-    if divergencias_alcistas:
-        analisis += f"Divergencias alcistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_alcistas]}."
-    if divergencias_bajistas:
-        analisis += f"Divergencias bajistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_bajistas]}."
-    return analisis
+        if divergencias_bajistas:
+            ultima_divergencia = divergencias_bajistas[-1]  # Obtiene la última divergencia bajista
+            fecha, precio, macd = ultima_divergencia
+            print(f"Última divergencia bajista en MACD detectada en: {fecha} (Precio: {precio}, MACD: {macd}).")
+            logging.info(f"Última divergencia bajista en MACD detectada en: {fecha} (Precio: {precio}, MACD: {macd}).")
+        else:
+            print("No se encontraron divergencias bajistas en MACD.")
+            logging.info("No se encontraron divergencias bajistas en MACD.")
+        return df
+    except Exception as e:
+        logging.error(f"Error al analizar MACD: {e}")
+        print(f"Error al analizar MACD: {e}")
+        return df
 
 def analizar_bandas_bollinger(df):
     """Analiza las Bandas de Bollinger."""
