@@ -160,29 +160,40 @@ def leer_y_procesar_csv(ruta_archivo):
 
 def main():
     print("Iniciando el bot...")
-
     directorio_script_bot = os.path.dirname(os.path.abspath(__file__))
-    nombre_archivo = "XBTUSDT_15m.csv"
-    ruta_completa = os.path.join(directorio_script_bot, "datos_BTC", nombre_archivo)
-    print(f"[main] Ruta completa al archivo: {ruta_completa}") #Mensaje dentro de main
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+    while True: #Bucle principal
+        print("Actualizando datos...")
+        for interval, filename_suffix in temporalidades.items(): #Bucle para cada temporalidad
+            nombre_archivo = f"XBTUSDT_{filename_suffix}.csv"
+            ruta_completa = os.path.join(directorio_script_bot, "datos_BTC", nombre_archivo)
+            try:
+                data = obtener_ohlc_kraken("XBT/USDT", interval)
+                if data is not None:
+                    guardar_dataframe(data, ruta_completa)
+                    print(f"Datos guardados en {ruta_completa}")
 
-    dataframe_procesado = leer_y_procesar_csv(ruta_completa)
-    if dataframe_procesado is not None:
-        print("[main] DataFrame procesado correctamente.")
-        print("\n[main] Ejemplo de uso del DataFrame:")
-        print(f"[main] Número de filas: {len(dataframe_procesado)}")
-        if not dataframe_procesado.empty: #Añadido para evitar error si el DataFrame está vacio
-            print(f"[main] Última fecha en los datos: {dataframe_procesado.index[-1]}")
-            print(f"[main] Primer valor de 'close': {dataframe_procesado['close'][0]}")
-            print(f"[main] Primer valor de RSI: {dataframe_procesado['RSI'][0]}")
-    else:
-        print("[main] No se pudo procesar el DataFrame. Deteniendo el bot.")
-        return
+                    # ***AQUÍ SE LEE Y PROCESA EL CSV DESPUÉS DE GUARDARLO***
+                    dataframe_procesado = leer_y_procesar_csv(ruta_completa)
+                    if dataframe_procesado is not None:
+                        print(f"[main] DataFrame de {nombre_archivo} procesado correctamente.")
+                        # ... (Aquí usas el dataframe_procesado para este archivo)
+                    else:
+                        print(f"[main] No se pudo procesar el DataFrame de {nombre_archivo}.")
+                else:
+                    print(f"No se pudieron obtener datos para {interval}")
 
-    print("Bot en ejecución (simulado)...")
-    while True:
-        print("Bot haciendo cosas...")
-        time.sleep(5)
+            except requests.exceptions.RequestException as e:
+                print(f"Error en la solicitud a Kraken: {e}")
+            except Exception as e:
+                print(f"Ocurrió un error general: {e}")
+        print("Datos actualizados. Esperando 60 segundos...")
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
