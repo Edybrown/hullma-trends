@@ -122,32 +122,39 @@ import pandas as pd
 import os
 
 def calcular_diferencia_apertura_cierre(filename):
-    """Calcula la diferencia entre la apertura y el cierre de cada vela y la guarda en el mismo archivo."""
+    """Calcula la diferencia entre la apertura y el cierre, convirtiendo a float al leer el CSV."""
     try:
-        df = pd.read_csv(filename, index_col='time', parse_dates=True)
+        # CONVERSIÓN A FLOAT AL LEER EL CSV
+        df = pd.read_csv(filename, index_col='time', parse_dates=True,
+                         dtype={'open': float, 'high': float, 'low': float, 'close': float, 'vwap': float, 'volume': float, 'count': float})
+
+        print(f"DataFrame leído (primeras 5 filas):\n{df.head().to_string()}")
+        print(f"Tipos de datos después de la lectura:\n{df.dtypes}")
+
         if df.empty:
             print(f"DataFrame vacío en {filename}. No se calcularon diferencias.")
             return
 
-        # Verificar las columnas antes de calcular
-        print(f"Columnas disponibles: {df.columns.tolist()}")
-
-        if 'open' not in df.columns or 'close' not in df.columns:
-            print(f"Las columnas 'open' o 'close' no existen en {filename}. No se calcularon diferencias.")
+        # Verificar las columnas ANTES de calcular (ahora es más importante)
+        if not all(col in df.columns for col in ['open', 'close']):
+            print(f"ERROR: Faltan columnas 'open' o 'close' en {filename}. Columnas presentes: {df.columns.tolist()}. No se calcularon diferencias.")
             return
 
-        df['Diferencia'] = df['close'] - df['open']  # Calcula la diferencia y crea una nueva columna
-        df.to_csv(filename)  # Guarda el DataFrame modificado en el mismo archivo
+        # Ya no es necesario convertir a float aquí, ya se hizo al leer
+        df['Diferencia'] = df['close'] - df['open']
+        print(f"Diferencias calculadas (primeras 5):\n{df['Diferencia'].head().to_string()}")
+
+        df.to_csv(filename)
         print(f"Diferencias calculadas y guardadas en {filename}")
 
-        # Imprime las diferencias para verificar
-        print("Diferencias calculadas:\n", df[['open', 'close', 'Diferencia']].head())
-
     except FileNotFoundError:
-        print(f"Archivo {filename} no encontrado.")
+        print(f"ERROR: Archivo {filename} no encontrado.")
+    except pd.errors.ParserError as e:
+        print(f"ERROR al leer el CSV {filename}: {e}")
+    except KeyError as e:
+        print(f"ERROR de clave (posible problema con el índice o columnas): {e}")
     except Exception as e:
-        print(f"Ocurrió un error al procesar el archivo: {e}")
-
+        print(f"Ocurrió un error general al procesar {filename}: {e}")
 
 def procesar_todos_archivos(carpeta="datos_BTC"):
     """Procesa todos los archivos CSV en la carpeta especificada."""
