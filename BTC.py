@@ -73,9 +73,9 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
             print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
             df = pd.DataFrame()
         df = actualizar_dataframe(df, pair, interval)
-        df = agregar_indicadores(df)
+        # ELIMINA ESTA LÍNEA: df = agregar_indicadores(df)
         guardar_dataframe(df, filename)
-
+      
 def calcular_rsi(df):
     try:
         df['RSI'] = talib.RSI(df['close'], timeperiod=14)
@@ -122,6 +122,7 @@ def calcular_hulma(df):
         return df
         
 # Función para actualizar un DataFrame con nuevos datos
+
 def actualizar_dataframe(df, pair, interval):
     if df.empty:
         since = None
