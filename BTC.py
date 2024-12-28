@@ -5,6 +5,7 @@ import time
 import datetime
 import os
 import talib
+import logging
 
 # Función para obtener datos de Kraken
 def obtener_ohlc_kraken(pair, interval, since=None):
