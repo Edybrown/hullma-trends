@@ -249,6 +249,120 @@ def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
 
+def detectar_divergencias_rsi(df):
+    """Detecta divergencias alcistas y bajistas en el RSI."""
+    divergencias_alcistas = []
+    divergencias_bajistas = []
+    for i in range(2, len(df)):
+        if df['close'][i] < df['close'][i-1] and df['RSI'][i] > df['RSI'][i-1]:
+            divergencias_alcistas.append((df.index[i], df['close'][i], df['RSI'][i]))
+        if df['close'][i] > df['close'][i-1] and df['RSI'][i] < df['RSI'][i-1]:
+            divergencias_bajistas.append((df.index[i], df['close'][i], df['RSI'][i]))
+    return divergencias_alcistas, divergencias_bajistas
+
+def detectar_divergencias_macd(df):
+    """Detecta divergencias alcistas y bajistas en el MACD."""
+    divergencias_alcistas = []
+    divergencias_bajistas = []
+    for i in range(2, len(df)):
+        if df['close'][i] < df['close'][i-1] and df['MACD'][i] > df['MACD'][i-1]:
+            divergencias_alcistas.append((df.index[i], df['close'][i], df['MACD'][i]))
+        if df['close'][i] > df['close'][i-1] and df['MACD'][i] < df['MACD'][i-1]:
+            divergencias_bajistas.append((df.index[i], df['close'][i], df['MACD'][i]))
+    return divergencias_alcistas, divergencias_bajistas
+
+def analizar_rsi(df):
+    """Analiza el RSI, incluyendo divergencias."""
+    if df['RSI'].empty:
+        return "Sin datos de RSI"
+
+    ultimo_rsi = df['RSI'].iloc[-1]
+    sobrecompra = ultimo_rsi > 70
+    sobreventa = ultimo_rsi < 30
+    divergencias_alcistas, divergencias_bajistas = detectar_divergencias_rsi(df)
+
+    analisis = f"RSI: {ultimo_rsi:.2f}. "
+    if sobrecompra:
+        analisis += "En sobrecompra. "
+    elif sobreventa:
+        analisis += "En sobreventa. "
+    if divergencias_alcistas:
+      analisis += f"Divergencias alcistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_alcistas]}."
+    if divergencias_bajistas:
+      analisis += f"Divergencias bajistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_bajistas]}."
+    return analisis
+
+def analizar_macd(df):
+    """Analiza el MACD, incluyendo cruces y divergencias."""
+    if df['MACD'].empty or df['MACD_signal'].empty:
+        return "Sin datos de MACD"
+
+    ultimo_macd = df['MACD'].iloc[-1]
+    ultima_senal_macd = df['MACD_signal'].iloc[-1]
+    cruce_alcista = ultimo_macd > ultima_senal_macd and df['MACD'].iloc[-2] <= df['MACD_signal'].iloc[-2]
+    cruce_bajista = ultimo_macd < ultima_senal_macd and df['MACD'].iloc[-2] >= df['MACD_signal'].iloc[-2]
+    divergencias_alcistas, divergencias_bajistas = detectar_divergencias_macd(df)
+    
+    analisis = f"MACD: {ultimo_macd:.2f}, Señal: {ultima_senal_macd:.2f}. "
+    if cruce_alcista:
+        analisis += "Cruce alcista detectado. "
+    elif cruce_bajista:
+        analisis += "Cruce bajista detectado. "
+    if divergencias_alcistas:
+        analisis += f"Divergencias alcistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_alcistas]}."
+    if divergencias_bajistas:
+        analisis += f"Divergencias bajistas detectadas en: {[fecha.strftime('%Y-%m-%d %H:%M') for fecha, _, _ in divergencias_bajistas]}."
+    return analisis
+
+def analizar_bandas_bollinger(df):
+    """Analiza las Bandas de Bollinger."""
+    if df['BB_upper'].empty or df['BB_lower'].empty or df['close'].empty:
+        return "Sin datos de Bandas de Bollinger"
+
+    precio_cerca_superior = df['close'].iloc[-1] > df['BB_upper'].iloc[-1]
+    precio_cerca_inferior = df['close'].iloc[-1] < df['BB_lower'].iloc[-1]
+    
+    analisis = ""
+    if precio_cerca_superior:
+        analisis = "Precio cerca de la banda superior de Bollinger."
+    elif precio_cerca_inferior:
+        analisis = "Precio cerca de la banda inferior de Bollinger."
+    else:
+        analisis = "Precio dentro de las Bandas de Bollinger."
+    return analisis
+
+def analizar_volumen(df):
+    """Analiza el volumen en relación al precio."""
+    if df['volume'].empty or df['close'].empty:
+        return "Sin datos de Volumen"
+
+    volumen_actual = df['volume'].iloc[-1]
+    variacion_precio = (df['close'].iloc[-1] - df['close'].iloc[-2]) / df['close'].iloc[-2] if len(df) > 1 else 0
+    analisis = f"Volumen: {volumen_actual:.2f}. "
+    if abs(variacion_precio) > 0.02 and volumen_actual > df['volume'].mean(): #Movimiento significativo del 2% con volumen por encima de la media
+      analisis += "Movimiento de precio significativo con volumen alto."
+    return analisis
+
+def generar_resumen(df, filename_suffix):
+    """Genera un resumen del análisis técnico."""
+    tendencia = analizar_precio(df)
+    analisis_rsi = analizar_rsi(df)
+    analisis_macd = analizar_macd(df)
+    analisis_bb = analizar_bandas_bollinger(df)
+    analisis_volumen = analizar_volumen(df)
+    ultimo_vwap = df['vwap'].iloc[-1] if not df['vwap'].empty else "Sin datos"
+
+    resumen = f"Resumen Técnico ({filename_suffix}):\n"
+    resumen += f"Tendencia: {tendencia}\n"
+    resumen += f"VWAP: {ultimo_vwap}\n"
+    resumen += f"{analisis_rsi}\n"
+    resumen += f"{analisis_macd}\n"
+    resumen += f"{analisis_bb}\n"
+    resumen += f"{analisis_volumen}\n"
+    return resumen
+
+
+
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
