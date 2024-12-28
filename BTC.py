@@ -122,16 +122,109 @@ def actualizar_dataframe(df, pair, interval):
         return df
 
 # Función para procesar archivos CSV
-def procesar_csv(pair, interval, carpeta="datos_BTC"):
-    nombre_archivo = f"{pair}_{interval}.csv"
+def encontrar_minimos_maximos(precios, ventana=3):
+    """Encuentra mínimos y máximos locales en una serie de precios."""
+    minimos = []
+    maximos = []
+    for i in range(ventana, len(precios) - ventana):
+        # Verificar mínimo local
+        if all(precios[i] < precios[i - j] for j in range(1, ventana + 1)) and \
+           all(precios[i] < precios[i + j] for j in range(1, ventana + 1)):
+            minimos.append((i, precios[i]))
+        # Verificar máximo local
+        if all(precios[i] > precios[i - j] for j in range(1, ventana + 1)) and \
+           all(precios[i] > precios[i + j] for j in range(1, ventana + 1)):
+            maximos.append((i, precios[i]))
+    return minimos, maximos
+
+def detectar_tendencia(minimos, maximos):
+    """Detecta la tendencia del precio basándose en mínimos y máximos."""
+    if len(minimos) < 2 or len(maximos) < 2:
+        return "Indefinido"
+
+    # Convertir las listas de tuplas a listas de precios para facilitar la comparación
+    precios_minimos = [minimo[1] for minimo in minimos]
+    precios_maximos = [maximo[1] for maximo in maximos]
+
+    minimos_crecientes = all(precios_minimos[i] < precios_minimos[i + 1] for i in range(len(precios_minimos) - 1))
+    maximos_crecientes = all(precios_maximos[i] < precios_maximos[i + 1] for i in range(len(precios_maximos) - 1))
+
+    minimos_decrecientes = all(precios_minimos[i] > precios_minimos[i + 1] for i in range(len(precios_minimos) - 1))
+    maximos_decrecientes = all(precios_maximos[i] > precios_maximos[i + 1] for i in range(len(precios_maximos) - 1))
+
+    if minimos_crecientes and maximos_crecientes:
+        return "Alcista"
+    elif minimos_decrecientes and maximos_decrecientes:
+        return "Bajista"
+    elif minimos_crecientes and maximos_decrecientes:
+        return "Triángulo Ascendente" #Esta condición es improbable, pero se deja por consistencia
+    elif minimos_decrecientes and maximos_crecientes:
+        return "Triángulo Descendente" #Esta condición es improbable, pero se deja por consistencia
+    else:
+        return "Lateralidad"
+
+def analizar_precio(df):
+    """Analiza el precio y la tendencia."""
+    try:
+        precios = df['close'].values.tolist()
+        minimos, maximos = encontrar_minimos_maximos(precios)
+        tendencia = detectar_tendencia(minimos, maximos)
+        logging.info(f"Análisis de precio: Tendencia detectada: {tendencia}")
+        return tendencia
+    except Exception as e:
+        logging.exception(f"Error al analizar el precio: {e}")
+        return "Error en el análisis"
+
+def analizar_indicadores(df):
+    """Analiza los indicadores técnicos y el VWAP."""
+    try:
+        ultimo_rsi = df['RSI'].iloc[-1] if not df['RSI'].empty else "Sin datos"
+        logging.info(f"Análisis de indicadores: Último RSI: {ultimo_rsi}")
+
+        if not df['BB_UPPER'].empty and not df['BB_LOWER'].empty and not df['close'].empty:
+            if df['close'].iloc[-1] > df['BB_UPPER'].iloc[-1]:
+                logging.info("Precio cerca de la banda superior de Bollinger.")
+            elif df['close'].iloc[-1] < df['BB_LOWER'].iloc[-1]:
+                logging.info("Precio cerca de la banda inferior de Bollinger.")
+
+        ultimo_macd = df['MACD'].iloc[-1] if not df['MACD'].empty else "Sin datos"
+        ultimo_macd_signal = df['MACD_signal'].iloc[-1] if not df['MACD_signal'].empty else "Sin datos"
+        logging.info(f"Último MACD: {ultimo_macd}, Señal: {ultimo_macd_signal}")
+
+        ultimo_hulma = df['HULMA'].iloc[-1] if not df['HULMA'].empty else "Sin datos"
+        logging.info(f"Último HULMA: {ultimo_hulma}")
+
+        ultimo_vwap = df['vwap'].iloc[-1] if not df['vwap'].empty else "Sin datos"
+        logging.info(f"Último VWAP: {ultimo_vwap}")
+    except Exception as e:
+        logging.exception(f"Error al analizar los indicadores: {e}")
+
+def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
+    """Procesa un archivo CSV, calculando indicadores y realizando análisis."""
+    nombre_archivo = f"{pair}_{filename_suffix}.csv"
     ruta_completa = os.path.join(carpeta, nombre_archivo)
     try:
         df = pd.read_csv(ruta_completa, index_col='time', parse_dates=True)
-        df = agregar_indicadores(df)
+        df['close'] = df['close'].astype(float)
+        df['vwap'] = df['vwap'].astype(float) #Convertir el VWAP a float
+
+        # Calcular indicadores
+        df = calcular_rsi(df)
+        df = calcular_bandas_bollinger(df)
+        df = calcular_macd(df)
+        df = calcular_hulma(df)
+
+        # Realizar análisis
+        analizar_precio(df)
+        analizar_indicadores(df)
+
         guardar_dataframe(df, ruta_completa)
-        print(f"Archivo {nombre_archivo} procesado correctamente.")
+        logging.info(f"Archivo {nombre_archivo} procesado y guardado correctamente.")
+
+    except FileNotFoundError:
+        logging.error(f"Archivo no encontrado: {ruta_completa}")
     except Exception as e:
-        print(f"Error al procesar el archivo {nombre_archivo}: {e}")
+        logging.exception(f"Error al procesar {ruta_completa}: {e}")
 
 # Función principal
 def main():
@@ -147,18 +240,14 @@ def main():
 
     while True:
         for interval, filename_suffix in temporalidades.items():
-            print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
-            df = obtener_ohlc_kraken(pair, interval)
-            if df is not None:
-                filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
-                df = agregar_indicadores(df)
-                guardar_dataframe(df, filename)
+            logging.info(f"Actualizando datos para {filename_suffix}...")
+            actualizar_archivos(pair, carpeta_datos)
 
-                # Crear un hilo para procesar el CSV
-                threading.Thread(target=procesar_csv, args=(pair, filename_suffix)).start()
+            logging.info(f"Procesando {filename_suffix} en un hilo...")
+            threading.Thread(target=procesar_csv, args=(pair, filename_suffix, carpeta_datos)).start()
 
-        print("Datos actualizados. Esperando 60 segundos...")
-        time.sleep(60)
+        logging.info(f"Datos actualizados y procesados. Esperando {frecuencia_actualizacion} segundos...")
+        time.sleep(frecuencia_actualizacion)
 
 if __name__ == "__main__":
     main()
