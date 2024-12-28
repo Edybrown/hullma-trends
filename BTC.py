@@ -7,6 +7,14 @@ import os
 import talib
 import logging
 
+
+# Configuración del logging
+logging.basicConfig(filename='btc_analisis.log', level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Frecuencia de actualización (en segundos)
+frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
+
 # Función para obtener datos de Kraken
 def obtener_ohlc_kraken(pair, interval, since=None):
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
@@ -47,40 +55,8 @@ def guardar_dataframe(df, filename):
         print("No hay datos para guardar.")
 
 # Función para agregar indicadores técnicos
-def agregar_indicadores(df):
-    try:
-        # RSI
-        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
 
-        # Bandas de Bollinger
-        upperband, middleband, lowerband = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-        df['BB_upper'] = upperband
-        df['BB_middle'] = middleband
-        df['BB_lower'] = lowerband
-
-        # MACD
-        macd, macdsignal, macdhist = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        df['MACD'] = macd
-        df['MACD_signal'] = macdsignal
-        df['MACD_hist'] = macdhist
-
-        # Hull Moving Average (HMA)
-        def hull_moving_average(series, period):
-            half_length = period // 2
-            sqrt_length = int(period**0.5)
-            wma_half = talib.WMA(series, timeperiod=half_length)
-            wma_full = talib.WMA(series, timeperiod=period)
-            hull_ma = talib.WMA(2 * wma_half - wma_full, timeperiod=sqrt_length)
-            return hull_ma
-
-        df['HMA'] = hull_moving_average(df['close'], period=14)
-
-        print("Indicadores calculados correctamente.")
-    except Exception as e:
-        print(f"Error al calcular indicadores: {e}")
-    return df
-
-# Función para actualizar archivos
+        
 
 def actualizar_archivos(pair, carpeta="datos_BTC"):
     temporalidades = {
@@ -100,6 +76,51 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         df = agregar_indicadores(df)
         guardar_dataframe(df, filename)
 
+def calcular_rsi(df):
+    try:
+        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+        return df
+    except Exception as e:
+        logging.error(f"Error al calcular RSI: {e}")
+        return df
+
+def calcular_bandas_bollinger(df):
+    try:
+        upperband, middleband, lowerband = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+        df['BB_upper'] = upperband
+        df['BB_middle'] = middleband
+        df['BB_lower'] = lowerband
+        return df
+    except Exception as e:
+        logging.error(f"Error al calcular Bandas de Bollinger: {e}")
+        return df
+
+def calcular_macd(df):
+    try:
+        macd, macdsignal, macdhist = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        df['MACD'] = macd
+        df['MACD_signal'] = macdsignal
+        df['MACD_hist'] = macdhist
+        return df
+    except Exception as e:
+        logging.error(f"Error al calcular MACD: {e}")
+        return df
+
+def calcular_hulma(df):
+    try:
+        def hull_moving_average(series, period):
+            half_length = period // 2
+            sqrt_length = int(period**0.5)
+            wma_half = talib.WMA(series, timeperiod=half_length)
+            wma_full = talib.WMA(series, timeperiod=period)
+            hull_ma = talib.WMA(2 * wma_half - wma_full, timeperiod=sqrt_length)
+            return hull_ma
+        df['HMA'] = hull_moving_average(df['close'], period=14)
+        return df
+    except Exception as e:
+        logging.error(f"Error al calcular HMA: {e}")
+        return df
+        
 # Función para actualizar un DataFrame con nuevos datos
 def actualizar_dataframe(df, pair, interval):
     if df.empty:
@@ -207,9 +228,9 @@ def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
     try:
         df = pd.read_csv(ruta_completa, index_col='time', parse_dates=True)
         df['close'] = df['close'].astype(float)
-        df['vwap'] = df['vwap'].astype(float) #Convertir el VWAP a float
+        df['vwap'] = df['vwap'].astype(float)
 
-        # Calcular indicadores
+        # Calcular indicadores (USANDO LAS NUEVAS FUNCIONES)
         df = calcular_rsi(df)
         df = calcular_bandas_bollinger(df)
         df = calcular_macd(df)
@@ -227,7 +248,6 @@ def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
 
-# Función principal
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
