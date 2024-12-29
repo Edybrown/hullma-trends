@@ -18,12 +18,29 @@ logging.basicConfig(filename='btc_analisis.log', level=logging.INFO,
 frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
-def obtener_ohlc_kraken(pair, interval, since=None):
-    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
+def obtener_ohlc_kraken(pair, interval, interval_dict, since=None):
+    """
+    Solicita datos OHLC de Kraken para un par específico y un intervalo.
+
+    :param pair: Par de criptomonedas (por ejemplo, "BTCUSD").
+    :param interval: Intervalo en formato como "15m", "1h", "4h", "1d".
+    :param interval_dict: Diccionario con la conversión de intervalos (e.g., {"15m": 15, "1h": 60, ...}).
+    :param since: Timestamp opcional para filtrar datos.
+    :return: DataFrame con los datos OHLC o None si ocurre un error.
+    """
+    # Convertir el intervalo usando el diccionario proporcionado
+    if interval not in interval_dict:
+        print(f"Intervalo no soportado: {interval}")
+        logging.error(f"Intervalo no soportado: {interval}")
+        return None
+    interval_in_minutes = interval_dict[interval]
+
+    # Construir la URL
+    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_in_minutes}"
     if since:
         url += f"&since={since}"
-    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
-    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
+    print(f"URL de la solicitud a Kraken: {url}")  # Imprime la URL
+    logging.info(f"URL de la solicitud a Kraken: {url}")  # Imprime la URL en el log
 
     retries = 3
     for i in range(retries):
@@ -287,8 +304,6 @@ def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
         print(f"Error al analizar el CSV: {e}. Revisa el formato del archivo.")
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
-import pandas as pd
-import logging
 
 def detectar_divergencias_rsi(df, periodo=10, min_diff=2): # Añadido min_diff
     """Detecta divergencias alcistas y bajistas en el RSI, enfocándose en la última."""
