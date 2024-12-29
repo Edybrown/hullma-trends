@@ -18,59 +18,41 @@ logging.basicConfig(filename='btc_analisis.log', level=logging.INFO,
 frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
-def obtener_ohlc_kraken(pair, interval, interval_dict, since=None):
-    # Verificar si el intervalo recibido está en el diccionario
-    if interval not in interval_dict:
-        print(f"Intervalo no soportado: {interval}")
-        logging.error(f"Intervalo no soportado: {interval}")
-        return None
-
-    # Convertir usando la clave directamente
-    interval_minutos = interval  # Ya está en formato de minutos según las claves del diccionario
-
-    # Construir la URL
-    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_minutos}"
+def obtener_ohlc_kraken(pair, interval_minutes, since=None): # Recibe interval_minutes (minutos)
+    interval_kraken = interval_minutes # Asigna directamente el valor en minutos
+    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_kraken}"
+   
     if since:
         url += f"&since={since}"
-    print(f"URL de la solicitud a Kraken: {url}")
-    logging.info(f"URL de la solicitud a Kraken: {url}")
+    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
+    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
 
-    # Realizar la solicitud con reintentos
     retries = 3
     for i in range(retries):
         try:
             response = requests.get(url)
             response.raise_for_status()
             data = response.json()
-            
-            # Manejar errores de la API
             if data['error']:
                 print(f"Error de Kraken: {data['error']}")
                 logging.error(f"Error de Kraken: {data['error']}")
                 return None
-            
-            # Verificar si hay resultados
             if not data['result']:
                 print("No hay datos disponibles para este intervalo.")
                 logging.info("No hay datos disponibles para este intervalo.")
                 return None
-            
-            # Procesar los datos en un DataFrame
             df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
             df['time'] = pd.to_datetime(df['time'], unit='s')
             df = df.set_index('time')
             df = df.astype(float)
             return df
-
         except requests.exceptions.RequestException as e:
             print(f"Error al obtener datos de Kraken: {e}")
             logging.error(f"Error al obtener datos de Kraken: {e}")
             time.sleep(5)
-    
-    # Si todos los intentos fallan
     print("Número máximo de reintentos alcanzado.")
     logging.error("Número máximo de reintentos alcanzado.")
-    return None
+    return None     
 
 
 # Función para guardar el DataFrame
@@ -102,10 +84,9 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         except FileNotFoundError:
             print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
             df = pd.DataFrame()
-        df = actualizar_dataframe(df, pair, interval)
-        # ELIMINA ESTA LÍNEA: df = agregar_indicadores(df)
+        df = actualizar_dataframe(df, pair, interval) # Pasa interval (minutos) directamente
         guardar_dataframe(df, filename)
-      
+
 def calcular_rsi(df):
     try:
         df['RSI'] = talib.RSI(df['close'], timeperiod=14)
@@ -159,8 +140,8 @@ def actualizar_dataframe(df, pair, interval_seconds): # Recibe el intervalo en s
         last_timestamp = int(df.index[-1].timestamp()) + 1
         since = last_timestamp
 
-    nuevos_datos = obtener_ohlc_kraken(pair, interval_seconds, since) # Usa interval_seconds
-
+    nuevos_datos = obtener_ohlc_kraken(pair, interval_minutes, since) # Usa interval_minutes
+  
     if nuevos_datos is not None:
         if not nuevos_datos.empty:
             df_actualizado = pd.concat([df, nuevos_datos])
