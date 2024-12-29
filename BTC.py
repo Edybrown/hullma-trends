@@ -134,7 +134,7 @@ def actualizar_dataframe(df, pair, interval_minutes): # Recibe el intervalo en s
     else:
         last_timestamp = int(df.index[-1].timestamp()) + 1
         since = last_timestamp
-nuevos_datos = obtener_ohlc_kraken(pair, interval_minutes, since) 
+    nuevos_datos = obtener_ohlc_kraken(pair, interval_minutes, since) 
   
     if nuevos_datos is not None:
         if not nuevos_datos.empty:
