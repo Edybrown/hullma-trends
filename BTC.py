@@ -927,12 +927,26 @@ def calcular_tiempo_restante(minutes):
     """Calcula el tiempo restante en segundos hasta el próximo cierre de vela según el intervalo."""
     now = datetime.datetime.now()
     
-    # Calcula el tiempo hasta el próximo cierre de vela basado en 'minutes'
-    seconds_in_current_candle = now.minute * 60 + now.second
-    remaining_seconds = (minutes * 60) - (seconds_in_current_candle % (minutes * 60))
+    # Calculamos el número total de segundos transcurridos desde la medianoche
+    total_seconds_now = now.hour * 3600 + now.minute * 60 + now.second
+
+    # Calculamos el total de segundos por vela (por ejemplo, 15 minutos = 900 segundos)
+    total_seconds_interval = minutes * 60
+
+    # Calculamos el tiempo restante hasta el cierre de la vela
+    remaining_seconds = total_seconds_interval - (total_seconds_now % total_seconds_interval)
     
+    # Si el tiempo restante es igual a 0, significa que la vela ya ha cerrado y comienza una nueva
+    if remaining_seconds == 0:
+        remaining_seconds = total_seconds_interval
+
     return remaining_seconds
-  
+
+# Ejemplo de uso
+intervalos = [15, 60, 240, 1440]  # 15m, 1h, 4h, 1d
+for intervalo in intervalos:
+    tiempo_restante = calcular_tiempo_restante(intervalo)
+    print(f"Tiempo hasta el próximo cierre de {intervalo}m: {tiempo_restante} segundos.")
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
     """Procesa una temporalidad específica."""
     print(f"Iniciando procesamiento de {filename_suffix}...")
