@@ -924,40 +924,49 @@ Puntos señal bajista: {puntos_senal_bajista}
 
 def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
     """Calcula el tiempo en segundos hasta el próximo cierre de vela."""
-    ahora = datetime.datetime.utcnow()
+    ahora = datetime.datetime.now(datetime.UTC) # Corregido el warning
     ahora_segundos = (ahora.hour * 3600) + (ahora.minute * 60) + ahora.second
     segundos_hasta_siguiente = intervalo_segundos - (ahora_segundos % intervalo_segundos)
     return segundos_hasta_siguiente
 
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
-    """Procesa una temporalidad específica (función auxiliar para los hilos)."""
-    print(f"Procesando {filename_suffix}...")
-    logging.info(f"Procesando {filename_suffix}...")
+    """Procesa una temporalidad específica."""
+    print(f"Iniciando procesamiento de {filename_suffix}...") # Mensaje de inicio
+    logging.info(f"Iniciando procesamiento de {filename_suffix}...")
     procesar_csv(pair, filename_suffix, carpeta)
+    print(f"Finalizado procesamiento de {filename_suffix}.") # Mensaje de finalización
+    logging.info(f"Finalizado procesamiento de {filename_suffix}.")
 
 def bucle_principal(pair, carpeta, intervalos):
     """Bucle principal que sincroniza el análisis de las temporalidades."""
     while True:
-        # Calcular el tiempo de espera MÁXIMO entre todas las temporalidades
-        tiempos_espera = [calcular_tiempo_hasta_proximo_cierre(intervalo) for intervalo in intervalos]
-        tiempo_espera_maximo = max(tiempos_espera)
+        tiempos_espera = {}
+        for intervalo_segundos, filename_suffix in intervalos.items():
+            tiempo_espera = calcular_tiempo_hasta_proximo_cierre(intervalo_segundos)
+            tiempos_espera[filename_suffix] = tiempo_espera
+            print(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_espera} segundos.")
+            logging.info(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_espera} segundos.")
 
+        tiempo_espera_maximo = max(tiempos_espera.values())
         print(f"Esperando {tiempo_espera_maximo} segundos para sincronizar el análisis...")
         logging.info(f"Esperando {tiempo_espera_maximo} segundos para sincronizar el análisis...")
         time.sleep(tiempo_espera_maximo)
 
-        # Después de la espera, procesar TODAS las temporalidades en hilos separados
+        print("Iniciando procesamiento de todas las temporalidades...")
+        logging.info("Iniciando procesamiento de todas las temporalidades...")
+
         hilos = []
         for intervalo_segundos, filename_suffix in intervalos.items():
             hilo = threading.Thread(target=procesar_temporalidad, args=(pair, carpeta, intervalo_segundos, filename_suffix))
             hilos.append(hilo)
             hilo.start()
 
-        # Esperar a que todos los hilos terminen
         for hilo in hilos:
             hilo.join()
         print("Análisis de todas las temporalidades completado.")
         logging.info("Análisis de todas las temporalidades completado.")
+        print("--------------------------------------------------") #Separador para mejor visualizacion
+        logging.info("--------------------------------------------------")
 
 def main():
     pair = "XXBTZUSD"
