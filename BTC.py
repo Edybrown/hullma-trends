@@ -78,13 +78,8 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         1440: "1d"
     }
     for interval, filename_suffix in temporalidades.items():
-        filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-        try:
-            df = pd.read_csv(filename, index_col='time', parse_dates=True)
-        except FileNotFoundError:
-            print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
-            df = pd.DataFrame()
-        df = actualizar_dataframe(df, pair, interval) # Pasa interval (minutos) directamente
+        # ... (rest of the code)
+        df = actualizar_dataframe(df, pair, interval)  # Pass interval directly (minutes)
         guardar_dataframe(df, filename)
 
 def calcular_rsi(df):
@@ -133,14 +128,13 @@ def calcular_hulma(df):
         return df
         
 # Función para actualizar un DataFrame con nuevos datos
-def actualizar_dataframe(df, pair, interval_seconds): # Recibe el intervalo en segundos
+def actualizar_dataframe(df, pair, interval_minutes): # Recibe el intervalo en segundos
     if df.empty:
         since = None
     else:
         last_timestamp = int(df.index[-1].timestamp()) + 1
         since = last_timestamp
-
-    nuevos_datos = obtener_ohlc_kraken(pair, interval_minutes, since) # Usa interval_minutes
+nuevos_datos = obtener_ohlc_kraken(pair, interval_minutes, since) 
   
     if nuevos_datos is not None:
         if not nuevos_datos.empty:
