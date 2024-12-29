@@ -19,6 +19,13 @@ frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
 def obtener_ohlc_kraken(pair, interval, since=None):
+        # Convertir el intervalo a minutos AQUI
+    interval_minutos = int(interval / 60)
+    if interval_minutos == 1440:
+        interval_kraken = 1440
+    else:
+        interval_kraken = interval_minutos
+    
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
