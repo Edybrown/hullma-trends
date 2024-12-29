@@ -923,25 +923,6 @@ Señal general: {"Alcista" if puntos_senal_alcista > puntos_senal_bajista else "
 
     return informe
 
-def calcular_tiempo_restante(minutes):
-    """Calcula el tiempo restante en segundos hasta el próximo cierre de vela según el intervalo."""
-    now = datetime.datetime.now()
-
-    # Si el intervalo es en minutos
-    if minutes <= 60:
-        # Calcular el siguiente múltiplo de minutos
-        next_interval = (now.minute // minutes + 1) * minutes
-        next_candle_time = now.replace(minute=next_interval % 60, second=0, microsecond=0)
-        if next_candle_time < now:
-            next_candle_time += datetime.timedelta(hours=1)
-    else:
-        # Si es un intervalo mayor (1h, 4h, 1d), ajustamos según la hora
-        next_candle_time = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=(now.hour // (minutes // 60) + 1) * (minutes // 60))
-
-    # Calcular el tiempo restante hasta el próximo cierre
-    remaining_seconds = (next_candle_time - now).total_seconds()
-
-    return remaining_seconds
   
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
     """Procesa una temporalidad específica."""
@@ -990,34 +971,42 @@ def procesar_csv(pair, filename_suffix, carpeta, intervalos):
     print(f"Archivo {filename_suffix} actualizado.")
     logging.info(f"Archivo {filename_suffix} actualizado.")
 
+def calcular_tiempo_restante(intervalo_segundos):
+    """Calcular el tiempo restante hasta el cierre de la vela más cercana."""
+    tiempo_actual = time.time()
+    # Redondeamos el tiempo actual hacia abajo al múltiplo más cercano de intervalo_segundos
+    tiempo_restante = intervalo_segundos - (tiempo_actual % intervalo_segundos)
+    return tiempo_restante
+
 def bucle_principal(pair, carpeta, intervalos):
-    """Bucle principal que sincroniza el análisis de las temporalidades."""
+    """Bucle principal que sincroniza el análisis de las temporalidades y calcula el tiempo restante hasta el cierre de la vela."""
     ultimos_tiempos = {filename_suffix: 0 for filename_suffix in intervalos.values()}
     
     while True:
         tiempo_actual = time.time()
+        print(f"Tiempo actual: {tiempo_actual}")
 
-        # Bucle combinado para procesar y calcular tiempo restante
         for minutes, filename_suffix in intervalos.items():
-            intervalo_segundos = minutes * 60  # Calcular intervalo_segundos UNA SOLA VEZ
-            tiempo_transcurrido = tiempo_actual - ultimos_tiempos.get(filename_suffix, 0)
+            intervalo_segundos = minutes * 60  # Convertir a segundos
 
-            # Procesar archivo si ha pasado el intervalo
-            if tiempo_transcurrido >= intervalo_segundos:
+            # Calcular el tiempo restante hasta el siguiente cierre de la vela
+            tiempo_restante = calcular_tiempo_restante(intervalo_segundos)
+
+            # Imprimir el tiempo restante hasta el siguiente cierre de la vela
+            print(f"Tiempo restante para el siguiente cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
+            logging.info(f"Tiempo restante para el siguiente cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
+
+            # Solo ejecutar el procesamiento si ha pasado el intervalo
+            if tiempo_actual - ultimos_tiempos[filename_suffix] >= intervalo_segundos:
                 print(f"Iniciando procesamiento de {filename_suffix}...")
                 logging.info(f"Iniciando procesamiento de {filename_suffix}...")
-                
+
                 procesar_csv(pair, filename_suffix, carpeta, intervalos)
 
                 print(f"Finalizado procesamiento de {filename_suffix}.")
                 logging.info(f"Finalizado procesamiento de {filename_suffix}.")
 
                 ultimos_tiempos[filename_suffix] = tiempo_actual
-
-            # Calcular el tiempo restante
-            tiempo_restante = intervalo_segundos - (tiempo_actual - ultimos_tiempos[filename_suffix]) if ultimos_tiempos[filename_suffix] is not None else intervalo_segundos
-            print(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
-            logging.info(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
 
         print("--------------------------------------------------")
         logging.info("--------------------------------------------------")
