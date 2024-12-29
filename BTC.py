@@ -21,6 +21,9 @@ def obtener_ohlc_kraken(pair, interval, since=None):
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
+    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
+    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
+
     retries = 3
     for i in range(retries):
         try:
@@ -29,9 +32,11 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             data = response.json()
             if data['error']:
                 print(f"Error de Kraken: {data['error']}")
+                logging.error(f"Error de Kraken: {data['error']}")
                 return None
             if not data['result']:
                 print("No hay datos disponibles para este intervalo.")
+                logging.info("No hay datos disponibles para este intervalo.")
                 return None
             df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
             df['time'] = pd.to_datetime(df['time'], unit='s')
@@ -40,8 +45,10 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             return df
         except requests.exceptions.RequestException as e:
             print(f"Error al obtener datos de Kraken: {e}")
+            logging.error(f"Error al obtener datos de Kraken: {e}")
             time.sleep(5)
     print("Número máximo de reintentos alcanzado.")
+    logging.error("Número máximo de reintentos alcanzado.")
     return None
 
 # Función para guardar el DataFrame
@@ -916,13 +923,13 @@ Señal general: {"Alcista" if puntos_senal_alcista > puntos_senal_bajista else "
 
     return informe
 
-def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
-    """Calcula el tiempo en segundos hasta el próximo cierre de vela."""
-    ahora = datetime.now(timezone.utc)
-    ahora_segundos = (ahora.hour * 3600) + (ahora.minute * 60) + ahora.second
-    segundos_hasta_siguiente = intervalo_segundos - (ahora_segundos % intervalo_segundos)
-    return segundos_hasta_siguiente
-
+def calcular_tiempo_restante(minutes):
+    """Calcula el tiempo restante en segundos hasta el próximo múltiplo del intervalo."""
+    now = datetime.datetime.now()
+    # Calcula el tiempo hasta el próximo múltiplo de 'minutes'
+    next_interval = now + datetime.timedelta(minutes=(minutes - now.minute % minutes))
+    return (next_interval - now).total_seconds()
+  
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
     """Procesa una temporalidad específica."""
     print(f"Iniciando procesamiento de {filename_suffix}...")
