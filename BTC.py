@@ -18,41 +18,79 @@ logging.basicConfig(filename='btc_analisis.log', level=logging.INFO,
 frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
-def obtener_ohlc_kraken(pair, interval_minutes, since=None): # Recibe interval_minutes (minutos)
-    interval_kraken = interval_minutes # Asigna directamente el valor en minutos
+def obtener_ohlc_kraken(pair_dict, interval_minutes, since=None):
+    """
+    Obtiene datos OHLC de Kraken.
+
+    Args:
+        pair_dict (dict): Diccionario que contiene el par de trading. 
+                           Ejemplo: {'pair': 'XXBTZUSD'}
+        interval_minutes (int): Intervalo en minutos.
+        since (int, opcional): Timestamp Unix para obtener datos desde una fecha específica.
+
+    Returns:
+        pd.DataFrame: DataFrame con los datos OHLC, o None en caso de error.
+    """
+
+    try:
+        pair = pair_dict['pair']  # Extrae el valor del par del diccionario
+    except (KeyError, TypeError):
+        print("Error: El diccionario 'pair_dict' debe contener la clave 'pair'.")
+        logging.error("Error: El diccionario 'pair_dict' debe contener la clave 'pair'.")
+        return None
+
+    interval_kraken = interval_minutes
+
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_kraken}"
-   
+
     if since:
         url += f"&since={since}"
-    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
-    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
+
+    print(f"URL de la solicitud a Kraken: {url}")
+    logging.info(f"URL de la solicitud a Kraken: {url}")
 
     retries = 3
     for i in range(retries):
         try:
-            response = requests.get(url)
-            response.raise_for_status()
+            response = requests.get(url, timeout=10) # Añadido timeout para evitar bloqueos
+            response.raise_for_status() # Lanza una excepción para códigos de error HTTP (4xx o 5xx)
             data = response.json()
+
             if data['error']:
                 print(f"Error de Kraken: {data['error']}")
                 logging.error(f"Error de Kraken: {data['error']}")
+
+                # Manejo específico para errores comunes de Kraken
+                if "EGeneral:Invalid pair" in data['error']: #Manejo de error par no valido
+                    print(f"El par {pair} no es válido.")
+                    logging.error(f"El par {pair} no es válido.")
+                    return None
+                
+                time.sleep(5)  # Espera antes de reintentar solo si es un error general
+                continue # Continua con el siguiente reintento
+
+            if not data['result'] or pair not in data['result']: #Verifica si existe el par en el result
+                print("No hay datos disponibles para este intervalo o par no válido.")
+                logging.info("No hay datos disponibles para este intervalo o par no válido.")
                 return None
-            if not data['result']:
-                print("No hay datos disponibles para este intervalo.")
-                logging.info("No hay datos disponibles para este intervalo.")
-                return None
+
             df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
             df['time'] = pd.to_datetime(df['time'], unit='s')
             df = df.set_index('time')
             df = df.astype(float)
             return df
+
         except requests.exceptions.RequestException as e:
             print(f"Error al obtener datos de Kraken: {e}")
             logging.error(f"Error al obtener datos de Kraken: {e}")
             time.sleep(5)
+        except (KeyError, IndexError) as e: # captura error si el par no existe en la respuesta
+            print(f"Error al procesar la respuesta de Kraken (par inexistente): {e}")
+            logging.error(f"Error al procesar la respuesta de Kraken (par inexistente): {e}")
+            return None # retorna None en caso de error al procesar el json
     print("Número máximo de reintentos alcanzado.")
     logging.error("Número máximo de reintentos alcanzado.")
-    return None     
+    return None
 
 
 # Función para guardar el DataFrame
