@@ -123,27 +123,28 @@ def calcular_hulma(df):
         return df
         
 # Función para actualizar un DataFrame con nuevos datos
-
-def actualizar_dataframe(df, pair, interval):
+def actualizar_dataframe(df, pair, interval_seconds): # Recibe el intervalo en segundos
     if df.empty:
         since = None
     else:
         last_timestamp = int(df.index[-1].timestamp()) + 1
         since = last_timestamp
 
-    nuevos_datos = obtener_ohlc_kraken(pair, interval, since)
+    nuevos_datos = obtener_ohlc_kraken(pair, interval_seconds, since) # Usa interval_seconds
 
-    if nuevos_datos is not None:
+   if nuevos_datos is not None:
         if not nuevos_datos.empty:
             df_actualizado = pd.concat([df, nuevos_datos])
+            df_actualizado = df_actualizado.sort_index() # Ordenar el DataFrame por índice (timestamp)
             df_actualizado = df_actualizado[~df_actualizado.index.duplicated(keep='last')]
             return df_actualizado
         else:
-            print(f"No hay nuevos datos para el intervalo {interval}")
+            print(f"No hay nuevos datos para el intervalo {interval_seconds}") # Imprime el intervalo en segundos
             return df
     else:
-        print(f"Error al obtener nuevos datos para el intervalo {interval}")
+        print(f"Error al obtener nuevos datos para el intervalo {interval_seconds}") # Imprime el intervalo en segundos
         return df
+
 
 # Función para procesar archivos CSV
 def encontrar_minimos_maximos(precios, ventana=3):
@@ -804,69 +805,59 @@ def analizar_temporalidad(pair, carpeta, interval, filename_suffix, periodos_rsi
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
         return None
       
-def generar_informe_completo(ultimo_precio, tendencia, rsi_data, macd_data, bandas_bollinger_analisis, ultimo_hma, vwap_mensaje, analisis_volumen_completo, rangos_compra, filename_suffix, mensaje_tiempo_restante):
+def generar_informe_completo(ultimo_precio, tendencia, rsi_data, macd_data, bandas_bollinger_analisis, ultimo_hma, vwap_mensaje, analisis_volumen_completo, rangos_compra, filename_suffix, mensaje_tiempo_restante, consejos_trading):
     """Genera el informe completo con mensajes detallados y fuerza de señal."""
 
     informe = f"""
 ==========================
 Análisis Técnico: {filename_suffix.split('_')[0]} ({filename_suffix})
+Fecha: {datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")}
 ==========================
 Precio actual: {ultimo_precio:.2f if ultimo_precio is not None else "N/A"}
 Tendencia: {tendencia if tendencia is not None else "N/A"}
+{mensaje_tiempo_restante}
 
 --- RSI ---
-RSI: {rsi_data['valor']:.2f if rsi_data and 'valor' in rsi_data else "N/A"} ({rsi_data['condicion'] if rsi_data and 'condicion' in rsi_data else "N/A"})
+RSI: {rsi_data.get('valor', "N/A"):.2f} ({rsi_data.get('condicion', "N/A")})
 """
     if rsi_data and 'condicion' in rsi_data:
-        if rsi_data['condicion'] == "Sobrecompra":
-            informe += "- El RSI está en sobrecompra, sugiriendo una posible reversión bajista."
-            informe += " Esta señal es débil." if tendencia == "Alcista" else " Esta señal es fuerte."
-        elif rsi_data['condicion'] == "Sobreventa":
-            informe += "- El RSI está en sobreventa, sugiriendo una posible reversión alcista."
-            informe += " Esta señal es débil." if tendencia == "Bajista" else " Esta señal es fuerte."
-        else:
-            informe += "- El RSI se encuentra en niveles neutrales."
+        fuerza_senal = "fuerte" if (tendencia == "Alcista" and rsi_data['condicion'] == "Sobreventa") or (tendencia == "Bajista" and rsi_data['condicion'] == "Sobrecompra") else "débil"
+        informe += f"- El RSI está en {rsi_data['condicion'].lower()}, señal {fuerza_senal}.\n"
 
     informe += f"""
 --- MACD ---
-MACD: {macd_data['macd']:.2f if macd_data and 'macd' in macd_data else "N/A"}, Señal: {macd_data['senal']:.2f if macd_data and 'senal' in macd_data else "N/A"} ({macd_data['cruce'] if macd_data and 'cruce' in macd_data else "N/A"})
+MACD: {macd_data.get('macd', "N/A"):.2f}, Señal: {macd_data.get('senal', "N/A"):.2f} ({macd_data.get('cruce', "N/A")})
 """
     if macd_data and 'cruce' in macd_data:
-        if macd_data['cruce'] == "Cruce alcista":
-            informe += "- Cruce alcista detectado, indicando un posible cambio de tendencia al alza."
-        elif macd_data['cruce'] == "Cruce bajista":
-            informe += "- Cruce bajista detectado, indicando un posible cambio de tendencia a la baja."
-        else:
-            informe += "- No se detectó un cruce significativo en el MACD."
+        informe += f"- Se detectó un {macd_data['cruce'].lower()}.\n"
 
     informe += f"""
 --- Bandas de Bollinger ---
 """
     if bandas_bollinger_analisis:
         informe += f"""
-    - Cierre sobre banda superior: {bandas_bollinger_analisis['cierre_sobre_banda_superior']}
-    - Cierre bajo banda inferior: {bandas_bollinger_analisis['cierre_bajo_banda_inferior']}
+    - Cierre sobre banda superior: {bandas_bollinger_analisis.get('cierre_sobre_banda_superior', "N/A")}
+    - Cierre bajo banda inferior: {bandas_bollinger_analisis.get('cierre_bajo_banda_inferior', "N/A")}
 """
-        if bandas_bollinger_analisis['cierre_sobre_banda_superior']:
-            informe += "- El precio cerró por encima de la banda superior, lo que sugiere sobrecompra o una tendencia alcista fuerte."
-        elif bandas_bollinger_analisis['cierre_bajo_banda_inferior']:
-            informe += "- El precio cerró por debajo de la banda inferior, lo que sugiere sobreventa o una tendencia bajista fuerte."
+        if bandas_bollinger_analisis.get('cierre_sobre_banda_superior'):
+            informe += "- El precio cerró por encima de la banda superior, lo que sugiere sobrecompra o una tendencia alcista fuerte.\n"
+        elif bandas_bollinger_analisis.get('cierre_bajo_banda_inferior'):
+            informe += "- El precio cerró por debajo de la banda inferior, lo que sugiere sobreventa o una tendencia bajista fuerte.\n"
         else:
-            informe += "- El precio se mantiene dentro de las Bandas de Bollinger."
+            informe += "- El precio se mantiene dentro de las Bandas de Bollinger.\n"
     else:
-        informe += "N/A"
+        informe += "N/A\n"
 
     informe += f"""
 --- Análisis de Volumen ---
 """
     if analisis_volumen_completo:
         informe += f"""
-    - Volumen actual: {analisis_volumen_completo['volumen_actual']}
-    - Volumen promedio: {analisis_volumen_completo['volumen_promedio']}
-    - {analisis_volumen_completo['mensaje']}
-"""
+    - Volumen actual: {analisis_volumen_completo.get('volumen_actual', "N/A")}
+    - Volumen promedio: {analisis_volumen_completo.get('volumen_promedio', "N/A")}
+    - {analisis_volumen_completo.get('mensaje', "N/A")}\n"""
     else:
-        informe += "N/A"
+        informe += "N/A\n"
 
     informe += f"""
 --- HMA (Hull Moving Average) ---
@@ -877,31 +868,29 @@ HMA: {ultimo_hma:.2f if ultimo_hma is not None else "N/A"}
 """
     if rangos_compra:
         informe += f"""
-    - Soporte: {rangos_compra['soporte']:.2f}
-    - Resistencia: {rangos_compra['resistencia']:.2f}
-    - {rangos_compra['mensaje']}
-"""
+    - Soporte: {rangos_compra.get('soporte', "N/A"):.2f}
+    - Resistencia: {rangos_compra.get('resistencia', "N/A"):.2f}
+    - {rangos_compra.get('mensaje', "N/A")}\n"""
     else:
-        informe += "N/A"
+        informe += "N/A\n"
 
-    # Cálculo de puntos de señal
     puntos_senal_alcista = 0
     puntos_senal_bajista = 0
 
-    if rsi_data and 'condicion' in rsi_data:
-        puntos_senal_alcista += 1 if rsi_data['condicion'] == "Sobreventa" else 0
-        puntos_senal_bajista += 1 if rsi_data['condicion'] == "Sobrecompra" else 0
-
-    if macd_data and 'cruce' in macd_data:
-        puntos_senal_alcista += 1 if macd_data['cruce'] == "Cruce alcista" else 0
-        puntos_senal_bajista += 1 if macd_data['cruce'] == "Cruce bajista" else 0
-
-    if bandas_bollinger_analisis:
-        puntos_senal_bajista += 1 if bandas_bollinger_analisis.get('cierre_sobre_banda_superior', False) else 0
-        puntos_senal_alcista += 1 if bandas_bollinger_analisis.get('cierre_bajo_banda_inferior', False) else 0
-
+    if rsi_data and rsi_data.get('condicion') == "Sobreventa":
+        puntos_senal_alcista += 1
+    if rsi_data and rsi_data.get('condicion') == "Sobrecompra":
+        puntos_senal_bajista += 1
+    if macd_data and macd_data.get('cruce') == "Cruce alcista":
+        puntos_senal_alcista += 2
+    if macd_data and macd_data.get('cruce') == "Cruce bajista":
+        puntos_senal_bajista += 2
+    if bandas_bollinger_analisis and bandas_bollinger_analisis.get('cierre_sobre_banda_superior'):
+        puntos_senal_bajista += 1
+    if bandas_bollinger_analisis and bandas_bollinger_analisis.get('cierre_bajo_banda_inferior'):
+        puntos_senal_alcista += 1
     if analisis_volumen_completo:
-        if "por encima del promedio" in analisis_volumen_completo['mensaje']:
+        if "por encima del promedio" in analisis_volumen_completo.get('mensaje', ""):
             puntos_senal_alcista += 0.5 if tendencia == "Alcista" else 0
             puntos_senal_bajista += 0.5 if tendencia == "Bajista" else 0
             if tendencia == "Lateral":
@@ -912,74 +901,117 @@ HMA: {ultimo_hma:.2f if ultimo_hma is not None else "N/A"}
 --- Resumen de Señales ---
 Puntos señal alcista: {puntos_senal_alcista}
 Puntos señal bajista: {puntos_senal_bajista}
+Señal general: {"Alcista" if puntos_senal_alcista > puntos_senal_bajista else "Bajista" if puntos_senal_bajista > puntos_senal_alcista else "Neutra"}
 """
-    if puntos_senal_alcista > puntos_senal_bajista:
-        informe += "Señal general: Alcista"
-    elif puntos_senal_bajista > puntos_senal_alcista:
-        informe += "Señal general: Bajista"
+
+    # **AQUÍ ESTÁ EL CAMBIO CRUCIAL: SEPARACIÓN DE LA SECCIÓN DE CONSEJOS**
+    informe += """
+--- Consejos de Trading ---
+""" # Se abre la sección con un string normal
+    if consejos_trading:
+        for consejo in consejos_trading:
+            informe += f"- {consejo}\n" # Se añaden los consejos con f-strings *dentro* del bucle
     else:
-        informe += "Señal general: Neutra"
+        informe += "No hay consejos disponibles en este momento.\n"
 
     return informe
 
 def calcular_tiempo_hasta_proximo_cierre(intervalo_segundos):
     """Calcula el tiempo en segundos hasta el próximo cierre de vela."""
-    ahora = datetime.datetime.now(datetime.UTC) # Corregido el warning
+    ahora = datetime.now(timezone.utc)
     ahora_segundos = (ahora.hour * 3600) + (ahora.minute * 60) + ahora.second
     segundos_hasta_siguiente = intervalo_segundos - (ahora_segundos % intervalo_segundos)
     return segundos_hasta_siguiente
 
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
     """Procesa una temporalidad específica."""
-    print(f"Iniciando procesamiento de {filename_suffix}...") # Mensaje de inicio
+    print(f"Iniciando procesamiento de {filename_suffix}...")
     logging.info(f"Iniciando procesamiento de {filename_suffix}...")
+
+    # Aquí realizarías las operaciones específicas para esta temporalidad
     procesar_csv(pair, filename_suffix, carpeta)
-    print(f"Finalizado procesamiento de {filename_suffix}.") # Mensaje de finalización
+
+    print(f"Finalizado procesamiento de {filename_suffix}.")
     logging.info(f"Finalizado procesamiento de {filename_suffix}.")
+
+def procesar_csv(pair, filename_suffix, carpeta, intervalos):
+    """Procesa una temporalidad específica y actualiza el CSV."""
+    ruta_csv = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
+    try:
+        df = pd.read_csv(ruta_csv, index_col='time', parse_dates=True)
+    except FileNotFoundError:
+        print(f"Archivo {ruta_csv} no encontrado. Creando archivo nuevo.")
+        df = pd.DataFrame()
+
+    # Obtener el intervalo en segundos del diccionario
+    minutes = int(filename_suffix[:-1]) if filename_suffix[:-1].isdigit() else None  # Manejar el caso "1d"
+    if minutes is None:
+        if filename_suffix == "1d":
+            intervalo_segundos = 24 * 60 * 60
+        else:
+            print(f"Error: Sufijo de archivo no válido: {filename_suffix}")
+            logging.error(f"Error: Sufijo de archivo no válido: {filename_suffix}")
+            return
+    else:
+        intervalo_segundos = intervalos.get(minutes, None)
+        if intervalo_segundos is None:
+            print(f"Error: Intervalo no definido para {minutes} minutos")
+            logging.error(f"Error: Intervalo no definido para {minutes} minutos")
+            return
+
+    df = actualizar_dataframe(df, pair, intervalo_segundos)
+
+    if not df.empty and 'close' in df.columns:
+        df['sma_20'] = df['close'].rolling(window=20).mean()
+
+    df['ultima_actualizacion'] = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    guardar_dataframe(df, ruta_csv)
+    print(f"Archivo {filename_suffix} actualizado.")
+    logging.info(f"Archivo {filename_suffix} actualizado.")
 
 def bucle_principal(pair, carpeta, intervalos):
     """Bucle principal que sincroniza el análisis de las temporalidades."""
+    ultimos_tiempos = {filename_suffix: 0 for filename_suffix in intervalos.values()}
     while True:
-        tiempos_espera = {}
-        for intervalo_segundos, filename_suffix in intervalos.items():
-            tiempo_espera = calcular_tiempo_hasta_proximo_cierre(intervalo_segundos)
-            tiempos_espera[filename_suffix] = tiempo_espera
-            print(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_espera} segundos.")
-            logging.info(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_espera} segundos.")
+        tiempo_actual = time.time()
 
-        tiempo_espera_maximo = max(tiempos_espera.values())
-        print(f"Esperando {tiempo_espera_maximo} segundos para sincronizar el análisis...")
-        logging.info(f"Esperando {tiempo_espera_maximo} segundos para sincronizar el análisis...")
-        time.sleep(tiempo_espera_maximo)
+        for minutes, filename_suffix in intervalos.items():
+            intervalo_segundos = minutes * 60  # Calcular intervalo_segundos UNA SOLA VEZ
+            tiempo_transcurrido = tiempo_actual - ultimos_tiempos.get(filename_suffix, 0)
 
-        print("Iniciando procesamiento de todas las temporalidades...")
-        logging.info("Iniciando procesamiento de todas las temporalidades...")
+            if tiempo_transcurrido >= intervalo_segundos:
+                print(f"Iniciando procesamiento de {filename_suffix}...")
+                logging.info(f"Iniciando procesamiento de {filename_suffix}...")
 
-        hilos = []
-        for intervalo_segundos, filename_suffix in intervalos.items():
-            hilo = threading.Thread(target=procesar_temporalidad, args=(pair, carpeta, intervalo_segundos, filename_suffix))
-            hilos.append(hilo)
-            hilo.start()
+                procesar_csv(pair, filename_suffix, carpeta, intervalos)
 
-        for hilo in hilos:
-            hilo.join()
-        print("Análisis de todas las temporalidades completado.")
-        logging.info("Análisis de todas las temporalidades completado.")
-        print("--------------------------------------------------") #Separador para mejor visualizacion
+                print(f"Finalizado procesamiento de {filename_suffix}.")
+                logging.info(f"Finalizado procesamiento de {filename_suffix}.")
+
+                ultimos_tiempos[filename_suffix] = tiempo_actual
+
+        for minutes, filename_suffix in intervalos.items():
+            intervalo_segundos = minutes * 60  # Calcular intervalo_segundos UNA SOLA VEZ
+            tiempo_restante = intervalo_segundos - (tiempo_actual - ultimos_tiempos[filename_suffix]) if ultimos_tiempos[filename_suffix] is not None else intervalo_segundos
+            print(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
+            logging.info(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
+
+        print("--------------------------------------------------")
         logging.info("--------------------------------------------------")
-
+        time.sleep(1)
 def main():
     pair = "XXBTZUSD"
     carpeta_datos = "datos_BTC"
     os.makedirs(carpeta_datos, exist_ok=True)
     intervalos = {
-        15 * 60: "15m",
-        60 * 60: "1h",
-        4 * 60 * 60: "4h",
-        24 * 60 * 60: "1d"
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
     }
 
-    bucle_principal(pair, carpeta_datos, intervalos) #Ejecutamos el bucle principal directamente
+    bucle_principal(pair, carpeta_datos, intervalos)
 
 if __name__ == "__main__":
     main()
