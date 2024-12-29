@@ -18,32 +18,12 @@ logging.basicConfig(filename='btc_analisis.log', level=logging.INFO,
 frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
-def obtener_ohlc_kraken(pair, interval, interval_dict, since=None):
-    """
-    Solicita datos OHLC de Kraken para un par específico y un intervalo.
-
-    :param pair: Par de criptomonedas (por ejemplo, "BTCUSD").
-    :param interval: Intervalo en formato string (e.g., "1h") o entero (e.g., 60).
-    :param interval_dict: Diccionario con la conversión de intervalos (e.g., {"15m": 15, "1h": 60, ...}).
-    :param since: Timestamp opcional para filtrar datos.
-    :return: DataFrame con los datos OHLC o None si ocurre un error.
-    """
-    # Determinar el intervalo en minutos
-    if isinstance(interval, int):
-        interval_in_minutes = interval  # Ya es un valor numérico
-    elif isinstance(interval, str) and interval in interval_dict:
-        interval_in_minutes = interval_dict[interval]  # Convertir usando el diccionario
-    else:
-        print(f"Intervalo no soportado o formato incorrecto: {interval}")
-        logging.error(f"Intervalo no soportado o formato incorrecto: {interval}")
-        return None
-
-    # Construir la URL
-    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_in_minutes}"
+def obtener_ohlc_kraken(pair, interval, since=None):
+    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
-    print(f"URL de la solicitud a Kraken: {url}")  # Imprime la URL
-    logging.info(f"URL de la solicitud a Kraken: {url}")  # Imprime la URL en el log
+    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
+    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
 
     retries = 3
     for i in range(retries):
