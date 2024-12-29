@@ -23,17 +23,20 @@ def obtener_ohlc_kraken(pair, interval, interval_dict, since=None):
     Solicita datos OHLC de Kraken para un par específico y un intervalo.
 
     :param pair: Par de criptomonedas (por ejemplo, "BTCUSD").
-    :param interval: Intervalo en formato como "15m", "1h", "4h", "1d".
+    :param interval: Intervalo en formato string (e.g., "1h") o entero (e.g., 60).
     :param interval_dict: Diccionario con la conversión de intervalos (e.g., {"15m": 15, "1h": 60, ...}).
     :param since: Timestamp opcional para filtrar datos.
     :return: DataFrame con los datos OHLC o None si ocurre un error.
     """
-    # Convertir el intervalo usando el diccionario proporcionado
-    if interval not in interval_dict:
+    # Determinar el intervalo en minutos
+    if isinstance(interval, int):
+        interval_in_minutes = interval  # Ya es un valor numérico
+    elif interval in interval_dict:
+        interval_in_minutes = interval_dict[interval]  # Convertir usando el diccionario
+    else:
         print(f"Intervalo no soportado: {interval}")
         logging.error(f"Intervalo no soportado: {interval}")
         return None
-    interval_in_minutes = interval_dict[interval]
 
     # Construir la URL
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_in_minutes}"
