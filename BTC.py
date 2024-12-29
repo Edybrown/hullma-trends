@@ -1046,26 +1046,28 @@ def bucle_principal(pair, carpeta, intervalos):
         time.sleep(1)
 
 def main():
-    """Función principal del programa."""
-    pair_dict = {'pair': "XBTUSDT"} # Define el diccionario pair_dict AQUI
+    pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
-    intervalos = [15, 60, 240, 1440]
+    temporalidades = {
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
+    }
+    
+    while True:
+        for interval, filename_suffix in temporalidades.items():
+            print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
+            df = obtener_ohlc_kraken(pair, interval)
+            if df is not None:
+                filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
+                guardar_dataframe(df, filename)
+                
+                # Crear un hilo para procesar el CSV
+                threading.Thread(target=procesar_csv, args=(pair, filename_suffix)).start()
 
-    # Crear la carpeta si no existe
-    if not os.path.exists(carpeta_datos):
-        os.makedirs(carpeta_datos)
-        print(f"Carpeta {carpeta_datos} creada.")
-        logging.info(f"Carpeta {carpeta_datos} creada.")
-
-    def ejecutar_analisis():
-        actualizar_archivos(pair_dict, carpeta_datos)
-        for interval in intervalos:
-            filename_suffix = {15: "15m", 60: "1h", 240: "4h", 1440: "1d"}.get(interval)
-            procesar_csv(pair_dict['pair'], filename_suffix, carpeta_datos) #pasa el pair
-
-        threading.Timer(frecuencia_actualizacion, ejecutar_analisis).start()
-
-    ejecutar_analisis()  # Iniciar el bucle la primera vez
+        print("Datos actualizados. Esperando 60 segundos...")
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
