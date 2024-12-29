@@ -19,19 +19,9 @@ frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
 def obtener_ohlc_kraken(pair, interval, since=None):
-        # Convertir el intervalo a minutos AQUI
-    interval_minutos = int(interval / 60)
-    if interval_minutos == 1440:
-        interval_kraken = 1440
-    else:
-        interval_kraken = interval_minutos
-    
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
-    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
-    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
-
     retries = 3
     for i in range(retries):
         try:
@@ -40,11 +30,9 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             data = response.json()
             if data['error']:
                 print(f"Error de Kraken: {data['error']}")
-                logging.error(f"Error de Kraken: {data['error']}")
                 return None
             if not data['result']:
                 print("No hay datos disponibles para este intervalo.")
-                logging.info("No hay datos disponibles para este intervalo.")
                 return None
             df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
             df['time'] = pd.to_datetime(df['time'], unit='s')
@@ -53,10 +41,8 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             return df
         except requests.exceptions.RequestException as e:
             print(f"Error al obtener datos de Kraken: {e}")
-            logging.error(f"Error al obtener datos de Kraken: {e}")
-            time.sleep(5)
+            time.sleep(5)  # Esperar antes de reintentar
     print("Número máximo de reintentos alcanzado.")
-    logging.error("Número máximo de reintentos alcanzado.")
     return None
 
 # Función para guardar el DataFrame
