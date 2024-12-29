@@ -31,11 +31,11 @@ def obtener_ohlc_kraken(pair, interval, interval_dict, since=None):
     # Determinar el intervalo en minutos
     if isinstance(interval, int):
         interval_in_minutes = interval  # Ya es un valor numérico
-    elif interval in interval_dict:
+    elif isinstance(interval, str) and interval in interval_dict:
         interval_in_minutes = interval_dict[interval]  # Convertir usando el diccionario
     else:
-        print(f"Intervalo no soportado: {interval}")
-        logging.error(f"Intervalo no soportado: {interval}")
+        print(f"Intervalo no soportado o formato incorrecto: {interval}")
+        logging.error(f"Intervalo no soportado o formato incorrecto: {interval}")
         return None
 
     # Construir la URL
