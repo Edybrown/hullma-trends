@@ -18,86 +18,39 @@ logging.basicConfig(filename='btc_analisis.log', level=logging.INFO,
 frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
-def obtener_ohlc_kraken(pair, interval_minutes, since=None): # Recibe 'pair' como string
-    """
-    Obtiene datos OHLC de Kraken.
-
-    Args:
-        pair (str): Par de trading. Ejemplo: 'XXBTZUSD'
-        interval_minutes (int): Intervalo en minutos.
-        since (int, opcional): Timestamp Unix para obtener datos desde una fecha específica.
-
-    Returns:
-        pd.DataFrame: DataFrame con los datos OHLC, o None en caso de error.
-        str: Mensaje de error en caso de fallo.
-    """
-    interval_kraken = interval_minutes
-
-    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_kraken}" # Usa 'pair' directamente
+def obtener_ohlc_kraken(pair, interval, since=None):
+    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
-
-    print(f"URL de la solicitud a Kraken: {url}")
-    logging.info(f"URL de la solicitud a Kraken: {url}")
+    print(f"URL de la solicitud a Kraken: {url}") #Imprime la url
+    logging.info(f"URL de la solicitud a Kraken: {url}") #Imprime la url en el log
 
     retries = 3
-    for attempt in range(retries):
+    for i in range(retries):
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url)
             response.raise_for_status()
             data = response.json()
-
             if data['error']:
-                error_message = f"Error de Kraken: {data['error']}"
-                print(error_message)
-                logging.error(error_message)
-
-                if "EGeneral:Invalid pair" in data['error']:
-                    error_message = f"El par {pair} no es válido."
-                    print(error_message)
-                    logging.error(error_message)
-                    return None, error_message
-                time.sleep(5)
-                continue
-
-            if not data['result'] or pair not in data['result']:
-                error_message = "No hay datos disponibles para este intervalo o par no válido."
-                print(error_message)
-                logging.info(error_message)
-                return None, error_message
-            ohlc_data = data['result'][pair]
-            if not ohlc_data: #Comprueba que la lista no este vacia
-                error_message = f"No hay datos OHLC disponibles para {pair} en este intervalo."
-                print(error_message)
-                logging.info(error_message)
-                return None, error_message
-
-            df = pd.DataFrame(ohlc_data, columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
-            df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
+                print(f"Error de Kraken: {data['error']}")
+                logging.error(f"Error de Kraken: {data['error']}")
+                return None
+            if not data['result']:
+                print("No hay datos disponibles para este intervalo.")
+                logging.info("No hay datos disponibles para este intervalo.")
+                return None
+            df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
+            df['time'] = pd.to_datetime(df['time'], unit='s')
             df = df.set_index('time')
             df = df.astype(float)
-            return df, None
-
+            return df
         except requests.exceptions.RequestException as e:
-            error_message = f"Error de conexión a Kraken (intento {attempt + 1}/{retries}): {e}"
-            print(error_message)
-            logging.error(error_message)
+            print(f"Error al obtener datos de Kraken: {e}")
+            logging.error(f"Error al obtener datos de Kraken: {e}")
             time.sleep(5)
-        except (KeyError, IndexError) as e:
-            error_message = f"Error al procesar la respuesta de Kraken: {e}"
-            print(error_message)
-            logging.error(error_message)
-            return None, error_message
-        except ValueError as e: # captura error si el valor de time no es valido
-            error_message = f"Error al convertir el tiempo: {e}"
-            print(error_message)
-            logging.error(error_message)
-            return None, error_message
-
-    error_message = "Número máximo de reintentos alcanzado."
-    print(error_message)
-    logging.error(error_message)
-    return None, error_message
+    print("Número máximo de reintentos alcanzado.")
+    logging.error("Número máximo de reintentos alcanzado.")
+    return None
 
 
 
