@@ -1001,7 +1001,7 @@ def bucle_principal(pair, carpeta, intervalos):
         logging.info("--------------------------------------------------")
         time.sleep(1)
 def main():
-    pair = "XXBTZUSD"
+    pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
     os.makedirs(carpeta_datos, exist_ok=True)
     intervalos = {
