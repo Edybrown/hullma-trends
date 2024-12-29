@@ -1012,10 +1012,10 @@ def main():
     carpeta_datos = "datos_BTC"
     os.makedirs(carpeta_datos, exist_ok=True)
     intervalos = {
-        15: "15",
-        60: "60",
-        240: "240",
-        1440: "1440"
+        15: "15m",
+        60: "1h",
+        240: "4h",
+        1440: "1d"
     }
     global frecuencia_actualizacion #Declaracion global de la variable
     frecuencia_actualizacion = 60 * 5  # 5 minutos
