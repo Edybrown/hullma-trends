@@ -18,31 +18,22 @@ logging.basicConfig(filename='btc_analisis.log', level=logging.INFO,
 frecuencia_actualizacion = 60 * 5  # Actualiza cada 5 minutos
 
 # Función para obtener datos de Kraken
-def obtener_ohlc_kraken(pair_dict, interval_minutes, since=None):
+def obtener_ohlc_kraken(pair, interval_minutes, since=None): # Recibe 'pair' como string
     """
     Obtiene datos OHLC de Kraken.
 
     Args:
-        pair_dict (dict): Diccionario que contiene el par de trading. 
-                           Ejemplo: {'pair': 'XXBTZUSD'}
+        pair (str): Par de trading. Ejemplo: 'XXBTZUSD'
         interval_minutes (int): Intervalo en minutos.
         since (int, opcional): Timestamp Unix para obtener datos desde una fecha específica.
 
     Returns:
         pd.DataFrame: DataFrame con los datos OHLC, o None en caso de error.
+        str: Mensaje de error en caso de fallo.
     """
-
-    try:
-        pair = pair_dict['pair']  # Extrae el valor del par del diccionario
-    except (KeyError, TypeError):
-        print("Error: El diccionario 'pair_dict' debe contener la clave 'pair'.")
-        logging.error("Error: El diccionario 'pair_dict' debe contener la clave 'pair'.")
-        return None
-
     interval_kraken = interval_minutes
 
-    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_kraken}"
-
+    url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval_kraken}" # Usa 'pair' directamente
     if since:
         url += f"&since={since}"
 
@@ -50,47 +41,64 @@ def obtener_ohlc_kraken(pair_dict, interval_minutes, since=None):
     logging.info(f"URL de la solicitud a Kraken: {url}")
 
     retries = 3
-    for i in range(retries):
+    for attempt in range(retries):
         try:
-            response = requests.get(url, timeout=10) # Añadido timeout para evitar bloqueos
-            response.raise_for_status() # Lanza una excepción para códigos de error HTTP (4xx o 5xx)
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
             data = response.json()
 
             if data['error']:
-                print(f"Error de Kraken: {data['error']}")
-                logging.error(f"Error de Kraken: {data['error']}")
+                error_message = f"Error de Kraken: {data['error']}"
+                print(error_message)
+                logging.error(error_message)
 
-                # Manejo específico para errores comunes de Kraken
-                if "EGeneral:Invalid pair" in data['error']: #Manejo de error par no valido
-                    print(f"El par {pair} no es válido.")
-                    logging.error(f"El par {pair} no es válido.")
-                    return None
-                
-                time.sleep(5)  # Espera antes de reintentar solo si es un error general
-                continue # Continua con el siguiente reintento
+                if "EGeneral:Invalid pair" in data['error']:
+                    error_message = f"El par {pair} no es válido."
+                    print(error_message)
+                    logging.error(error_message)
+                    return None, error_message
+                time.sleep(5)
+                continue
 
-            if not data['result'] or pair not in data['result']: #Verifica si existe el par en el result
-                print("No hay datos disponibles para este intervalo o par no válido.")
-                logging.info("No hay datos disponibles para este intervalo o par no válido.")
-                return None
+            if not data['result'] or pair not in data['result']:
+                error_message = "No hay datos disponibles para este intervalo o par no válido."
+                print(error_message)
+                logging.info(error_message)
+                return None, error_message
+            ohlc_data = data['result'][pair]
+            if not ohlc_data: #Comprueba que la lista no este vacia
+                error_message = f"No hay datos OHLC disponibles para {pair} en este intervalo."
+                print(error_message)
+                logging.info(error_message)
+                return None, error_message
 
-            df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
-            df['time'] = pd.to_datetime(df['time'], unit='s')
+            df = pd.DataFrame(ohlc_data, columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
+            df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
             df = df.set_index('time')
             df = df.astype(float)
-            return df
+            return df, None
 
         except requests.exceptions.RequestException as e:
-            print(f"Error al obtener datos de Kraken: {e}")
-            logging.error(f"Error al obtener datos de Kraken: {e}")
+            error_message = f"Error de conexión a Kraken (intento {attempt + 1}/{retries}): {e}"
+            print(error_message)
+            logging.error(error_message)
             time.sleep(5)
-        except (KeyError, IndexError) as e: # captura error si el par no existe en la respuesta
-            print(f"Error al procesar la respuesta de Kraken (par inexistente): {e}")
-            logging.error(f"Error al procesar la respuesta de Kraken (par inexistente): {e}")
-            return None # retorna None en caso de error al procesar el json
-    print("Número máximo de reintentos alcanzado.")
-    logging.error("Número máximo de reintentos alcanzado.")
-    return None
+        except (KeyError, IndexError) as e:
+            error_message = f"Error al procesar la respuesta de Kraken: {e}"
+            print(error_message)
+            logging.error(error_message)
+            return None, error_message
+        except ValueError as e: # captura error si el valor de time no es valido
+            error_message = f"Error al convertir el tiempo: {e}"
+            print(error_message)
+            logging.error(error_message)
+            return None, error_message
+
+    error_message = "Número máximo de reintentos alcanzado."
+    print(error_message)
+    logging.error(error_message)
+    return None, error_message
+
 
 
 # Función para guardar el DataFrame
@@ -1046,7 +1054,7 @@ def bucle_principal(pair, carpeta, intervalos):
         time.sleep(1)
 
 def main():
-    pair = "XBTUSDT"
+    pair = "XBTUSDT" # Definición de 'pair' como STRING
     carpeta_datos = "datos_BTC"
     temporalidades = {
         15: "15m",
@@ -1054,17 +1062,22 @@ def main():
         240: "4h",
         1440: "1d"
     }
-    
+
     while True:
         for interval, filename_suffix in temporalidades.items():
             print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
-            df = obtener_ohlc_kraken(pair, interval)
+            df, error_message = obtener_ohlc_kraken(pair, interval) # Pasa 'pair' directamente
+            if error_message:
+                print(f"Error al obtener datos: {error_message}")
+                continue #Continua con el siguiente intervalo en caso de error
             if df is not None:
                 filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
                 guardar_dataframe(df, filename)
-                
+
                 # Crear un hilo para procesar el CSV
-                threading.Thread(target=procesar_csv, args=(pair, filename_suffix)).start()
+                threading.Thread(target=procesar_csv, args=(pair, filename_suffix, carpeta_datos)).start() #Pasa la carpeta de datos
+            else:
+                print("No se recibieron datos pero no hubo error reportado.")
 
         print("Datos actualizados. Esperando 60 segundos...")
         time.sleep(60)
