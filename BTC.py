@@ -993,17 +993,20 @@ def procesar_csv(pair, filename_suffix, carpeta, intervalos):
 def bucle_principal(pair, carpeta, intervalos):
     """Bucle principal que sincroniza el análisis de las temporalidades."""
     ultimos_tiempos = {filename_suffix: 0 for filename_suffix in intervalos.values()}
+    
     while True:
         tiempo_actual = time.time()
 
+        # Bucle combinado para procesar y calcular tiempo restante
         for minutes, filename_suffix in intervalos.items():
             intervalo_segundos = minutes * 60  # Calcular intervalo_segundos UNA SOLA VEZ
             tiempo_transcurrido = tiempo_actual - ultimos_tiempos.get(filename_suffix, 0)
 
+            # Procesar archivo si ha pasado el intervalo
             if tiempo_transcurrido >= intervalo_segundos:
                 print(f"Iniciando procesamiento de {filename_suffix}...")
                 logging.info(f"Iniciando procesamiento de {filename_suffix}...")
-
+                
                 procesar_csv(pair, filename_suffix, carpeta, intervalos)
 
                 print(f"Finalizado procesamiento de {filename_suffix}.")
@@ -1011,9 +1014,15 @@ def bucle_principal(pair, carpeta, intervalos):
 
                 ultimos_tiempos[filename_suffix] = tiempo_actual
 
+            # Calcular el tiempo restante
+            tiempo_restante = intervalo_segundos - (tiempo_actual - ultimos_tiempos[filename_suffix]) if ultimos_tiempos[filename_suffix] is not None else intervalo_segundos
+            print(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
+            logging.info(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
+
         print("--------------------------------------------------")
         logging.info("--------------------------------------------------")
         time.sleep(1)
+
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
