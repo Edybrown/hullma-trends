@@ -132,7 +132,7 @@ def actualizar_dataframe(df, pair, interval_seconds): # Recibe el intervalo en s
 
     nuevos_datos = obtener_ohlc_kraken(pair, interval_seconds, since) # Usa interval_seconds
 
-   if nuevos_datos is not None:
+    if nuevos_datos is not None:
         if not nuevos_datos.empty:
             df_actualizado = pd.concat([df, nuevos_datos])
             df_actualizado = df_actualizado.sort_index() # Ordenar el DataFrame por índice (timestamp)
