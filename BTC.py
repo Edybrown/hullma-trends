@@ -8,6 +8,7 @@ import talib
 import logging
 import json
 from scipy.signal import argrelextrema
+import numpy as np
 
 # Configuración del logging
 logging.basicConfig(filename='btc_analisis.log', level=logging.INFO, 
@@ -1013,7 +1014,7 @@ def bucle_principal(pair, carpeta, intervalos):
         time.sleep(1)
 
 def main():
-    pair = "XBTUSDT"
+    pair = "XBTUSDT"  # O XXBTZUSD, según corresponda a Kraken
     carpeta_datos = "datos_BTC"
     os.makedirs(carpeta_datos, exist_ok=True)
     intervalos = {
@@ -1022,8 +1023,15 @@ def main():
         240: "4h",
         1440: "1d"
     }
+    global frecuencia_actualizacion #Declaracion global de la variable
+    frecuencia_actualizacion = 60 * 5  # 5 minutos
 
-    bucle_principal(pair, carpeta_datos, intervalos)
+    def ejecutar_analisis(): #Declaracion de la funcion dentro de main
+        for interval, filename_suffix in intervalos.items():
+            procesar_csv(pair, filename_suffix, carpeta_datos) #carpeta_datos en vez de carpeta
+        threading.Timer(frecuencia_actualizacion, ejecutar_analisis).start()
+
+    ejecutar_analisis()  # Iniciar el bucle la primera vez
 
 if __name__ == "__main__":
     main()
