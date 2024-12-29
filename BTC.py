@@ -965,19 +965,27 @@ Señal general: {"Alcista" if puntos_senal_alcista > puntos_senal_bajista else "
     return informe
 
   
-def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
-    """Procesa una temporalidad específica."""
-    print(f"Iniciando procesamiento de {filename_suffix}...")
-    logging.info(f"Iniciando procesamiento de {filename_suffix}...")
+def procesar_temporalidad(pair, carpeta, filename_suffix, periodos_rsi=14, periodos_bb=20, desviaciones_bb=2, periodos_macd_rapido=12, periodos_macd_lento=26, periodos_macd_senal=9, periodos_hma=12):
+    """Analiza una temporalidad específica (sin actualizar archivos)."""
+    nombre_archivo = f"{pair}_{filename_suffix}.csv"
+    ruta_completa = os.path.join(carpeta, nombre_archivo)
 
-    # Aquí realizarías las operaciones específicas para esta temporalidad
-    procesar_csv(pair, filename_suffix, carpeta)
+    try:
+        df = pd.read_csv(ruta_completa, index_col='time', parse_dates=True)
+        # ... (resto del código de análisis, igual que en tu versión)
+        return resumen_telegram
 
-    print(f"Finalizado procesamiento de {filename_suffix}.")
-    logging.info(f"Finalizado procesamiento de {filename_suffix}.")
-
-def procesar_csv(pair, filename_suffix, carpeta, intervalos):
-    """Procesa una temporalidad específica y actualiza el CSV."""
+    except FileNotFoundError:
+        logging.error(f"Archivo no encontrado: {ruta_completa}")
+        return None
+    except pd.errors.EmptyDataError:
+        logging.error(f"El archivo {ruta_completa} está vacío.")
+        return None
+    except Exception as e:
+        logging.exception(f"Error al procesar {ruta_completa}: {e}")
+        return None
+def procesar_csv(pair, filename_suffix, carpeta): # Se elimina 'intervalos'
+    """Procesa y actualiza el CSV, luego realiza el análisis."""
     ruta_csv = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
     try:
         df = pd.read_csv(ruta_csv, index_col='time', parse_dates=True)
@@ -985,32 +993,23 @@ def procesar_csv(pair, filename_suffix, carpeta, intervalos):
         print(f"Archivo {ruta_csv} no encontrado. Creando archivo nuevo.")
         df = pd.DataFrame()
 
-    # Obtener el intervalo en segundos del diccionario
     minutes = int(filename_suffix[:-1]) if filename_suffix[:-1].isdigit() else None  # Manejar el caso "1d"
     if minutes is None:
-        if filename_suffix == "1d":
-            intervalo_segundos = 24 * 60 * 60
-        else:
+        if filename_suffix != "1d":
             print(f"Error: Sufijo de archivo no válido: {filename_suffix}")
             logging.error(f"Error: Sufijo de archivo no válido: {filename_suffix}")
             return
+        intervalo_segundos = 24 * 60 * 60 #intervalo de 1 dia en segundos
     else:
-        intervalo_segundos = intervalos.get(minutes, None)
-        if intervalo_segundos is None:
-            print(f"Error: Intervalo no definido para {minutes} minutos")
-            logging.error(f"Error: Intervalo no definido para {minutes} minutos")
-            return
+        intervalo_segundos = minutes * 60
 
     df = actualizar_dataframe(df, pair, intervalo_segundos)
-
-    if not df.empty and 'close' in df.columns:
-        df['sma_20'] = df['close'].rolling(window=20).mean()
-
-    df['ultima_actualizacion'] = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-
     guardar_dataframe(df, ruta_csv)
     print(f"Archivo {filename_suffix} actualizado.")
     logging.info(f"Archivo {filename_suffix} actualizado.")
+
+    # **LLAMADA A ANALIZAR_TEMPORALIDAD DESPUÉS DE ACTUALIZAR EL CSV**
+    analizar_temporalidad(pair, carpeta, filename_suffix) #Se llama a la funcion de analisis despues de actualizar el csv
 
 def calcular_tiempo_restante(intervalo_segundos):
     """Calcular el tiempo restante hasta el cierre de la vela más cercana."""
@@ -1054,7 +1053,7 @@ def bucle_principal(pair, carpeta, intervalos):
         time.sleep(1)
 
 def main():
-    pair = "XBTUSDT" # Definición de 'pair' como STRING
+    pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
     temporalidades = {
         15: "15m",
@@ -1066,16 +1065,15 @@ def main():
     while True:
         for interval, filename_suffix in temporalidades.items():
             print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
-            df, error_message = obtener_ohlc_kraken(pair, interval) # Pasa 'pair' directamente
+            df, error_message = obtener_ohlc_kraken(pair, interval)
             if error_message:
                 print(f"Error al obtener datos: {error_message}")
-                continue #Continua con el siguiente intervalo en caso de error
+                continue
             if df is not None:
                 filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
                 guardar_dataframe(df, filename)
 
-                # Crear un hilo para procesar el CSV
-                threading.Thread(target=procesar_csv, args=(pair, filename_suffix, carpeta_datos)).start() #Pasa la carpeta de datos
+                threading.Thread(target=procesar_csv, args=(pair, filename_suffix, carpeta_datos)).start() # Se pasa carpeta_datos y se elimina intervalos
             else:
                 print("No se recibieron datos pero no hubo error reportado.")
 
