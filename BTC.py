@@ -1046,21 +1046,23 @@ def bucle_principal(pair, carpeta, intervalos):
         time.sleep(1)
 
 def main():
-    pair = "XBTUSDT"  # O XXBTZUSD, según corresponda a Kraken
+    """Función principal del programa."""
+    pair_dict = {'pair': "XBTUSDT"} # Define el diccionario pair_dict AQUI
     carpeta_datos = "datos_BTC"
-    os.makedirs(carpeta_datos, exist_ok=True)
-    intervalos = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
-    }
-    global frecuencia_actualizacion #Declaracion global de la variable
-    frecuencia_actualizacion = 60 * 5  # 5 minutos
+    intervalos = [15, 60, 240, 1440]
+
+    # Crear la carpeta si no existe
+    if not os.path.exists(carpeta_datos):
+        os.makedirs(carpeta_datos)
+        print(f"Carpeta {carpeta_datos} creada.")
+        logging.info(f"Carpeta {carpeta_datos} creada.")
 
     def ejecutar_analisis():
-        for interval, filename_suffix in intervalos.items():
-            procesar_csv(pair, filename_suffix, carpeta_datos, intervalos) # Llamada CON intervalos
+        actualizar_archivos(pair_dict, carpeta_datos)
+        for interval in intervalos:
+            filename_suffix = {15: "15m", 60: "1h", 240: "4h", 1440: "1d"}.get(interval)
+            procesar_csv(pair_dict['pair'], filename_suffix, carpeta_datos) #pasa el pair
+
         threading.Timer(frecuencia_actualizacion, ejecutar_analisis).start()
 
     ejecutar_analisis()  # Iniciar el bucle la primera vez
