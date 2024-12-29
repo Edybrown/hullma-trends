@@ -926,26 +926,23 @@ Señal general: {"Alcista" if puntos_senal_alcista > puntos_senal_bajista else "
 def calcular_tiempo_restante(minutes):
     """Calcula el tiempo restante en segundos hasta el próximo cierre de vela según el intervalo."""
     now = datetime.datetime.now()
-    
-    # Tiempo transcurrido desde la hora anterior en segundos
-    seconds_since_last_candle = (now.minute * 60 + now.second) % (minutes * 60)
-    
-    # Calcular el tiempo restante para el próximo cierre de vela
-    remaining_seconds = (minutes * 60) - seconds_since_last_candle
-    
+
+    # Si el intervalo es en minutos
+    if minutes <= 60:
+        # Calcular el siguiente múltiplo de minutos
+        next_interval = (now.minute // minutes + 1) * minutes
+        next_candle_time = now.replace(minute=next_interval % 60, second=0, microsecond=0)
+        if next_candle_time < now:
+            next_candle_time += datetime.timedelta(hours=1)
+    else:
+        # Si es un intervalo mayor (1h, 4h, 1d), ajustamos según la hora
+        next_candle_time = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=(now.hour // (minutes // 60) + 1) * (minutes // 60))
+
+    # Calcular el tiempo restante hasta el próximo cierre
+    remaining_seconds = (next_candle_time - now).total_seconds()
+
     return remaining_seconds
-
-# Ejemplo de uso
-intervalos = [15, 60, 240, 1440]  # 15m, 1h, 4h, 1d
-for intervalo in intervalos:
-    tiempo_restante = calcular_tiempo_restante(intervalo)
-    print(f"Tiempo hasta el próximo cierre de {intervalo}m: {tiempo_restante} segundos.")
-
-# Ejemplo de uso
-intervalos = [15, 60, 240, 1440]  # 15m, 1h, 4h, 1d
-for intervalo in intervalos:
-    tiempo_restante = calcular_tiempo_restante(intervalo)
-    print(f"Tiempo hasta el próximo cierre de {intervalo}m: {tiempo_restante} segundos.")
+  
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
     """Procesa una temporalidad específica."""
     print(f"Iniciando procesamiento de {filename_suffix}...")
@@ -1013,12 +1010,6 @@ def bucle_principal(pair, carpeta, intervalos):
                 logging.info(f"Finalizado procesamiento de {filename_suffix}.")
 
                 ultimos_tiempos[filename_suffix] = tiempo_actual
-
-        for minutes, filename_suffix in intervalos.items():
-            intervalo_segundos = minutes * 60  # Calcular intervalo_segundos UNA SOLA VEZ
-            tiempo_restante = intervalo_segundos - (tiempo_actual - ultimos_tiempos[filename_suffix]) if ultimos_tiempos[filename_suffix] is not None else intervalo_segundos
-            print(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
-            logging.info(f"Tiempo hasta el próximo cierre de {filename_suffix}: {tiempo_restante:.0f} segundos.")
 
         print("--------------------------------------------------")
         logging.info("--------------------------------------------------")
