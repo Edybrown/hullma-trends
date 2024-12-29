@@ -924,11 +924,14 @@ Señal general: {"Alcista" if puntos_senal_alcista > puntos_senal_bajista else "
     return informe
 
 def calcular_tiempo_restante(minutes):
-    """Calcula el tiempo restante en segundos hasta el próximo múltiplo del intervalo."""
+    """Calcula el tiempo restante en segundos hasta el próximo cierre de vela según el intervalo."""
     now = datetime.datetime.now()
-    # Calcula el tiempo hasta el próximo múltiplo de 'minutes'
-    next_interval = now + datetime.timedelta(minutes=(minutes - now.minute % minutes))
-    return (next_interval - now).total_seconds()
+    
+    # Calcula el tiempo hasta el próximo cierre de vela basado en 'minutes'
+    seconds_in_current_candle = now.minute * 60 + now.second
+    remaining_seconds = (minutes * 60) - (seconds_in_current_candle % (minutes * 60))
+    
+    return remaining_seconds
   
 def procesar_temporalidad(pair, carpeta, intervalo_segundos, filename_suffix):
     """Procesa una temporalidad específica."""
