@@ -1026,9 +1026,9 @@ def main():
     global frecuencia_actualizacion #Declaracion global de la variable
     frecuencia_actualizacion = 60 * 5  # 5 minutos
 
-    def ejecutar_analisis(): #Declaracion de la funcion dentro de main
+     def ejecutar_analisis():
         for interval, filename_suffix in intervalos.items():
-            procesar_csv(pair, filename_suffix, carpeta_datos) #carpeta_datos en vez de carpeta
+            procesar_csv(pair, filename_suffix, carpeta_datos, intervalos) # Llamada CON intervalos
         threading.Timer(frecuencia_actualizacion, ejecutar_analisis).start()
 
     ejecutar_analisis()  # Iniciar el bucle la primera vez
