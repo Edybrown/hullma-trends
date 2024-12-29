@@ -226,12 +226,32 @@ def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
     """Procesa un archivo CSV, calculando indicadores y realizando análisis."""
     nombre_archivo = f"{pair}_{filename_suffix}.csv"
     ruta_completa = os.path.join(carpeta, nombre_archivo)
-    try:
-        df = pd.read_csv(ruta_completa, index_col='time', parse_dates=True)
-        df['close'] = df['close'].astype(float)
-        df['vwap'] = df['vwap'].astype(float)
 
-        # Calcular indicadores (USANDO LAS NUEVAS FUNCIONES)
+    try:
+        # LECTURA DEL CSV CON MANEJO DE TIPOS DE DATOS Y ERRORES
+        df = pd.read_csv(ruta_completa, index_col='time', parse_dates=True,
+                         dtype={'open': np.float64, 'high': np.float64, 'low': np.float64,
+                                'close': np.float64, 'vwap': np.float64, 'volume': np.float64})
+
+        # LIMPIEZA DE DATOS (CRUCIAL PARA EVITAR ERRORES)
+        # 1. Eliminar filas con valores faltantes (NaN) en CUALQUIER columna
+        df.dropna(inplace=True)
+
+        # 2. Manejo de comas como separadores decimales (si existen)
+        cols_a_limpiar = ['open', 'high', 'low', 'close', 'vwap', 'volume']
+        for col in cols_a_limpiar:
+            if df[col].dtype == object:  # Solo si la columna es de tipo 'object' (string)
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        df.dropna(inplace=True)  # Eliminar posibles nuevos NaN después de la conversión
+
+        # 3. Eliminar filas con volumen cero (para evitar divisiones por cero)
+        df = df[df['volume'] != 0]
+
+        # 4. Eliminar indices duplicados.
+        df = df[~df.index.duplicated(keep='last')]
+
+        # CALCULAR INDICADORES (DESPUÉS DE LA LIMPIEZA)
         df = calcular_rsi(df)
         df = calcular_bandas_bollinger(df)
         df = calcular_macd(df)
@@ -246,6 +266,9 @@ def procesar_csv(pair, filename_suffix, carpeta="datos_BTC"):
 
     except FileNotFoundError:
         logging.error(f"Archivo no encontrado: {ruta_completa}")
+    except pd.errors.ParserError as e:  # Capturar errores de formato del CSV
+        logging.error(f"Error al analizar el CSV: {e}. Revisa el formato del archivo. ¿Comas en lugar de puntos decimales?")
+        print(f"Error al analizar el CSV: {e}. Revisa el formato del archivo. ¿Comas en lugar de puntos decimales?")
     except Exception as e:
         logging.exception(f"Error al procesar {ruta_completa}: {e}")
 
