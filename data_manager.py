@@ -55,11 +55,16 @@ def calcular_hullma(df, period=9):
     df['HULLMA'] = talib.WMA(talib.WMA(df['close'], period//2).multiply(2).sub(talib.WMA(df['close'], period)), int(period**0.5))
     return df
 
+def calcular_atr(df, period=14): # Función para calcular el ATR
+    df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=period)
+    return df
+
 def calcular_todos_indicadores(df):
     df = calcular_rsi(df)
     df = calcular_macd(df)
     df = calcular_bandas_bollinger(df)
     df = calcular_hullma(df)
+    df = calcular_atr(df) # Llamada a la función para calcular el ATR
     return df
 
 # --- Funciones de gestión de archivos CSV ---
@@ -127,7 +132,7 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
             df = pd.DataFrame()
         df = actualizar_dataframe(df, pair, interval)
         if not df.empty:
-            df = calcular_todos_indicadores(df)
+            df = calcular_todos_indicadores(df) # Se calculan TODOS los indicadores, incluyendo el ATR
         guardar_dataframe(df, filename)
 
 # --- Función principal para ejecutar la actualización ---
