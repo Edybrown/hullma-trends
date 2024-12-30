@@ -1,13 +1,11 @@
-import threading
 import requests
 import pandas as pd
-import time
-import datetime
 import os
+import time
 import talib
 
+# --- Funciones de la API de Kraken ---
 def obtener_ohlc_kraken(pair, interval, since=None):
-    # Lógica para obtener datos desde Kraken
     url = f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}"
     if since:
         url += f"&since={since}"
@@ -30,10 +28,41 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             return df
         except requests.exceptions.RequestException as e:
             print(f"Error al obtener datos de Kraken: {e}")
-            time.sleep(5)  # Esperar antes de reintentar
+            time.sleep(5)
     print("Número máximo de reintentos alcanzado.")
     return None
 
+# --- Funciones de cálculo de indicadores ---
+def calcular_rsi(df, period=14):
+    df['RSI'] = talib.RSI(df['close'], timeperiod=period)
+    return df
+
+def calcular_macd(df, fastperiod=12, slowperiod=26, signalperiod=9):
+    macd, macdsignal, macdhist = talib.MACD(df['close'], fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
+    df['MACD'] = macd
+    df['MACD_Signal'] = macdsignal
+    df['MACD_Hist'] = macdhist
+    return df
+
+def calcular_bandas_bollinger(df, period=20, stddev=2):
+    upper, middle, lower = talib.BBANDS(df['close'], timeperiod=period, nbdevup=stddev, nbdevdn=stddev)
+    df['BB_Upper'] = upper
+    df['BB_Middle'] = middle
+    df['BB_Lower'] = lower
+    return df
+
+def calcular_hullma(df, period=9):
+    df['HULLMA'] = talib.WMA(talib.WMA(df['close'], period//2).multiply(2).sub(talib.WMA(df['close'], period)), int(period**0.5))
+    return df
+
+def calcular_todos_indicadores(df):
+    df = calcular_rsi(df)
+    df = calcular_macd(df)
+    df = calcular_bandas_bollinger(df)
+    df = calcular_hullma(df)
+    return df
+
+# --- Funciones de gestión de archivos CSV ---
 def guardar_dataframe(df, filename):
     if df is not None:
         try:
@@ -45,27 +74,42 @@ def guardar_dataframe(df, filename):
         print("No hay datos para guardar.")
 
 def leer_y_procesar_csv(ruta_archivo):
-    """Lee un archivo CSV, lo imprime (opcional) y lo procesa."""
     try:
-        print(f"[leer_y_procesar_csv] Intentando leer el archivo: {ruta_archivo}")
-        if not os.path.exists(ruta_archivo): #Verifica si el archivo existe ANTES de intentar leerlo
+        if not os.path.exists(ruta_archivo):
             print(f"[leer_y_procesar_csv] ERROR: El archivo NO existe en la ruta: {ruta_archivo}")
             return None
 
-        print(f"[leer_y_procesar_csv] Archivo EXISTE. Procediendo con la lectura...")
         df = pd.read_csv(ruta_archivo, index_col='time', parse_dates=True)
-
-        #Ejemplo de uso de talib
-        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
-        print(f"[leer_y_procesar_csv] RSI calculado (primeras 5 filas):\n{df['RSI'].head().to_string()}")
+        print(f"[leer_y_procesar_csv] Datos leídos desde {ruta_archivo} (primeras 5 filas):\n{df.head().to_string()}")
         return df
 
-    except FileNotFoundError: 
+    except FileNotFoundError:
         print(f"[leer_y_procesar_csv] ERROR: Archivo no encontrado en la ruta: {ruta_archivo}")
         return None
     except Exception as e:
         print(f"[leer_y_procesar_csv] Ocurrió un error general: {e}")
         return None
+
+def actualizar_dataframe(df, pair, interval):
+    if df.empty:
+        since = None
+    else:
+        last_timestamp = int(df.index[-1].timestamp()) + 1
+        since = last_timestamp
+
+    nuevos_datos = obtener_ohlc_kraken(pair, interval, since)
+
+    if nuevos_datos is not None:
+        if not nuevos_datos.empty:
+            df_actualizado = pd.concat([df, nuevos_datos])
+            df_actualizado = df_actualizado[~df_actualizado.index.duplicated(keep='last')]
+            return df_actualizado
+        else:
+            print(f"No hay nuevos datos para el intervalo {interval}")
+            return df
+    else:
+        print(f"Error al obtener nuevos datos para el intervalo {interval}")
+        return df
 
 def actualizar_archivos(pair, carpeta="datos_BTC"):
     temporalidades = {
@@ -82,39 +126,11 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
             print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
             df = pd.DataFrame()
         df = actualizar_dataframe(df, pair, interval)
+        if not df.empty:
+            df = calcular_todos_indicadores(df)
         guardar_dataframe(df, filename)
 
-def actualizar_dataframe(df, pair, interval):
-    if df.empty:  # Si el DataFrame está vacío, obtener datos desde el inicio
-        since = None
-    else:
-        last_timestamp = int(df.index[-1].timestamp()) + 1
-        since = last_timestamp
-
-    nuevos_datos = obtener_ohlc_kraken(pair, interval, since)
-
-    if nuevos_datos is not None:
-        if not nuevos_datos.empty: 
-            df_actualizado = pd.concat([df, nuevos_datos])
-            df_actualizado = df_actualizado[~df_actualizado.index.duplicated(keep='last')] 
-            return df_actualizado
-        else:
-            print(f"No hay nuevos datos para el intervalo {interval}")
-            return df
-    else:
-        print(f"Error al obtener nuevos datos para el intervalo {interval}")
-        return df
-
-# Función que se ejecutará en un hilo separado para procesar el CSV
-def procesar_csv(pair, interval, carpeta="datos_BTC"):
-    nombre_archivo = f"{pair}_{interval}.csv"
-    ruta_completa = os.path.join(carpeta, nombre_archivo)
-    dataframe_procesado = leer_y_procesar_csv(ruta_completa)
-    if dataframe_procesado is not None:
-        print(f"Archivo {nombre_archivo} procesado correctamente.")
-    else:
-        print(f"No se pudo procesar el archivo {nombre_archivo}.")
-
+# --- Función principal para ejecutar la actualización ---
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
@@ -124,17 +140,14 @@ def main():
         240: "4h",
         1440: "1d"
     }
-    
+
+    if not os.path.exists(carpeta_datos):
+        os.makedirs(carpeta_datos)
+        print(f"Carpeta {carpeta_datos} creada.")
+
     while True:
-        for interval, filename_suffix in temporalidades.items():
-            print(f"Obteniendo datos para el intervalo de {filename_suffix}...")
-            df = obtener_ohlc_kraken(pair, interval)
-            if df is not None:
-                filename = os.path.join(carpeta_datos, f"{pair}_{filename_suffix}.csv")
-                guardar_dataframe(df, filename)
-                
-                # Crear un hilo para procesar el CSV
-                threading.Thread(target=procesar_csv, args=(pair, filename_suffix)).start()
+        print("Actualizando archivos...")
+        actualizar_archivos(pair, carpeta_datos)
 
         print("Datos actualizados. Esperando 60 segundos...")
         time.sleep(60)
