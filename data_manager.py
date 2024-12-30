@@ -155,7 +155,7 @@ def main():
         actualizar_archivos(pair, carpeta_datos)
 
         print("Datos actualizados. Esperando 60 segundos...")
-        time.sleep(60)
+        time.sleep(30)
 
 if __name__ == "__main__":
     main()
