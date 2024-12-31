@@ -8,7 +8,7 @@ CSV_FILES = {
     "15m": "XBTUSDT_15m.csv",
     "1h": "XBTUSDT_1h.csv",
     "4h": "XBTUSDT_4h.csv",  # Archivo para 4 horas
-    "1d": "XBTUSDT_1d.csv""
+    "1d": "XBTUSDT_1d.csv"",
 }
 
 TIME_INTERVALS = {
@@ -176,18 +176,31 @@ def generate_report(timeframe, analysis):
         "timestamp": timestamp,
         "analysis": analysis
     }
-# Función para exportar informes a JSON
-def export_to_json(reports):
-    """Exporta los informes generados a un archivo JSON."""
-    timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
-    output_file = f"reports_{timestamp}.json"
-    with open(output_file, "w") as f:
-        json.dump(reports, f, indent=4)
-    print(f"Informes exportados a {output_file}")
 
-# Bucle principal
+
+def export_to_json(report, timeframe, max_reports=10):
+    """Exporta/acumula el informe a un archivo JSON con el nombre de la temporalidad,
+    manteniendo los últimos max_reports registros."""
+
+    output_file = f"report_{timeframe}.json"
+
+    try:
+        with open(output_file, "r") as f:
+            existing_reports = json.load(f)
+    except FileNotFoundError:
+        existing_reports = []
+
+    existing_reports.append(report)
+
+    if len(existing_reports) > max_reports:
+        existing_reports = existing_reports[-max_reports:]
+
+    with open(output_file, "w") as f:
+        json.dump(existing_reports, f, indent=4)
+    print(f"Informe para {timeframe} (acumulado, últimos {max_reports} registros) exportado a {output_file}")
+
 def main_loop():
-    pivotes_historicos = {}  # Inicializar al principio
+    pivotes_historicos = {}
     try:
         with open("pivotes_historicos.json", "r") as f:
             pivotes_historicos = json.load(f)
@@ -196,25 +209,18 @@ def main_loop():
 
     while True:
         current_time = time.time()
-        all_reports = []
 
         for timeframe, file_path in CSV_FILES.items():
-            # Verificar si es momento de procesar
-            if current_time - LAST_RUN.get(timeframe,0) >= TIME_INTERVALS[timeframe]: #Se usa .get para evitar errores si no existe la clave
+            if current_time - LAST_RUN.get(timeframe, 0) >= TIME_INTERVALS[timeframe]:
                 print(f"Procesando {timeframe}...")
                 df = load_csv(file_path)
-                if df is not None and not df.empty: #Se añade la comprobacion de df.empty
-                    # Análisis completo (ahora pasando pivotes_historicos)
+
+                if df is not None and not df.empty:
                     indicators = analyze_indicators(df, timeframe, pivotes_historicos)
-
-                    # Generar informe
                     report = generate_report(timeframe, indicators)
-                    all_reports.append(report)
-
-                    # Actualizar el tiempo de última ejecución
+                    export_to_json(report, timeframe) #Llamada a export_to_json
                     LAST_RUN[timeframe] = current_time
 
-                    # Actualizar pivotes_historicos (CORREGIDO)
                     try:
                         nuevos_pivotes = indicators["PriceAction"]["ZonasSR"]
                         for nivel, datos in nuevos_pivotes.items():
@@ -229,15 +235,7 @@ def main_loop():
                 elif df is not None and df.empty:
                     print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
 
-        # Exportar todos los informes
-        if all_reports:
-            export_to_json(all_reports)
-
-        # Guardar pivotes_historicos (FUERA del bucle de timeframes)
         with open("pivotes_historicos.json", "w") as f:
             json.dump(pivotes_historicos, f, indent=4)
 
-        # Pausa antes del siguiente ciclo
         time.sleep(1)
-if __name__ == "__main__":
-    main_loop() 
