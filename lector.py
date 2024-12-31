@@ -398,6 +398,16 @@ def encontrar_pivotes(precios, max_pivotes=10):
     # Retornar solo los últimos pivotes relevantes
     return pivotes[-max_pivotes:]
 
+def guardar_pivotes(pivotes_historicos): #Función guardar_pivotes
+    """Guarda los pivotes históricos en un archivo JSON."""
+    try:
+        with open(PIVOTES_FILE, "w") as f:
+            json.dump(pivotes_historicos, f, indent=4)
+        print(f"Pivotes guardados en {PIVOTES_FILE}")
+    except Exception as e:
+        print(f"Error al guardar pivotes: {e}")
+
+
 def analizar_patrones(pivotes, tolerance=0.02):
     """Analiza patrones chartistas basados en pivotes."""
     if len(pivotes) < 3:
@@ -498,77 +508,121 @@ def generate_report(timeframe, analysis):
         "analysis": analysis
     }
 
-def export_to_json(report, timeframe, max_reports=10):
-    """Exporta a JSON, gestionando la rotación de informes."""
+def export_to_json(report, timeframe):
+    """Exporta a JSON, guardando solo el último informe."""
     output_file = os.path.join(OUTPUT_DIR, f"report_{timeframe}.json")
-
-    try:
-        with open(output_file, "r") as f:
-            existing_reports = json.load(f)
-    except FileNotFoundError:
-        existing_reports = []
-    except json.JSONDecodeError: #Manejo de errores de json
-        print(f"Error al decodificar json en {output_file}. Se creará un nuevo archivo.")
-        existing_reports = []
-
-    existing_reports.append(report)
-    existing_reports = existing_reports[-max_reports:]  # Mantener solo los últimos informes
-
     with open(output_file, "w") as f:
-        json.dump(existing_reports, f, indent=4)
+        json.dump(report, f, indent=4)
     print(f"Informe para {timeframe} exportado a {output_file}")
 
+def espera_cierre_vela(timeframe):
+    """Espera hasta el cierre de la próxima vela."""
+    ahora = time.time()
+    intervalo = TIME_INTERVALS[timeframe]
+    tiempo_para_siguiente_vela = intervalo - (ahora % intervalo)
+    print(f"Esperando {tiempo_para_siguiente_vela:.0f} segundos para el cierre de la vela de {timeframe}...")
+    time.sleep(tiempo_para_siguiente_vela)
 
 def main_loop():
     pivotes_historicos = {}
     try:
         with open(PIVOTES_FILE, "r") as f:
             pivotes_historicos = json.load(f)
+        print(f"Pivotes historicos cargados desde {PIVOTES_FILE}")
     except FileNotFoundError:
-        pass
-    except json.JSONDecodeError: #Manejo de errores de json
+        print(f"Archivo {PIVOTES_FILE} no encontrado. Se creará un nuevo archivo.")
+    except json.JSONDecodeError:
         print(f"Error al decodificar json en {PIVOTES_FILE}. Se creará un nuevo archivo.")
         pivotes_historicos = {}
 
+    # Procesamiento inicial (una vez al inicio)
+    for timeframe, file_path in CSV_FILES.items():
+        df = load_csv(file_path)
+        if df is not None and not df.empty:
+            print(f"Procesando {timeframe} por primera vez...")
+            try:
+                indicators = analyze_indicators(df, timeframe, pivotes_historicos)
+                report = generate_report(timeframe, indicators)
+                export_to_json(report, timeframe)
+                LAST_RUN[timeframe] = df.index[-1]
+                try:
+                    nuevos_pivotes = indicators.get("PriceAction", {}).get("ZonasSR", {}) # Manejo seguro de claves anidadas
+                    if nuevos_pivotes: #Verificar si hay zonas SR
+                        for nivel, datos in nuevos_pivotes.items():
+                            pivotes_historicos.setdefault(nivel, {"conteo": 0, "tipo": datos["tipo"]})
+                            pivotes_historicos[nivel]["conteo"] += datos["conteo"]
+                except Exception as e:
+                    print(f"Error al actualizar pivotes históricos: {e}")
+                    traceback.print_exc()
+            except Exception as e:
+                print(f"Error durante el análisis inicial de {timeframe}: {e}")
+                traceback.print_exc()
+
     while True:
         for timeframe, file_path in CSV_FILES.items():
+            espera_cierre_vela(timeframe)
             df = load_csv(file_path)
 
             if df is not None and not df.empty:
                 try:
-                    #Comprobamos si es la primera vez que se ejecuta o si hay un nuevo index
-                    if LAST_RUN.get(timeframe) is None or df.index[-1] != LAST_RUN[timeframe]:
-                        print(f"Procesando {timeframe}...")
-                        indicators = analyze_indicators(df, timeframe, pivotes_historicos)
-                        report = generate_report(timeframe, indicators)
-                        export_to_json(report, timeframe)
-                        LAST_RUN[timeframe] = df.index[-1]
-
+                    if df.index[-1] != LAST_RUN[timeframe]:
+                        print(f"Nueva vela detectada para {timeframe}. Procesando...")
                         try:
-                            nuevos_pivotes = indicators["PriceAction"]["ZonasSR"]
-                            for nivel, datos in nuevos_pivotes.items():
-                                pivotes_historicos.setdefault(nivel, {"conteo": 0, "tipo": datos["tipo"]}) #Usamos setdefault para evitar keyerrors
-                                pivotes_historicos[nivel]["conteo"] += datos["conteo"]
-                        except KeyError as e:
-                            print(f"Error al acceder a la clave: {e}. Probablemente no hay zonas SR.")
+                            indicators = analyze_indicators(df, timeframe, pivotes_historicos)
+                            report = generate_report(timeframe, indicators)
+                            export_to_json(report, timeframe)
+                            LAST_RUN[timeframe] = df.index[-1]
+                            try:
+                                nuevos_pivotes = indicators.get("PriceAction", {}).get("ZonasSR", {}) # Manejo seguro de claves anidadas
+                                if nuevos_pivotes: #Verificar si hay zonas SR
+                                    for nivel, datos in nuevos_pivotes.items():
+                                        pivotes_historicos.setdefault(nivel, {"conteo": 0, "tipo": datos["tipo"]})
+                                        pivotes_historicos[nivel]["conteo"] += datos["conteo"]
+                            except Exception as e:
+                                print(f"Error al actualizar pivotes históricos: {e}")
+                                traceback.print_exc()
                         except Exception as e:
-                            print(f"Error al actualizar pivotes históricos: {e}")
+                            print(f"Error durante el análisis de {timeframe}: {e}")
                             traceback.print_exc()
-
                     else:
-                        print(f"No hay nuevos datos para {timeframe}")
-
+                        print(f"No hay nueva vela para {timeframe}. Esperando 30 segundos adicionales...")
+                        time.sleep(30)
+                        df = load_csv(file_path)
+                        if df is not None and not df.empty and df.index[-1] != LAST_RUN[timeframe]:
+                            print(f"Nueva vela detectada despues de la espera para {timeframe}. Procesando...")
+                            try:
+                                indicators = analyze_indicators(df, timeframe, pivotes_historicos)
+                                report = generate_report(timeframe, indicators)
+                                export_to_json(report, timeframe)
+                                LAST_RUN[timeframe] = df.index[-1]
+                                try:
+                                    nuevos_pivotes = indicators.get("PriceAction", {}).get("ZonasSR", {}) # Manejo seguro de claves anidadas
+                                    if nuevos_pivotes: #Verificar si hay zonas SR
+                                        for nivel, datos in nuevos_pivotes.items():
+                                            pivotes_historicos.setdefault(nivel, {"conteo": 0, "tipo": datos["tipo"]})
+                                            pivotes_historicos[nivel]["conteo"] += datos["conteo"]
+                                except Exception as e:
+                                    print(f"Error al actualizar pivotes históricos: {e}")
+                                    traceback.print_exc()
+                            except Exception as e:
+                                print(f"Error durante el analisis despues de la espera de {timeframe}: {e}")
+                                traceback.print_exc()
+                        else:
+                            print(f"Aun no hay nueva vela para {timeframe} despues de la espera.")
                 except Exception as e:
-                    print(f"Error durante el análisis de {timeframe}: {e}")
+                    print(f"Error en la verificacion de nueva vela {timeframe}: {e}")
                     traceback.print_exc()
-
             elif df is not None and df.empty:
                 print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
-
-        with open(PIVOTES_FILE, "w") as f:
-            json.dump(pivotes_historicos, f, indent=4)
-
-        time.sleep(1)
+        guardar_pivotes(pivotes_historicos) # Correctamente indentado
 
 if __name__ == "__main__":
-    main_loop()
+    try:
+        main_loop()
+    except KeyboardInterrupt:
+        print("Script detenido por el usuario.")
+    except Exception as e:
+        print(f"Error inesperado en el script principal: {e}")
+        traceback.print_exc()
+    finally:
+        print("Fin del script.")
