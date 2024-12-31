@@ -8,7 +8,7 @@ CSV_FILES = {
     "15m": "XBTUSDT_15m.csv",
     "1h": "XBTUSDT_1h.csv",
     "4h": "XBTUSDT_4h.csv",  # Archivo para 4 horas
-    "1d": "XBTUSDT_1d.csv"",
+    "1d": "XBTUSDT_1d.csv",
 }
 
 TIME_INTERVALS = {
