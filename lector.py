@@ -1,7 +1,9 @@
 import time
 import json
 import os
-
+import pandas as pd
+import numpy as np
+import ta
 
 # Configuración de archivos y tiempos
 CSV_FILES = {
@@ -27,7 +29,7 @@ def load_csv(file_path):
         return None
 # Función para analizar RSI
 
-import pandas as pd
+
 
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
