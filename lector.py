@@ -50,8 +50,8 @@ def load_csv(file_path):
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     try:
-        if 'RSI' not in df.columns or 'Close' not in df.columns:
-            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'RSI' o 'Close' en el DataFrame."}
+        if 'RSI' not in df.columns or 'close' not in df.columns:
+            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'RSI' o 'close' en el DataFrame."}
 
         last_rsi = df['RSI'].iloc[-1]
         signal = "Neutral"
@@ -76,13 +76,13 @@ def analyze_rsi(df):
         # Detección de divergencias (incluyendo ocultas)
         if len(df) >= 3:
             # Divergencias regulares (sin cambios)
-            if df['Close'].iloc[-1] > df['Close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2]:
+            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2]:
                 message += " Posible divergencia bajista."
                 if signal == "Sobrecompra":
                     signal = "Divergencia Bajista en Sobrecompra"
                 else:
                     signal = "Divergencia Bajista"
-            elif df['Close'].iloc[-1] < df['Close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2]:
+            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2]:
                 message += " Posible divergencia alcista."
                 if signal == "Sobreventa":
                     signal = "Divergencia Alcista en Sobreventa"
@@ -91,12 +91,12 @@ def analyze_rsi(df):
 
             # Divergencias ocultas (AÑADIDO)
             # Divergencia oculta alcista (precio hace un mínimo más alto, RSI hace un mínimo más bajo)
-            if df['Close'].iloc[-1] > df['Close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2] and df['Close'].iloc[-2] > df['Close'].iloc[-3] and df['RSI'].iloc[-2] > df['RSI'].iloc[-3]:
+            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2] and df['close'].iloc[-2] > df['close'].iloc[-3] and df['RSI'].iloc[-2] > df['RSI'].iloc[-3]:
                 message += " Posible divergencia oculta alcista."
                 signal = "Divergencia Oculta Alcista"
 
             # Divergencia oculta bajista (precio hace un máximo más bajo, RSI hace un máximo más alto)
-            elif df['Close'].iloc[-1] < df['Close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2] and df['Close'].iloc[-2] < df['Close'].iloc[-3] and df['RSI'].iloc[-2] < df['RSI'].iloc[-3]:
+            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2] and df['close'].iloc[-2] < df['close'].iloc[-3] and df['RSI'].iloc[-2] < df['RSI'].iloc[-3]:
                 message += " Posible divergencia oculta bajista."
                 signal = "Divergencia Oculta Bajista"
         return {"value": last_rsi, "signal": signal, "message": message}
@@ -109,21 +109,21 @@ def analyze_vwap(df):
     Analiza el VWAP.
 
     Esta función asume que la columna 'VWAP' YA ESTÁ CALCULADA y presente en el DataFrame 'df',
-    junto con la columna 'Close' (Precio de Cierre).
+    junto con la columna 'close' (Precio de Cierre).
 
     Args:
-        df (pd.DataFrame): DataFrame con las columnas 'VWAP' y 'Close'.
+        df (pd.DataFrame): DataFrame con las columnas 'VWAP' y 'close'.
 
     Returns:
         dict: Un diccionario con el valor del VWAP ('value'), la señal ('signal') y un mensaje descriptivo ('message').
               Devuelve un mensaje de error si faltan las columnas necesarias.
     """
     try:
-        if not all(col in df.columns for col in ['VWAP', 'Close']):
-            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'VWAP' o 'Close' en el DataFrame."}
+        if not all(col in df.columns for col in ['VWAP', 'close']):
+            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'VWAP' o 'close' en el DataFrame."}
 
         last_vwap = df['VWAP'].iloc[-1]
-        last_close = df['Close'].iloc[-1]
+        last_close = df['close'].iloc[-1]
 
         signal = "Neutral"
         message = f"VWAP en {last_vwap:.2f}. Precio actual en {last_close:.2f}. "
@@ -206,18 +206,18 @@ def analyze_hullma(df):
     Analiza la HULLMA.
 
     Esta función asume que la columna 'HULLMA' YA ESTÁ CALCULADA y presente en el DataFrame 'df',
-    junto con la columna 'Close' (Precio de Cierre).
+    junto con la columna 'close' (Precio de Cierre).
 
     Args:
-        df (pd.DataFrame): DataFrame con las columnas 'HULLMA' y 'Close'.
+        df (pd.DataFrame): DataFrame con las columnas 'HULLMA' y 'close'.
 
     Returns:
         dict: Un diccionario con el valor de la HULLMA ('value'), la señal ('signal') y un mensaje descriptivo ('message').
               Devuelve un mensaje de error si faltan las columnas necesarias o si no hay suficientes datos.
     """
     try:
-        if not all(col in df.columns for col in ['HULLMA', 'Close']):
-            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'HULLMA' o 'Close' en el DataFrame."}
+        if not all(col in df.columns for col in ['HULLMA', 'close']):
+            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'HULLMA' o 'close' en el DataFrame."}
 
         if len(df) < 3:  # Necesitamos al menos tres datos para comparar aceleración
             return {"value": None, "signal": "Datos insuficientes", "message": "No hay suficientes datos para analizar la HULLMA y detectar impulsos."}
@@ -225,8 +225,8 @@ def analyze_hullma(df):
         last_hullma = df['HULLMA'].iloc[-1]
         previous_hullma = df['HULLMA'].iloc[-2]
         previous_previous_hullma = df['HULLMA'].iloc[-3]
-        last_close = df['Close'].iloc[-1]
-        previous_close = df['Close'].iloc[-2]
+        last_close = df['close'].iloc[-1]
+        previous_close = df['close'].iloc[-2]
 
         signal = "Neutral"
         message = f"HULLMA en {last_hullma:.2f}. Precio actual en {last_close:.2f}. "
@@ -267,13 +267,14 @@ def analyze_hullma(df):
 def analyze_bollinger_bands(df):
     """Analiza Bandas de Bollinger precalculadas en el DataFrame."""
     try:
-        if not all(col in df.columns for col in ['bb_bbm', 'bb_bbh', 'bb_bbl', 'Close']):
-            return {"signal": "Datos insuficientes", "message": "Faltan columnas de Bandas de Bollinger (bb_bbm, bb_bbh, bb_bbl, Close)."}
+        df.columns = df.columns.str.lower() #Convertimos a minusculas
+        if not all(col in df.columns for col in ['bb_upper', 'bb_middle', 'bb_lower', 'close']):
+            return {"signal": "Datos insuficientes", "message": "Faltan columnas de Bandas de Bollinger (bb_upper, bb_middle, bb_lower, close)."}
 
-        last_bb_m = df['bb_bbm'].iloc[-1]
-        last_bb_h = df['bb_bbh'].iloc[-1]
-        last_bb_l = df['bb_bbl'].iloc[-1]
-        last_close = df['Close'].iloc[-1]
+        last_bb_m = df['bb_middle'].iloc[-1]
+        last_bb_h = df['bb_upper'].iloc[-1]
+        last_bb_l = df['bb_lower'].iloc[-1]
+        last_close = df['close'].iloc[-1]
 
         signal = "Neutral"
         message = f"BB: Media {last_bb_m:.2f}, Sup {last_bb_h:.2f}, Inf {last_bb_l:.2f}, Precio {last_close:.2f}. "
@@ -293,7 +294,7 @@ def analyze_bollinger_bands(df):
 
         if len(df) >= 2:
             current_band_width = last_bb_h - last_bb_l
-            previous_band_width = df['bb_bbh'].iloc[-2] - df['bb_bbl'].iloc[-2]
+            previous_band_width = df['bb_upper'].iloc[-2] - df['bb_lower'].iloc[-2]
             band_width_change = (current_band_width - previous_band_width) / previous_band_width * 100
 
             if current_band_width < previous_band_width and band_width_change < -5:
@@ -306,44 +307,50 @@ def analyze_bollinger_bands(df):
         elif last_close > last_bb_h:
             message += " Probando resistencia."
 
-        if last_close > last_bb_h and df['Close'].iloc[-2] <= df['bb_bbh'].iloc[-2]:
+        if last_close > last_bb_h and df['close'].iloc[-2] <= df['bb_upper'].iloc[-2]:
             message += " Ruptura confirmada al alza."
-        elif last_close < last_bb_l and df['Close'].iloc[-2] >= df['bb_bbl'].iloc[-2]:
+        elif last_close < last_bb_l and df['close'].iloc[-2] >= df['bb_lower'].iloc[-2]:
             message += " Ruptura confirmada a la baja."
 
-        if last_close > last_bb_h and (df['bb_bbh'].iloc[-2] - df['bb_bbh'].iloc[-3]) < 0:
+        if last_close > last_bb_h and (df['bb_upper'].iloc[-2] - df['bb_upper'].iloc[-3]) < 0:
             message += " Divergencia: precio sube, banda superior no se expande."
-        elif last_close < last_bb_l and (df['bb_bbl'].iloc[-2] - df['bb_bbl'].iloc[-3]) > 0:
+        elif last_close < last_bb_l and (df['bb_lower'].iloc[-2] - df['bb_lower'].iloc[-3]) > 0:
             message += " Divergencia: precio baja, banda inferior no se contrae."
 
         return {"signal": signal, "message": message}
 
     except IndexError:
         return {"signal": "Error", "message": "Error al analizar las Bandas de Bollinger."}
-
+    except Exception as e:
+        print(f"Error en analyze_bollinger_bands: {e}")
+        return {"signal": "Error", "message": f"Error al analizar las Bandas de Bollinger: {e}"}
 
 def analyze_macd(df):
     """Analiza el indicador MACD precalculado en el DataFrame."""
     try:
+        if df is None or df.empty:
+            return {"signal": "Datos insuficientes", "message": "DataFrame vacío o None."}
+        df = df.rename(columns={'Close': 'close', 'CLOSE':'close', 'cLOSE':'close'}) #Nos aseguramos que close este en minuscula
         # Verificar que las columnas necesarias estén en el DataFrame
-        if not all(col in df.columns for col in ['MACD', 'Signal', 'Histograma', 'Close']): #Se agrega close para las divergencias
-            return {"signal": "Datos insuficientes", "message": "Faltan columnas de MACD (MACD, Signal, Histograma, Close)."}
+        if not all(col in df.columns for col in ['MACD', 'MACD_Signal', 'MACD_Hist', 'close']):
+            return {"signal": "Datos insuficientes", "message": "Faltan columnas de MACD (MACD, MACD_Signal, MACD_Hist, close)."}
 
         # Últimos valores de las columnas necesarias
         last_macd = df['MACD'].iloc[-1]
-        last_signal = df['Signal'].iloc[-1]
-        last_histogram = df['Histograma'].iloc[-1]
-        last_close = df['Close'].iloc[-1]
-        prev_close = df['Close'].iloc[-2]
+        last_signal = df['MACD_Signal'].iloc[-1]
+        last_histogram = df['MACD_Hist'].iloc[-1]
+        last_close = df['close'].iloc[-1]
+        if len(df) >= 2:
+            prev_close = df['close'].iloc[-2]
 
         signal = "Neutral"
         message = f"MACD: {last_macd:.2f}, Señal: {last_signal:.2f}, Histograma: {last_histogram:.2f}. "
 
         # Analizar cruces entre MACD y Signal
-        if last_macd > last_signal and df['MACD'].iloc[-2] <= df['Signal'].iloc[-2]:
+        if last_macd > last_signal and df['MACD'].iloc[-2] <= df['MACD_Signal'].iloc[-2]:
             signal = "Compra"
             message += "Cruce alcista detectado (MACD supera a la Señal)."
-        elif last_macd < last_signal and df['MACD'].iloc[-2] >= df['Signal'].iloc[-2]:
+        elif last_macd < last_signal and df['MACD'].iloc[-2] >= df['MACD_Signal'].iloc[-2]:
             signal = "Venta"
             message += "Cruce bajista detectado (MACD cae por debajo de la Señal)."
 
@@ -354,9 +361,9 @@ def analyze_macd(df):
             message += " MACD por debajo de cero: Momentum bajista."
 
         # Análisis del Histograma
-        if last_histogram > 0 and df['Histograma'].iloc[-2] <= 0:
+        if last_histogram > 0 and df['MACD_Hist'].iloc[-2] <= 0:
             message += " Incremento en momentum alcista."
-        elif last_histogram < 0 and df['Histograma'].iloc[-2] >= 0:
+        elif last_histogram < 0 and df['MACD_Hist'].iloc[-2] >= 0:
             message += " Incremento en momentum bajista."
 
         # Análisis de divergencias
@@ -371,8 +378,11 @@ def analyze_macd(df):
         return {"signal": signal, "message": message}
 
     except IndexError:
-        return {"signal": "Error", "message": "Error al analizar el MACD."}
-
+        return {"signal": "Error", "message": "Error al analizar el MACD. Datos insuficientes"}
+    except Exception as e:
+        print(f"Error en analyze_macd: {e}")
+        return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
+        
 def analizar_patrones(pivotes, tolerance=0.02):
     """Analiza patrones chartistas basados en pivotes."""
     if len(pivotes) < 3:
@@ -429,7 +439,7 @@ def encontrar_zonas_pivotes(pivotes_actuales, pivotes_historicos, tolerancia=0.0
 def analyze_price_action(df, pivotes_historicos):
     """Función principal para analizar la acción del precio, incluyendo zonas SR."""
     try:
-        precios = df['Close'].values
+        precios = df['close'].values
         pivotes = encontrar_pivotes(precios)
         patrones = analizar_patrones(pivotes)
         zonas_sr = encontrar_zonas_pivotes(pivotes, pivotes_historicos)
