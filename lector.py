@@ -383,6 +383,16 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
         
+def encontrar_pivotes(precios):
+    """Encuentra pivotes máximos y mínimos en una serie de precios."""
+    pivotes = []
+    for i in range(1, len(precios) - 1):
+        if precios[i - 1] < precios[i] and precios[i] > precios[i + 1]:
+            pivotes.append((i, precios[i], "maximo"))  # (indice, precio, tipo)
+        elif precios[i - 1] > precios[i] and precios[i] < precios[i + 1]:
+            pivotes.append((i, precios[i], "minimo"))
+    return pivotes
+
 def analizar_patrones(pivotes, tolerance=0.02):
     """Analiza patrones chartistas basados en pivotes."""
     if len(pivotes) < 3:
@@ -422,17 +432,17 @@ def encontrar_zonas_pivotes(pivotes_actuales, pivotes_historicos, tolerancia=0.0
     zonas = {}
     for pivote_actual in pivotes_actuales:
         nivel_actual = pivote_actual[1]
-        encontrado = False  # Variable para controlar si se encontró una zona cercana
-        for nivel_historico_str, datos_historicos in pivotes_historicos.items(): #Iteramos sobre los items para obtener clave y valor
-            nivel_historico = float(nivel_historico_str) #Convertimos la clave a float para la comparacion
+        encontrado = False
+        for nivel_historico_str, datos_historicos in pivotes_historicos.items():
+            nivel_historico = float(nivel_historico_str)
             if abs(nivel_actual - nivel_historico) / max(nivel_actual, nivel_historico) < tolerancia:
                 encontrado = True
                 if str(nivel_historico) not in zonas:
-                    zonas[str(nivel_historico)] = {"conteo": datos_historicos["conteo"] + 1, "tipo": datos_historicos["tipo"]} #Usamos el tipo de pivote historico
+                    zonas[str(nivel_historico)] = {"conteo": datos_historicos["conteo"] + 1, "tipo": datos_historicos["tipo"]}
                 else:
                     zonas[str(nivel_historico)]["conteo"] += datos_historicos["conteo"]
-                break  # Importante: salir del bucle interno una vez encontrada la zona
-        if not encontrado:  # Si no se encontró ninguna zona cercana, se crea una nueva
+                break
+        if not encontrado:
             zonas[str(nivel_actual)] = {"conteo": 1, "tipo": pivote_actual[2]}
     return zonas
 
@@ -444,10 +454,16 @@ def analyze_price_action(df, pivotes_historicos):
         patrones = analizar_patrones(pivotes)
         zonas_sr = encontrar_zonas_pivotes(pivotes, pivotes_historicos)
 
-        resultados = {"Patrones": patrones["Patrones"], "ZonasSR": zonas_sr}  # Combina los resultados
+        resultados = {"Patrones": patrones["Patrones"], "ZonasSR": zonas_sr}
         return resultados
     except IndexError:
         return {"Patron": "No hay suficientes datos"}
+    except KeyError as e:
+        print(f"Error KeyError en analyze_price_action: {e}")
+        return {"Patron": f"Error KeyError: {e}. Asegúrate de que la columna 'close' exista en el DataFrame."}
+    except Exception as e:
+        print(f"Error en analyze_price_action: {e}")
+        return {"Patron": f"Error desconocido: {e}"}
 
 def analyze_indicators(df, timeframe, pivotes_historicos):
     """Analiza todos los indicadores relevantes."""
