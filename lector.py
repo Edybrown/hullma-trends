@@ -439,15 +439,15 @@ def analyze_price_action(df, pivotes_historicos):
     except IndexError:
         return {"Patron": "No hay suficientes datos"}
 
-def analyze_indicators(df, timeframe):
+def analyze_indicators(df, timeframe, pivotes_historicos):
     """Analiza todos los indicadores relevantes."""
     rsi_analysis = analyze_rsi(df)
     vwap_analysis = analyze_vwap(df)
     atr_analysis = analyze_atr(df)
     hullma_analysis = analyze_hullma(df)
-    bollinger_analysis = analyze_bollinger(df)
+    bollinger_analysis = analyze_bollinger_bands(df)
     macd_analysis = analyze_macd(df)
-    price_action_analysis = analyze_price_action(df)
+    price_action_analysis = analyze_price_action(df, pivotes_historicos) #Se pasa pivotes_historicos
     return {
         "RSI": rsi_analysis,
         "VWAP": vwap_analysis,
@@ -508,7 +508,6 @@ def main_loop():
                 df = load_csv(file_path)
 
                 if df is not None and not df.empty:
-                    #Añadido manejo de excepciones en el analisis
                     try:
                         indicators = analyze_indicators(df, timeframe, pivotes_historicos)
                         report = generate_report(timeframe, indicators)
@@ -538,6 +537,6 @@ def main_loop():
 
         time.sleep(1)
 
-# --- PUNTO DE ENTRADA DEL SCRIPT ---
+# --- PUNTO DE ENTRADA ---
 if __name__ == "__main__":
     main_loop()
