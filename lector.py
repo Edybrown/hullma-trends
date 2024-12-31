@@ -4,14 +4,20 @@ import os
 import pandas as pd
 import numpy as np
 import ta
+import traceback  # Importar traceback una sola vez
 
 # --- CONFIGURACIÓN DE ARCHIVOS Y CARPETAS ---
-DATA_DIR = "datos_BTC"  # Nombre de la carpeta con los datos
+DATA_DIR = "datos_BTC"
+OUTPUT_DIR = "Informes"  # Define el directorio de salida para informes
+PIVOTES_FILE = "pivotes_historicos.json" #Archivo para guardar pivotes
 
-# Verificar si la carpeta de datos existe
-if not os.path.exists(DATA_DIR) or not os.path.isdir(DATA_DIR):
-    print(f"Error: La carpeta '{DATA_DIR}' no existe o no es un directorio.")
-    exit()
+# Verificar la existencia de directorios
+for path in [DATA_DIR, OUTPUT_DIR]:
+    if not os.path.exists(path):
+        os.makedirs(path)
+    elif not os.path.isdir(path):
+        print(f"Error: '{path}' existe pero no es un directorio.")
+        exit()
 
 CSV_FILES = {
     "15m": os.path.join(DATA_DIR, "XBTUSDT_15m.csv"),
@@ -20,30 +26,28 @@ CSV_FILES = {
     "1d": os.path.join(DATA_DIR, "XBTUSDT_1d.csv"),
 }
 
-# --- RESTO DE LA CONFIGURACIÓN (SIN CAMBIOS) ---
 TIME_INTERVALS = {
-    "15m": 900,      # 15 minutos
-    "1h": 3600,      # 1 hora
-    "4h": 14400,     # 4 horas
-    "1d": 86400      # 1 día
+    "15m": 900,
+    "1h": 3600,
+    "4h": 14400,
+    "1d": 86400
 }
-LAST_RUN = {key: 0 for key in CSV_FILES.keys()}
 
-# --- FUNCIÓN PARA CARGAR DATOS (SIN CAMBIOS) ---
+LAST_RUN = {key: None for key in CSV_FILES.keys()} #Inicializar a None
+
+# --- FUNCIÓN PARA CARGAR DATOS ---
 def load_csv(file_path):
-    if os.path.exists(file_path):
-        return pd.read_csv(file_path)
-    else:
-        print(f"Archivo no encontrado: {file_path}")
+    try:
+        if os.path.exists(file_path):
+            df = pd.read_csv(file_path, index_col=0, parse_dates=True) #Parsea las fechas
+            return df
+        else:
+            print(f"Archivo no encontrado: {file_path}")
+            return None
+    except pd.errors.ParserError as e: #Manejo de errores al parsear el csv
+        print(f"Error al leer el archivo CSV {file_path}: {e}")
         return None
-# Función para cargar datos de un archivo CSV
-def load_csv(file_path):
-    if os.path.exists(file_path):
-        return pd.read_csv(file_path)
-    else:
-        print(f"Archivo no encontrado: {file_path}")
-        return None
-# Función para analizar RSI
+
 
 
 
@@ -494,84 +498,77 @@ def generate_report(timeframe, analysis):
         "analysis": analysis
     }
 
-
-def export_to_json(report, timeframe, max_reports=10, output_dir="Informes"):
-    """Exporta a JSON en un directorio específico."""
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    output_file = os.path.join(output_dir, f"report_{timeframe}.json")
+def export_to_json(report, timeframe, max_reports=10):
+    """Exporta a JSON, gestionando la rotación de informes."""
+    output_file = os.path.join(OUTPUT_DIR, f"report_{timeframe}.json")
 
     try:
         with open(output_file, "r") as f:
             existing_reports = json.load(f)
     except FileNotFoundError:
         existing_reports = []
+    except json.JSONDecodeError: #Manejo de errores de json
+        print(f"Error al decodificar json en {output_file}. Se creará un nuevo archivo.")
+        existing_reports = []
 
     existing_reports.append(report)
-    if len(existing_reports) > max_reports:
-        existing_reports = existing_reports[-max_reports:]
+    existing_reports = existing_reports[-max_reports:]  # Mantener solo los últimos informes
 
     with open(output_file, "w") as f:
         json.dump(existing_reports, f, indent=4)
     print(f"Informe para {timeframe} exportado a {output_file}")
 
 
-
 def main_loop():
     pivotes_historicos = {}
     try:
-        with open("pivotes_historicos.json", "r") as f:
+        with open(PIVOTES_FILE, "r") as f:
             pivotes_historicos = json.load(f)
     except FileNotFoundError:
         pass
+    except json.JSONDecodeError: #Manejo de errores de json
+        print(f"Error al decodificar json en {PIVOTES_FILE}. Se creará un nuevo archivo.")
+        pivotes_historicos = {}
 
     while True:
-        current_time = time.time()
-
         for timeframe, file_path in CSV_FILES.items():
-            df = load_csv(file_path) #Cargamos el df fuera del if
+            df = load_csv(file_path)
 
             if df is not None and not df.empty:
                 try:
-                    # *** CAMBIO CRUCIAL: Verificar NUEVOS DATOS antes del análisis ***
-                    if len(df) > 0 and (LAST_RUN.get(timeframe, 0) == 0 or df.index[-1] != LAST_RUN.get(timeframe,0)) : #Comprobamos si es la primera vez que se ejecuta o si hay un nuevo index
+                    #Comprobamos si es la primera vez que se ejecuta o si hay un nuevo index
+                    if LAST_RUN.get(timeframe) is None or df.index[-1] != LAST_RUN[timeframe]:
                         print(f"Procesando {timeframe}...")
                         indicators = analyze_indicators(df, timeframe, pivotes_historicos)
                         report = generate_report(timeframe, indicators)
                         export_to_json(report, timeframe)
-
-                        LAST_RUN[timeframe] = df.index[-1] #Guardamos el index en vez del tiempo
+                        LAST_RUN[timeframe] = df.index[-1]
 
                         try:
                             nuevos_pivotes = indicators["PriceAction"]["ZonasSR"]
                             for nivel, datos in nuevos_pivotes.items():
-                                if nivel in pivotes_historicos:
-                                    pivotes_historicos[nivel]["conteo"] += datos["conteo"]
-                                else:
-                                    pivotes_historicos[nivel] = datos
+                                pivotes_historicos.setdefault(nivel, {"conteo": 0, "tipo": datos["tipo"]}) #Usamos setdefault para evitar keyerrors
+                                pivotes_historicos[nivel]["conteo"] += datos["conteo"]
                         except KeyError as e:
                             print(f"Error al acceder a la clave: {e}. Probablemente no hay zonas SR.")
-                            print(indicators["PriceAction"]) #Imprimimos para ver el error
                         except Exception as e:
                             print(f"Error al actualizar pivotes históricos: {e}")
-                            import traceback
                             traceback.print_exc()
 
-                    elif len(df) > 0 and df.index[-1] == LAST_RUN.get(timeframe,0):
+                    else:
                         print(f"No hay nuevos datos para {timeframe}")
 
                 except Exception as e:
                     print(f"Error durante el análisis de {timeframe}: {e}")
-                    import traceback
                     traceback.print_exc()
 
             elif df is not None and df.empty:
                 print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
 
-        with open("pivotes_historicos.json", "w") as f:
+        with open(PIVOTES_FILE, "w") as f:
             json.dump(pivotes_historicos, f, indent=4)
 
         time.sleep(1)
-# --- PUNTO DE ENTRADA ---
+
 if __name__ == "__main__":
     main_loop()
