@@ -387,15 +387,16 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
         
-def encontrar_pivotes(precios):
+def encontrar_pivotes(precios, max_pivotes=10):
     """Encuentra pivotes máximos y mínimos en una serie de precios."""
     pivotes = []
     for i in range(1, len(precios) - 1):
-        if precios[i - 1] < precios[i] and precios[i] > precios[i + 1]:
-            pivotes.append((i, precios[i], "maximo"))  # (indice, precio, tipo)
-        elif precios[i - 1] > precios[i] and precios[i] < precios[i + 1]:
+        if precios[i - 1] < precios[i] > precios[i + 1]:
+            pivotes.append((i, precios[i], "maximo"))
+        elif precios[i - 1] > precios[i] < precios[i + 1]:
             pivotes.append((i, precios[i], "minimo"))
-    return pivotes
+    # Retornar solo los últimos pivotes relevantes
+    return pivotes[-max_pivotes:]
 
 def analizar_patrones(pivotes, tolerance=0.02):
     """Analiza patrones chartistas basados en pivotes."""
@@ -405,34 +406,29 @@ def analizar_patrones(pivotes, tolerance=0.02):
     for i in range(len(pivotes)):
         for j in range(i + 1, len(pivotes)):
             for k in range(j + 1, len(pivotes)):
-                p1 = pivotes[i]
-                p2 = pivotes[j]
-                p3 = pivotes[k]
-                if p1[2] == p2[2] == p3[2]:  # Mismo tipo de pivote (Canales)
-                    if p1[2] == "maximo":  # Canal bajista
-                        if p3[0] > p2[0] > p1[0] and p3[1] < p2[1] < p1[1]:
-                            patrones.append({"Patron": "Canal Bajista", "pivotes": [p1, p2, p3]})
-                    elif p1[2] == "minimo":  # Canal alcista
-                        if p3[0] > p2[0] > p1[0] and p3[1] > p2[1] > p1[1]:
-                            patrones.append({"Patron": "Canal Alcista", "pivotes": [p1, p2, p3]})
-                elif p1[2] != p2[2] and p2[2] != p3[2]:  # Distinto tipo de pivote (Dobles Suelos/Techos y Triángulos)
+                p1, p2, p3 = pivotes[i], pivotes[j], pivotes[k]
+                # Mismo tipo de pivote (Canales)
+                if p1[2] == p2[2] == p3[2]:
+                    if p1[2] == "maximo" and p3[0] > p2[0] > p1[0] and p3[1] < p2[1] < p1[1]:
+                        patrones.append({"Patron": "Canal Bajista", "pivotes": [p1, p2, p3]})
+                    elif p1[2] == "minimo" and p3[0] > p2[0] > p1[0] and p3[1] > p2[1] > p1[1]:
+                        patrones.append({"Patron": "Canal Alcista", "pivotes": [p1, p2, p3]})
+                # Distinto tipo de pivote (Dobles Suelos/Techos y Triángulos)
+                elif p1[2] != p2[2] and p2[2] != p3[2]:
                     if p1[2] == "maximo" and p2[2] == "minimo" and p3[2] == "maximo":
                         if abs(p1[1] - p3[1]) / max(p1[1], p3[1]) < tolerance:
                             patrones.append({"Patron": "Doble Techo", "pivotes": [p1, p2, p3]})
-                        elif p1[1] > p3[1] and p2[1] > min(p1[1],p3[1]):
-                            patrones.append({"Patron": "Triangulo Simetrico", "pivotes": [p1, p2, p3]})
-                        else:
-                            patrones.append({"Patron": "Triangulo Ascendente", "pivotes": [p1, p2, p3]})
+                        elif p1[1] > p3[1] and p2[1] > min(p1[1], p3[1]):
+                            patrones.append({"Patron": "Triángulo Simétrico", "pivotes": [p1, p2, p3]})
                     elif p1[2] == "minimo" and p2[2] == "maximo" and p3[2] == "minimo":
                         if abs(p1[1] - p3[1]) / max(p1[1], p3[1]) < tolerance:
                             patrones.append({"Patron": "Doble Suelo", "pivotes": [p1, p2, p3]})
-                        elif p1[1] < p3[1] and p2[1] < max(p1[1],p3[1]):
-                            patrones.append({"Patron": "Triangulo Simetrico", "pivotes": [p1, p2, p3]})
-                        else:
-                            patrones.append({"Patron": "Triangulo Descendente", "pivotes": [p1, p2, p3]})
+                        elif p1[1] < p3[1] and p2[1] < max(p1[1], p3[1]):
+                            patrones.append({"Patron": "Triángulo Simétrico", "pivotes": [p1, p2, p3]})
     return {"Patrones": patrones}
 
 def encontrar_zonas_pivotes(pivotes_actuales, pivotes_historicos, tolerancia=0.02):
+    """Encuentra zonas de soporte y resistencia basadas en pivotes."""
     zonas = {}
     for pivote_actual in pivotes_actuales:
         nivel_actual = pivote_actual[1]
@@ -450,24 +446,28 @@ def encontrar_zonas_pivotes(pivotes_actuales, pivotes_historicos, tolerancia=0.0
             zonas[str(nivel_actual)] = {"conteo": 1, "tipo": pivote_actual[2]}
     return zonas
 
-def analyze_price_action(df, pivotes_historicos):
-    """Función principal para analizar la acción del precio, incluyendo zonas SR."""
+def analyze_price_action(df, pivotes_historicos, max_velas=200, max_pivotes=10):
+    """Analiza la acción del precio con un rango limitado de datos."""
     try:
+        # Limita el rango de análisis
+        df = df.tail(max_velas)
         precios = df['close'].values
-        pivotes = encontrar_pivotes(precios)
+        pivotes = encontrar_pivotes(precios, max_pivotes=max_pivotes)
         patrones = analizar_patrones(pivotes)
         zonas_sr = encontrar_zonas_pivotes(pivotes, pivotes_historicos)
-
-        resultados = {"Patrones": patrones["Patrones"], "ZonasSR": zonas_sr}
-        return resultados
-    except IndexError:
-        return {"Patron": "No hay suficientes datos"}
+        
+        return {
+            "Patrones": patrones["Patrones"],
+            "ZonasSR": zonas_sr,
+            "UltimosPivotes": pivotes,
+        }
     except KeyError as e:
-        print(f"Error KeyError en analyze_price_action: {e}")
-        return {"Patron": f"Error KeyError: {e}. Asegúrate de que la columna 'close' exista en el DataFrame."}
+        print(f"Error KeyError: {e}")
+        return {"Error": f"Columna faltante: {e}"}
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
-        return {"Patron": f"Error desconocido: {e}"}
+        return {"Error": str(e)}
+
 
 def analyze_indicators(df, timeframe, pivotes_historicos):
     """Analiza todos los indicadores relevantes."""
