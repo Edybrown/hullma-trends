@@ -5,21 +5,37 @@ import pandas as pd
 import numpy as np
 import ta
 
-# Configuración de archivos y tiempos
+# --- CONFIGURACIÓN DE ARCHIVOS Y CARPETAS ---
+DATA_DIR = "datos_BTC"  # Nombre de la carpeta con los datos
+
+# Verificar si la carpeta de datos existe
+if not os.path.exists(DATA_DIR) or not os.path.isdir(DATA_DIR):
+    print(f"Error: La carpeta '{DATA_DIR}' no existe o no es un directorio.")
+    exit()
+
 CSV_FILES = {
-    "15m": "XBTUSDT_15m.csv",
-    "1h": "XBTUSDT_1h.csv",
-    "4h": "XBTUSDT_4h.csv",  # Archivo para 4 horas
-    "1d": "XBTUSDT_1d.csv",
+    "15m": os.path.join(DATA_DIR, "XBTUSDT_15m.csv"),
+    "1h": os.path.join(DATA_DIR, "XBTUSDT_1h.csv"),
+    "4h": os.path.join(DATA_DIR, "XBTUSDT_4h.csv"),
+    "1d": os.path.join(DATA_DIR, "XBTUSDT_1d.csv"),
 }
 
+# --- RESTO DE LA CONFIGURACIÓN (SIN CAMBIOS) ---
 TIME_INTERVALS = {
-   "15m": 900,      # 15 minutos
+    "15m": 900,      # 15 minutos
     "1h": 3600,      # 1 hora
-    "4h": 14400,     # 4 horas (60 * 60 * 4)
+    "4h": 14400,     # 4 horas
     "1d": 86400      # 1 día
 }
 LAST_RUN = {key: 0 for key in CSV_FILES.keys()}
+
+# --- FUNCIÓN PARA CARGAR DATOS (SIN CAMBIOS) ---
+def load_csv(file_path):
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    else:
+        print(f"Archivo no encontrado: {file_path}")
+        return None
 # Función para cargar datos de un archivo CSV
 def load_csv(file_path):
     if os.path.exists(file_path):
@@ -409,6 +425,7 @@ def encontrar_zonas_pivotes(pivotes_actuales, pivotes_historicos, tolerancia=0.0
         if not encontrado:  # Si no se encontró ninguna zona cercana, se crea una nueva
             zonas[str(nivel_actual)] = {"conteo": 1, "tipo": pivote_actual[2]}
     return zonas
+
 def analyze_price_action(df, pivotes_historicos):
     """Función principal para analizar la acción del precio, incluyendo zonas SR."""
     try:
@@ -452,11 +469,11 @@ def generate_report(timeframe, analysis):
     }
 
 
-def export_to_json(report, timeframe, max_reports=10):
-    """Exporta/acumula el informe a un archivo JSON con el nombre de la temporalidad,
-    manteniendo los últimos max_reports registros."""
-
-    output_file = f"report_{timeframe}.json"
+def export_to_json(report, timeframe, max_reports=10, output_dir="Informes"):
+    """Exporta a JSON en un directorio específico."""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    output_file = os.path.join(output_dir, f"report_{timeframe}.json")
 
     try:
         with open(output_file, "r") as f:
@@ -465,13 +482,14 @@ def export_to_json(report, timeframe, max_reports=10):
         existing_reports = []
 
     existing_reports.append(report)
-
     if len(existing_reports) > max_reports:
         existing_reports = existing_reports[-max_reports:]
 
     with open(output_file, "w") as f:
         json.dump(existing_reports, f, indent=4)
-    print(f"Informe para {timeframe} (acumulado, últimos {max_reports} registros) exportado a {output_file}")
+    print(f"Informe para {timeframe} exportado a {output_file}")
+
+
 
 def main_loop():
     pivotes_historicos = {}
@@ -490,21 +508,27 @@ def main_loop():
                 df = load_csv(file_path)
 
                 if df is not None and not df.empty:
-                    indicators = analyze_indicators(df, timeframe, pivotes_historicos)
-                    report = generate_report(timeframe, indicators)
-                    export_to_json(report, timeframe) #Llamada a export_to_json
-                    LAST_RUN[timeframe] = current_time
-
+                    #Añadido manejo de excepciones en el analisis
                     try:
-                        nuevos_pivotes = indicators["PriceAction"]["ZonasSR"]
-                        for nivel, datos in nuevos_pivotes.items():
-                            if nivel in pivotes_historicos:
-                                pivotes_historicos[nivel]["conteo"] += datos["conteo"]
-                            else:
-                                pivotes_historicos[nivel] = datos
-                    except KeyError as e:
-                        print(f"Error al acceder a la clave: {e}. Probablemente no hay zonas SR.")
-                        print(indicators["PriceAction"])
+                        indicators = analyze_indicators(df, timeframe, pivotes_historicos)
+                        report = generate_report(timeframe, indicators)
+                        export_to_json(report, timeframe)
+                        LAST_RUN[timeframe] = current_time
+
+                        try:
+                            nuevos_pivotes = indicators["PriceAction"]["ZonasSR"]
+                            for nivel, datos in nuevos_pivotes.items():
+                                if nivel in pivotes_historicos:
+                                    pivotes_historicos[nivel]["conteo"] += datos["conteo"]
+                                else:
+                                    pivotes_historicos[nivel] = datos
+                        except KeyError as e:
+                            print(f"Error al acceder a la clave: {e}. Probablemente no hay zonas SR.")
+                            print(indicators["PriceAction"])
+                    except Exception as e:
+                        print(f"Error durante el análisis de {timeframe}: {e}")
+                        import traceback
+                        traceback.print_exc()
 
                 elif df is not None and df.empty:
                     print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
@@ -513,3 +537,7 @@ def main_loop():
             json.dump(pivotes_historicos, f, indent=4)
 
         time.sleep(1)
+
+# --- PUNTO DE ENTRADA DEL SCRIPT ---
+if __name__ == "__main__":
+    main_loop()
