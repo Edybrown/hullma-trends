@@ -529,16 +529,18 @@ def main_loop():
         current_time = time.time()
 
         for timeframe, file_path in CSV_FILES.items():
-            if current_time - LAST_RUN.get(timeframe, 0) >= TIME_INTERVALS[timeframe]:
-                print(f"Procesando {timeframe}...")
-                df = load_csv(file_path)
+            df = load_csv(file_path) #Cargamos el df fuera del if
 
-                if df is not None and not df.empty:
-                    try:
+            if df is not None and not df.empty:
+                try:
+                    # *** CAMBIO CRUCIAL: Verificar NUEVOS DATOS antes del análisis ***
+                    if len(df) > 0 and (LAST_RUN.get(timeframe, 0) == 0 or df.index[-1] != LAST_RUN.get(timeframe,0)) : #Comprobamos si es la primera vez que se ejecuta o si hay un nuevo index
+                        print(f"Procesando {timeframe}...")
                         indicators = analyze_indicators(df, timeframe, pivotes_historicos)
                         report = generate_report(timeframe, indicators)
                         export_to_json(report, timeframe)
-                        LAST_RUN[timeframe] = current_time
+
+                        LAST_RUN[timeframe] = df.index[-1] #Guardamos el index en vez del tiempo
 
                         try:
                             nuevos_pivotes = indicators["PriceAction"]["ZonasSR"]
@@ -549,20 +551,27 @@ def main_loop():
                                     pivotes_historicos[nivel] = datos
                         except KeyError as e:
                             print(f"Error al acceder a la clave: {e}. Probablemente no hay zonas SR.")
-                            print(indicators["PriceAction"])
-                    except Exception as e:
-                        print(f"Error durante el análisis de {timeframe}: {e}")
-                        import traceback
-                        traceback.print_exc()
+                            print(indicators["PriceAction"]) #Imprimimos para ver el error
+                        except Exception as e:
+                            print(f"Error al actualizar pivotes históricos: {e}")
+                            import traceback
+                            traceback.print_exc()
 
-                elif df is not None and df.empty:
-                    print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
+                    elif len(df) > 0 and df.index[-1] == LAST_RUN.get(timeframe,0):
+                        print(f"No hay nuevos datos para {timeframe}")
+
+                except Exception as e:
+                    print(f"Error durante el análisis de {timeframe}: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            elif df is not None and df.empty:
+                print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
 
         with open("pivotes_historicos.json", "w") as f:
             json.dump(pivotes_historicos, f, indent=4)
 
         time.sleep(1)
-
 # --- PUNTO DE ENTRADA ---
 if __name__ == "__main__":
     main_loop()
