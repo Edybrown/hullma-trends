@@ -533,7 +533,7 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
 def load_csv(file_path):
     try:
         if os.path.exists(file_path):
-            df = pd.read_csv(file_path, index_col='Date', parse_dates=True)
+            df = pd.read_csv(file_path, index_col='time', parse_dates=True)
             if not df.empty:
                 return df
             else:
