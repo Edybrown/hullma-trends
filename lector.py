@@ -387,25 +387,30 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
         
-def encontrar_pivotes(precios, max_pivotes=10):
-    """Encuentra pivotes máximos y mínimos en una serie de precios."""
-    pivotes = []
-    for i in range(1, len(precios) - 1):
-        if precios[i - 1] < precios[i] > precios[i + 1]:
-            pivotes.append((i, precios[i], "maximo"))
-        elif precios[i - 1] > precios[i] < precios[i + 1]:
-            pivotes.append((i, precios[i], "minimo"))
-    # Retornar solo los últimos pivotes relevantes
-    return pivotes[-max_pivotes:]
-
-def guardar_pivotes(pivotes_historicos): #Función guardar_pivotes
-    """Guarda los pivotes históricos en un archivo JSON."""
+def guardar_pivotes(pivotes_historicos):
     try:
-        with open(PIVOTES_FILE, "w") as f:
+        with open(PIVOTES_FILE, 'w') as f:
             json.dump(pivotes_historicos, f, indent=4)
-        print(f"Pivotes guardados en {PIVOTES_FILE}")
+        print("Pivotes guardados correctamente.")
     except Exception as e:
         print(f"Error al guardar pivotes: {e}")
+
+def cargar_pivotes():
+    pivotes_historicos = {}
+    if os.path.exists(PIVOTES_FILE):
+        try:
+            with open(PIVOTES_FILE, 'r') as f:
+                pivotes_historicos = json.load(f)
+            print("Pivotes cargados desde archivo.")
+        except json.JSONDecodeError:
+            print("Error al decodificar el archivo de pivotes. Se utilizarán pivotes vacíos.")
+        except FileNotFoundError:
+            print("Archivo de pivotes no encontrado. Se utilizarán pivotes vacíos.")
+        except Exception as e:
+            print(f"Error al cargar pivotes desde archivo: {e}")
+    else:
+        print("No se encontró el archivo de pivotes. Se utilizarán pivotes vacíos.")
+    return pivotes_historicos
 
 
 def analizar_patrones(pivotes, tolerance=0.02):
@@ -515,13 +520,15 @@ def export_to_json(report, timeframe):
         json.dump(report, f, indent=4)
     print(f"Informe para {timeframe} exportado a {output_file}")
 
-def espera_cierre_vela(timeframe):
-    """Espera hasta el cierre de la próxima vela."""
+def espera_cierre_vela(timeframe, margen_segundos=5):
+    """Espera hasta el cierre de la próxima vela, con un margen."""
     ahora = time.time()
     intervalo = TIME_INTERVALS[timeframe]
     tiempo_para_siguiente_vela = intervalo - (ahora % intervalo)
+    tiempo_para_siguiente_vela = max(0, tiempo_para_siguiente_vela - margen_segundos)
     print(f"Esperando {tiempo_para_siguiente_vela:.0f} segundos para el cierre de la vela de {timeframe}...")
     time.sleep(tiempo_para_siguiente_vela)
+
 
 def load_csv(file_path):
     try:
