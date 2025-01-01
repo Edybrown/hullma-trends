@@ -386,7 +386,19 @@ def analyze_macd(df):
     except Exception as e:
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
-        
+
+def encontrar_pivotes(precios, max_pivotes=10):
+    """Encuentra pivotes máximos y mínimos en una serie de precios."""
+    pivotes = []
+    for i in range(1, len(precios) - 1):
+        if precios[i - 1] < precios[i] > precios[i + 1]:
+            pivotes.append((i, precios[i], "maximo"))
+        elif precios[i - 1] > precios[i] < precios[i + 1]:
+            pivotes.append((i, precios[i], "minimo"))
+    # Retornar solo los últimos pivotes relevantes
+    return pivotes[-max_pivotes:]
+
+
 def guardar_pivotes(pivotes_historicos):
     try:
         with open(PIVOTES_FILE, 'w') as f:
