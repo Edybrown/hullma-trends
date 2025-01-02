@@ -3,6 +3,8 @@ import pandas as pd
 import os
 import time
 import talib
+import datetime
+
 
 # --- Funciones de la API de Kraken ---
 def obtener_ohlc_kraken(pair, interval, since=None):
@@ -130,9 +132,24 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         except FileNotFoundError:
             print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
             df = pd.DataFrame()
+
         df = actualizar_dataframe(df, pair, interval)
-        if not df.empty:
-            df = calcular_todos_indicadores(df) # Se calculan TODOS los indicadores, incluyendo el ATR
+
+       if not df.empty:
+            # *** Obtener la hora actual EN UTC ***
+            ahora_utc = pd.Timestamp.now(tz='UTC')
+
+            # *** Los timestamps del DataFrame YA ESTÁN EN UTC ***
+            ultimo_timestamp_utc = df.index[-1]
+
+            # Calcular la hora de cierre esperada (EN UTC)
+            hora_cierre_esperada_utc = ultimo_timestamp_utc + pd.Timedelta(minutes=interval)
+
+            # *** Comparar ambas horas EN UTC ***
+            if hora_cierre_esperada_utc > ahora_utc:
+                df = df[:-1]  # Eliminar la última fila (vela incompleta)
+                print(f"Vela incompleta eliminada para {filename_suffix}")
+            df = calcular_todos_indicadores(df)
         guardar_dataframe(df, filename)
 
 # --- Función principal para ejecutar la actualización ---
