@@ -224,68 +224,41 @@ def actualizar_dataframe(df, pair, interval):
 
 
 def actualizar_archivos(pair, carpeta="datos_BTC"):
-
     temporalidades = {
-
         15: "15m",
-
         60: "1h",
-
         240: "4h",
-
         1440: "1d"
-
     }
-
+    os.makedirs(carpeta, exist_ok=True)
     for interval, filename_suffix in temporalidades.items():
-
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
-
         try:
-
             df = pd.read_csv(filename, index_col='time', parse_dates=True)
-
+            logging.info(f"Archivo {filename} leído correctamente.")
         except FileNotFoundError:
-
-            print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
-
+            logging.info(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
             df = pd.DataFrame()
-
+        except Exception as e:
+            logging.error(f"Error al leer el archivo {filename}: {e}")
+            continue
 
         df = actualizar_dataframe(df, pair, interval)
 
-
         if not df.empty:
+            ahora = pd.Timestamp.now()  # Obtiene la hora actual SIN zona horaria
 
-            # *** Obtener la hora actual EN UTC ***
+            ultimo_timestamp = df.index[-1]
+            hora_cierre_esperada = ultimo_timestamp + pd.Timedelta(minutes=interval)
 
-            ahora_utc = pd.Timestamp.now(tz='UTC')
-
-
-            # *** Los timestamps del DataFrame YA ESTÁN EN UTC ***
-
-            ultimo_timestamp_utc = df.index[-1]
-
-
-            # Calcular la hora de cierre esperada (EN UTC)
-
-            hora_cierre_esperada_utc = ultimo_timestamp_utc + pd.Timedelta(minutes=interval)
-
-
-            # *** Comparar ambas horas EN UTC ***
-
-            if hora_cierre_esperada_utc > ahora_utc:
-
-                df = df[:-1]  # Eliminar la última fila (vela incompleta)
-
-                print(f"Vela incompleta eliminada para {filename_suffix}")
+            if hora_cierre_esperada > ahora:  # Comparación directa (ambos naive)
+                df = df[:-1]
+                logging.info(f"Vela incompleta eliminada para {filename_suffix}")
 
             df = calcular_todos_indicadores(df)
-
         guardar_dataframe(df, filename)
+    logging.info("Archivos actualizados.")
 
-
-# --- Función principal para ejecutar la actualización ---
 
 def main():
 
