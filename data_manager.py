@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import time
 import talib
-import datetime
 import logging
 
 # --- Funciones de la API de Kraken ---
@@ -18,10 +17,10 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             response.raise_for_status()
             data = response.json()
             if data['error']:
-                print(f"Error de Kraken: {data['error']}")
+                logging.error(f"Error de Kraken: {data['error']}")
                 return None
             if not data['result']:
-                print("No hay datos disponibles para este intervalo.")
+                logging.warning("No hay datos disponibles para este intervalo.")
                 return None
             df = pd.DataFrame(data['result'][pair], columns=['time', 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'])
             df['time'] = pd.to_datetime(df['time'], unit='s')
@@ -29,80 +28,35 @@ def obtener_ohlc_kraken(pair, interval, since=None):
             df = df.astype(float)
             return df
         except requests.exceptions.RequestException as e:
-            print(f"Error al obtener datos de Kraken: {e}")
+            logging.error(f"Error al obtener datos de Kraken: {e}")
             time.sleep(5)
-    print("Número máximo de reintentos alcanzado.")
+    logging.error("Número máximo de reintentos alcanzado.")
     return None
 
 # --- Funciones de cálculo de indicadores ---
-def calcular_rsi(df, period=14):
-    df['RSI'] = talib.RSI(df['close'], timeperiod=period)
-    return df
-
-def calcular_macd(df, fastperiod=12, slowperiod=26, signalperiod=9):
-    macd, macdsignal, macdhist = talib.MACD(df['close'], fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
-    df['MACD'] = macd
-    df['MACD_Signal'] = macdsignal
-    df['MACD_Hist'] = macdhist
-    return df
-
-def calcular_bandas_bollinger(df, period=20, stddev=2):
-    upper, middle, lower = talib.BBANDS(df['close'], timeperiod=period, nbdevup=stddev, nbdevdn=stddev)
-    df['BB_Upper'] = upper
-    df['BB_Middle'] = middle
-    df['BB_Lower'] = lower
-    return df
-
-def calcular_hullma(df, period=9):
-    df['HULLMA'] = talib.WMA(talib.WMA(df['close'], period//2).multiply(2).sub(talib.WMA(df['close'], period)), int(period**0.5))
-    return df
-
-def calcular_atr(df, period=14): # Función para calcular el ATR
-    df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=period)
-    return df
-
 def calcular_todos_indicadores(df):
-    df = calcular_rsi(df)
-    df = calcular_macd(df)
-    df = calcular_bandas_bollinger(df)
-    df = calcular_hullma(df)
-    df = calcular_atr(df) # Llamada a la función para calcular el ATR
+    df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+    macd, macdsignal, macdhist = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+    df['MACD'], df['MACD_Signal'], df['MACD_Hist'] = macd, macdsignal, macdhist
+    upper, middle, lower = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
+    df['BB_Upper'], df['BB_Middle'], df['BB_Lower'] = upper, middle, lower
+    df['HULLMA'] = talib.WMA(talib.WMA(df['close'], 4.5).multiply(2).sub(talib.WMA(df['close'], 9)), 3)
+    df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
     return df
 
 # --- Funciones de gestión de archivos CSV ---
 def guardar_dataframe(df, filename):
-    if df is not None:
-        try:
-            df.to_csv(filename)
-            print(f"Datos guardados en {filename}")
-        except Exception as e:
-            print(f"Error al guardar el archivo: {e}")
-    else:
-        print("No hay datos para guardar.")
-
-def leer_y_procesar_csv(ruta_archivo):
     try:
-        if not os.path.exists(ruta_archivo):
-            print(f"[leer_y_procesar_csv] ERROR: El archivo NO existe en la ruta: {ruta_archivo}")
-            return None
-
-        df = pd.read_csv(ruta_archivo, index_col='time', parse_dates=True)
-        print(f"[leer_y_procesar_csv] Datos leídos desde {ruta_archivo} (primeras 5 filas):\n{df.head().to_string()}")
-        return df
-
-    except FileNotFoundError:
-        print(f"[leer_y_procesar_csv] ERROR: Archivo no encontrado en la ruta: {ruta_archivo}")
-        return None
+        df.to_csv(filename)
+        logging.info(f"Datos guardados en {filename}")
     except Exception as e:
-        print(f"[leer_y_procesar_csv] Ocurrió un error general: {e}")
-        return None
+        logging.error(f"Error al guardar el archivo: {e}")
 
 def actualizar_dataframe(df, pair, interval):
     if df.empty:
         since = None
     else:
-        last_timestamp = int(df.index[-1].timestamp()) + 1
-        since = last_timestamp
+        since = int(df.index[-1].timestamp()) + 1
 
     nuevos_datos = obtener_ohlc_kraken(pair, interval, since)
 
@@ -110,13 +64,19 @@ def actualizar_dataframe(df, pair, interval):
         if not nuevos_datos.empty:
             df_actualizado = pd.concat([df, nuevos_datos])
             df_actualizado = df_actualizado[~df_actualizado.index.duplicated(keep='last')]
+
+            # Eliminar última vela si está incompleta
+            ultimo_timestamp = df_actualizado.index[-1]
+            hora_cierre_esperada = ultimo_timestamp + pd.Timedelta(minutes=interval)
+            if hora_cierre_esperada > pd.Timestamp.now(tz='UTC'):
+                logging.info(f"Eliminando última vela incompleta. Hora cierre esperada: {hora_cierre_esperada}")
+                df_actualizado = df_actualizado[:-1]
+            
             return df_actualizado
-        else:
-            print(f"No hay nuevos datos para el intervalo {interval}")
-            return df
     else:
-        print(f"Error al obtener nuevos datos para el intervalo {interval}")
-        return df
+        logging.error(f"Error al obtener nuevos datos para el intervalo {interval}")
+    
+    return df
 
 def actualizar_archivos(pair, carpeta="datos_BTC"):
     temporalidades = {
@@ -137,35 +97,21 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         df = actualizar_dataframe(df, pair, interval)
 
         if not df.empty:
-            ahora_utc = pd.Timestamp.now(tz='UTC')
-
-            ultimo_timestamp_utc = df.index[-1]
-            hora_cierre_esperada_utc = ultimo_timestamp_utc + pd.Timedelta(minutes=interval)
-
-            if hora_cierre_esperada_utc > ahora_utc:  # Comparación correcta (ambos tz-aware)
-                df = df[:-1]
-                logging.info(f"Vela incompleta eliminada para {filename_suffix}")
-
             df = calcular_todos_indicadores(df)
-        guardar_dataframe(df, filename)
         
-# --- Función principal para ejecutar la actualización ---
+        guardar_dataframe(df, filename)
+
+# --- Función principal ---
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
-
-    if not os.path.exists(carpeta_datos):
-        os.makedirs(carpeta_datos)
-        logging.info(f"Carpeta {carpeta_datos} creada.")
+    os.makedirs(carpeta_datos, exist_ok=True)
 
     while True:
         logging.info("Actualizando archivos...")
         actualizar_archivos(pair, carpeta_datos)
-
         logging.info("Datos actualizados. Esperando 30 segundos...")
         time.sleep(30)
 
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()
