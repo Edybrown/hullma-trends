@@ -125,30 +125,29 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         240: "4h",
         1440: "1d"
     }
+    os.makedirs(carpeta, exist_ok=True)
     for interval, filename_suffix in temporalidades.items():
         filename = os.path.join(carpeta, f"{pair}_{filename_suffix}.csv")
         try:
             df = pd.read_csv(filename, index_col='time', parse_dates=True)
         except FileNotFoundError:
-            print(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
+            logging.info(f"Archivo {filename} no encontrado. Creando archivo nuevo.")
             df = pd.DataFrame()
 
         df = actualizar_dataframe(df, pair, interval)
 
         if not df.empty:
-            # *** Obtener la hora actual EN UTC ***
             ahora_utc = pd.Timestamp.now(tz='UTC')
-
-            # *** Los timestamps del DataFrame YA ESTÁN EN UTC ***
             ultimo_timestamp_utc = df.index[-1]
-
-            # Calcular la hora de cierre esperada (EN UTC)
             hora_cierre_esperada_utc = ultimo_timestamp_utc + pd.Timedelta(minutes=interval)
 
-            # *** Comparar ambas horas EN UTC ***
+            # *** CORRECCIÓN IMPORTANTE: Localizar ahora_utc a UTC ***
+            ahora_utc = ahora_utc.tz_localize('UTC')
+
             if hora_cierre_esperada_utc > ahora_utc:
-                df = df[:-1]  # Eliminar la última fila (vela incompleta)
-                print(f"Vela incompleta eliminada para {filename_suffix}")
+                df = df[:-1]
+                logging.info(f"Vela incompleta eliminada para {filename_suffix}")
+
             df = calcular_todos_indicadores(df)
         guardar_dataframe(df, filename)
 
@@ -156,23 +155,19 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
 def main():
     pair = "XBTUSDT"
     carpeta_datos = "datos_BTC"
-    temporalidades = {
-        15: "15m",
-        60: "1h",
-        240: "4h",
-        1440: "1d"
-    }
 
     if not os.path.exists(carpeta_datos):
         os.makedirs(carpeta_datos)
-        print(f"Carpeta {carpeta_datos} creada.")
+        logging.info(f"Carpeta {carpeta_datos} creada.")
 
     while True:
-        print("Actualizando archivos...")
+        logging.info("Actualizando archivos...")
         actualizar_archivos(pair, carpeta_datos)
 
-        print("Datos actualizados. Esperando 60 segundos...")
+        logging.info("Datos actualizados. Esperando 30 segundos...")
         time.sleep(30)
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
