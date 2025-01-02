@@ -135,7 +135,7 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
 
         df = actualizar_dataframe(df, pair, interval)
 
-       if not df.empty:
+        if not df.empty:
             # *** Obtener la hora actual EN UTC ***
             ahora_utc = pd.Timestamp.now(tz='UTC')
 
