@@ -416,9 +416,13 @@ def guardar_pivotes(pivotes):
 
 def encontrar_cambios_de_sentido(precios, min_velas=5):
     """Encuentra cambios de sentido relevantes en una serie de precios."""
+    if len(precios) < 2:  # No se puede encontrar pivotes con menos de 2 precios
+        return []
+
     pivotes = []
     direccion_anterior = 0
 
+    # Iterar SOLO sobre las ultimas 200 velas
     for i in range(1, len(precios)):
         if precios[i] > precios[i - 1]:
             direccion_actual = 1
@@ -431,12 +435,16 @@ def encontrar_cambios_de_sentido(precios, min_velas=5):
             if abs(i - (pivotes[-1][0] if pivotes else -min_velas)) >= min_velas:
                 pivotes.append((i - 1, precios[i - 1], "maximo" if direccion_anterior == 1 else "minimo"))
             direccion_anterior = direccion_actual
-    if len(pivotes) > 1:
+
+    #Correccion para el ultimo pivote
+    if len(pivotes) > 0:
         if precios[-1] > precios[pivotes[-1][0]] and pivotes[-1][2] == "minimo":
             pivotes[-1] = (len(precios) - 1, precios[-1], "maximo")
         elif precios[-1] < precios[pivotes[-1][0]] and pivotes[-1][2] == "maximo":
             pivotes[-1] = (len(precios) - 1, precios[-1], "minimo")
+
     return pivotes
+
 
 def actualizar_pivotes(pivotes, nuevo_precio, tipo_pivote, max_pivotes=6):
     """Actualiza la lista de pivotes con un nuevo pivote."""
