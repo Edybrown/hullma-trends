@@ -387,6 +387,33 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
 
+def cargar_pivotes():
+    """Carga los pivotes históricos desde un archivo JSON."""
+    try:
+        if os.path.exists(PIVOTES_FILE):
+            with open(PIVOTES_FILE, "r") as f:
+                return json.load(f)
+        else:
+            return {}  # Devuelve un diccionario vacío si el archivo no existe
+    except json.JSONDecodeError:
+        print(f"Error al decodificar el archivo JSON de pivotes. Se inicializarán los pivotes.")
+        return {} #Retorna un diccionario vacio en caso de error de decodificacion
+    except Exception as e:
+        print(f"Error al cargar pivotes: {e}")
+        traceback.print_exc()
+        return {} #Retorna un diccionario vacio en caso de error
+
+def guardar_pivotes(pivotes):
+    """Guarda los pivotes históricos en un archivo JSON."""
+    try:
+        with open(PIVOTES_FILE, "w") as f:
+            json.dump(pivotes, f, indent=4)
+        print("Pivotes guardados correctamente.")
+    except Exception as e:
+        print(f"Error al guardar pivotes: {e}")
+        traceback.print_exc()
+
+
 def encontrar_cambios_de_sentido(precios, min_velas=5):
     """Encuentra cambios de sentido relevantes en una serie de precios."""
     pivotes = []
@@ -457,7 +484,7 @@ def encontrar_zonas_sr(pivotes, tolerancia=0.01):
                 zonas_sr.append((pivotes[i][1], pivotes[j][1]))
     return zonas_sr
 
-def analyze_price_action(df, max_velas=200, max_pivotes=6):
+def analyze_price_action(df, pivotes_historicos, max_velas=200): #Se agrega pivotes_historicos como parametro
     """Analiza la acción del precio con un rango limitado de datos."""
     try:
         df = df.tail(max_velas)
@@ -471,6 +498,7 @@ def analyze_price_action(df, max_velas=200, max_pivotes=6):
             "Tendencia": tendencia,
             "CambioEstructura": cambio_estructura,
             "ZonasSR": zonas_sr,
+            "PivotesHistoricos": pivotes_historicos #Se agrega pivotes_historicos al diccionario
         }
     except KeyError as e:
         print(f"Error KeyError: {e}")
@@ -478,6 +506,7 @@ def analyze_price_action(df, max_velas=200, max_pivotes=6):
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
         return {"Error": str(e)}
+
 
 def analyze_indicators(df, timeframe, pivotes_historicos):
     """Analiza todos los indicadores relevantes."""
