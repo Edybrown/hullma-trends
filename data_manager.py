@@ -137,20 +137,18 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         df = actualizar_dataframe(df, pair, interval)
 
         if not df.empty:
-            ahora_utc = pd.Timestamp.now(tz='UTC')  # Eliminada la línea innecesaria
+            ahora_utc = pd.Timestamp.now(tz='UTC')
+
             ultimo_timestamp_utc = df.index[-1]
             hora_cierre_esperada_utc = ultimo_timestamp_utc + pd.Timedelta(minutes=interval)
 
-            # *** CORRECCIÓN IMPORTANTE: Localizar ahora_utc a UTC ***
-            ahora_utc = ahora_utc.tz_localize('UTC')
-
-            if hora_cierre_esperada_utc > ahora_utc:
+            if hora_cierre_esperada_utc > ahora_utc:  # Comparación correcta (ambos tz-aware)
                 df = df[:-1]
                 logging.info(f"Vela incompleta eliminada para {filename_suffix}")
 
             df = calcular_todos_indicadores(df)
         guardar_dataframe(df, filename)
-
+        
 # --- Función principal para ejecutar la actualización ---
 def main():
     pair = "XBTUSDT"
