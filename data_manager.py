@@ -4,7 +4,7 @@ import os
 import time
 import talib
 import datetime
-
+import logging
 
 # --- Funciones de la API de Kraken ---
 def obtener_ohlc_kraken(pair, interval, since=None):
