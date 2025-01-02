@@ -137,7 +137,7 @@ def actualizar_archivos(pair, carpeta="datos_BTC"):
         df = actualizar_dataframe(df, pair, interval)
 
         if not df.empty:
-            ahora_utc = pd.Timestamp.now(tz='UTC')
+            ahora_utc = pd.Timestamp.now(tz='UTC')  # Eliminada la línea innecesaria
             ultimo_timestamp_utc = df.index[-1]
             hora_cierre_esperada_utc = ultimo_timestamp_utc + pd.Timedelta(minutes=interval)
 
