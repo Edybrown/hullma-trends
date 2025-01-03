@@ -387,7 +387,7 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
 
-def encontrar_cambios_de_sentido(precios, min_velas=5, max_pivotes=6):
+def encontrar_cambios_de_sentido(precios, min_velas=10, max_pivotes=6):
     """Encuentra los pivotes principales (máximos y mínimos) en un rango de precios."""
     if len(precios) < 2:
         return []
@@ -411,39 +411,6 @@ def encontrar_cambios_de_sentido(precios, min_velas=5, max_pivotes=6):
     # Limitar a los últimos `max_pivotes` pivotes relevantes
     return pivotes[-max_pivotes:]
 
-
-def encontrar_cambios_de_sentido(df, tolerancia=0.01):
-    """
-    Identifica los máximos y mínimos relevantes del precio.
-    Basado en los valores de high y low de las velas y filtrado por un umbral.
-    
-    Args:
-        df (DataFrame): Contiene columnas 'high' y 'low'.
-        tolerancia (float): Umbral para definir cambios relevantes.
-
-    Returns:
-        list: Lista de pivotes relevantes [(índice, precio, tipo)].
-    """
-    pivotes = []
-    n = len(df)
-    
-    for i in range(1, n - 1):
-        # Detectar máximos locales
-        if df['high'].iloc[i] > df['high'].iloc[i - 1] and df['high'].iloc[i] > df['high'].iloc[i + 1]:
-            pivotes.append((i, df['high'].iloc[i], "maximo"))
-
-        # Detectar mínimos locales
-        if df['low'].iloc[i] < df['low'].iloc[i - 1] and df['low'].iloc[i] < df['low'].iloc[i + 1]:
-            pivotes.append((i, df['low'].iloc[i], "minimo"))
-    
-    # Filtrar por tolerancia
-    pivotes_relevantes = []
-    for j in range(len(pivotes)):
-        if not pivotes_relevantes or abs(pivotes[j][1] - pivotes_relevantes[-1][1]) / max(pivotes[j][1], pivotes_relevantes[-1][1]) >= tolerancia:
-            pivotes_relevantes.append(pivotes[j])
-
-    # Mantener solo los últimos 10 pivotes relevantes
-    return pivotes_relevantes[-10:]
 
 
 def analizar_tendencia(pivotes):
