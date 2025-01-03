@@ -422,6 +422,7 @@ def encontrar_cambios_de_sentido(df, min_velas=8, max_pivotes=10):
 
 
 
+
 def analizar_tendencia(pivotes):
     """
     Determina la tendencia en función de los pivotes relevantes.
