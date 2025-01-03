@@ -412,26 +412,76 @@ def encontrar_cambios_de_sentido(precios, min_velas=5, max_pivotes=6):
     return pivotes[-max_pivotes:]
 
 
+def encontrar_cambios_de_sentido(df, tolerancia=0.01):
+    """
+    Identifica los máximos y mínimos relevantes del precio.
+    Basado en los valores de High y Low de las velas y filtrado por un umbral.
+    
+    Args:
+        df (DataFrame): Contiene columnas 'High' y 'Low'.
+        tolerancia (float): Umbral para definir cambios relevantes.
+
+    Returns:
+        list: Lista de pivotes relevantes [(índice, precio, tipo)].
+    """
+    pivotes = []
+    n = len(df)
+    
+    for i in range(1, n - 1):
+        # Detectar máximos locales
+        if df['High'].iloc[i] > df['High'].iloc[i - 1] and df['High'].iloc[i] > df['High'].iloc[i + 1]:
+            pivotes.append((i, df['High'].iloc[i], "maximo"))
+
+        # Detectar mínimos locales
+        if df['Low'].iloc[i] < df['Low'].iloc[i - 1] and df['Low'].iloc[i] < df['Low'].iloc[i + 1]:
+            pivotes.append((i, df['Low'].iloc[i], "minimo"))
+    
+    # Filtrar por tolerancia
+    pivotes_relevantes = []
+    for j in range(len(pivotes)):
+        if not pivotes_relevantes or abs(pivotes[j][1] - pivotes_relevantes[-1][1]) / max(pivotes[j][1], pivotes_relevantes[-1][1]) >= tolerancia:
+            pivotes_relevantes.append(pivotes[j])
+
+    # Mantener solo los últimos 10 pivotes relevantes
+    return pivotes_relevantes[-10:]
+
+
 def analizar_tendencia(pivotes):
-    """Determina la tendencia en función de los pivotes relevantes."""
+    """
+    Determina la tendencia en función de los pivotes relevantes.
+    
+    Args:
+        pivotes (list): Lista de pivotes [(índice, precio, tipo)].
+
+    Returns:
+        str: Tendencia ("Tendencia alcista", "Tendencia bajista", "Tendencia lateral o sin tendencia clara").
+    """
     if len(pivotes) < 2:
         return "Sin tendencia clara"
 
     maximos = [p[1] for p in pivotes if p[2] == "maximo"]
     minimos = [p[1] for p in pivotes if p[2] == "minimo"]
 
-    if len(maximos) >= 2 and all(maximos[i] < maximos[i+1] for i in range(len(maximos) - 1)) and \
-       len(minimos) >= 2 and all(minimos[i] < minimos[i+1] for i in range(len(minimos) - 1)):
+    if len(maximos) >= 2 and all(maximos[i] < maximos[i + 1] for i in range(len(maximos) - 1)) and \
+       len(minimos) >= 2 and all(minimos[i] < minimos[i + 1] for i in range(len(minimos) - 1)):
         return "Tendencia alcista"
-    elif len(maximos) >= 2 and all(maximos[i] > maximos[i+1] for i in range(len(maximos) - 1)) and \
-         len(minimos) >= 2 and all(minimos[i] > minimos[i+1] for i in range(len(minimos) - 1)):
+    elif len(maximos) >= 2 and all(maximos[i] > maximos[i + 1] for i in range(len(maximos) - 1)) and \
+         len(minimos) >= 2 and all(minimos[i] > minimos[i + 1] for i in range(len(minimos) - 1)):
         return "Tendencia bajista"
     else:
         return "Tendencia lateral o sin tendencia clara"
 
 
 def detectar_cambio_estructura(pivotes):
-    """Detecta cambios de estructura basado en los pivotes recientes."""
+    """
+    Detecta cambios de estructura basado en los pivotes recientes.
+    
+    Args:
+        pivotes (list): Lista de pivotes [(índice, precio, tipo)].
+
+    Returns:
+        str: Descripción del cambio de estructura o "Sin cambio de estructura detectado".
+    """
     if len(pivotes) < 2:
         return "Sin datos suficientes"
 
@@ -447,7 +497,16 @@ def detectar_cambio_estructura(pivotes):
 
 
 def encontrar_zonas_sr(pivotes, tolerancia=0.01):
-    """Encuentra las zonas de soporte/resistencia basadas en los pivotes."""
+    """
+    Encuentra las zonas de soporte/resistencia basadas en los pivotes.
+    
+    Args:
+        pivotes (list): Lista de pivotes [(índice, precio, tipo)].
+        tolerancia (float): Umbral de proximidad para agrupar niveles.
+
+    Returns:
+        list: Zonas de soporte/resistencia.
+    """
     zonas_sr = []
     if len(pivotes) < 2:
         return zonas_sr
@@ -460,15 +519,23 @@ def encontrar_zonas_sr(pivotes, tolerancia=0.01):
     return list(set(zonas_sr))  # Eliminar duplicados
 
 
-def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
-    """Analiza la acción del precio con un rango limitado de datos."""
+def analyze_price_action(df, max_velas=200):
+    """
+    Analiza la acción del precio con un rango limitado de datos.
+    
+    Args:
+        df (DataFrame): Contiene las columnas 'High' y 'Low'.
+        max_velas (int): Número máximo de velas a analizar.
+
+    Returns:
+        dict: Resultados del análisis de la acción del precio.
+    """
     try:
         # Tomar solo las últimas `max_velas`
         df = df.tail(max_velas)
-        precios = df['close'].values
 
         # Identificar pivotes relevantes
-        pivotes = encontrar_cambios_de_sentido(precios)
+        pivotes = encontrar_cambios_de_sentido(df)
 
         # Analizar tendencia
         tendencia = analizar_tendencia(pivotes)
@@ -488,6 +555,7 @@ def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
         return {"Error": str(e)}
+
 
 
 
