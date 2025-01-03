@@ -497,7 +497,7 @@ def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
     hullma_analysis = analyze_hullma(df)
     bollinger_analysis = analyze_bollinger_bands(df)
     macd_analysis = analyze_macd(df)
-    price_action_analysis = analyze_price_action(df, velas_maximas)
+    price_action_analysis = analyze_price_action(df, velas_limite)
 
     return {
         "RSI": rsi_analysis,
