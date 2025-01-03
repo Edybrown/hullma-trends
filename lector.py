@@ -387,87 +387,51 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
 
-def cargar_pivotes():
-    """Carga los pivotes históricos desde un archivo JSON."""
-    try:
-        if os.path.exists(PIVOTES_FILE):
-            with open(PIVOTES_FILE, "r") as f:
-                return json.load(f)
-        else:
-            return {}  # Devuelve un diccionario vacío si el archivo no existe
-    except json.JSONDecodeError:
-        print(f"Error al decodificar el archivo JSON de pivotes. Se inicializarán los pivotes.")
-        return {} #Retorna un diccionario vacio en caso de error de decodificacion
-    except Exception as e:
-        print(f"Error al cargar pivotes: {e}")
-        traceback.print_exc()
-        return {} #Retorna un diccionario vacio en caso de error
-
-def guardar_pivotes(pivotes):
-    """Guarda los pivotes históricos en un archivo JSON."""
-    try:
-        with open(PIVOTES_FILE, "w") as f:
-            json.dump(pivotes, f, indent=4)
-        print("Pivotes guardados correctamente.")
-    except Exception as e:
-        print(f"Error al guardar pivotes: {e}")
-        traceback.print_exc()
-
-
-def encontrar_cambios_de_sentido(precios, min_velas=5):
-    """Encuentra cambios de sentido relevantes en una serie de precios."""
-    if len(precios) < 2:  # No se puede encontrar pivotes con menos de 2 precios
+def encontrar_cambios_de_sentido(precios, min_velas=5, max_pivotes=6):
+    """Encuentra los pivotes principales (máximos y mínimos) en un rango de precios."""
+    if len(precios) < 2:
         return []
 
     pivotes = []
     direccion_anterior = 0
 
-    # Iterar SOLO sobre las ultimas 200 velas
-    for i in range(1, len(precios)):
-        if precios[i] > precios[i - 1]:
+    for i in range(1, len(precios) - 1):
+        if precios[i] > precios[i - 1] and precios[i] > precios[i + 1]:  # Máximo local
             direccion_actual = 1
-        elif precios[i] < precios[i - 1]:
+        elif precios[i] < precios[i - 1] and precios[i] < precios[i + 1]:  # Mínimo local
             direccion_actual = -1
         else:
-            direccion_actual = 0
+            continue
 
-        if direccion_actual != 0 and direccion_actual != direccion_anterior:
-            if abs(i - (pivotes[-1][0] if pivotes else -min_velas)) >= min_velas:
-                pivotes.append((i - 1, precios[i - 1], "maximo" if direccion_anterior == 1 else "minimo"))
-            direccion_anterior = direccion_actual
+        if direccion_actual != direccion_anterior:
+            if len(pivotes) == 0 or abs(i - pivotes[-1][0]) >= min_velas:
+                pivotes.append((i, precios[i], "maximo" if direccion_actual == 1 else "minimo"))
+                direccion_anterior = direccion_actual
 
-    #Correccion para el ultimo pivote
-    if len(pivotes) > 0:
-        if precios[-1] > precios[pivotes[-1][0]] and pivotes[-1][2] == "minimo":
-            pivotes[-1] = (len(precios) - 1, precios[-1], "maximo")
-        elif precios[-1] < precios[pivotes[-1][0]] and pivotes[-1][2] == "maximo":
-            pivotes[-1] = (len(precios) - 1, precios[-1], "minimo")
-
-    return pivotes
-
-
-def actualizar_pivotes(pivotes, nuevo_precio, tipo_pivote, max_pivotes=6):
-    """Actualiza la lista de pivotes con un nuevo pivote."""
-    pivotes.append((len(pivotes), nuevo_precio, tipo_pivote))
+    # Limitar a los últimos `max_pivotes` pivotes relevantes
     return pivotes[-max_pivotes:]
 
+
 def analizar_tendencia(pivotes):
-    """Analiza la tendencia basada en la secuencia de pivotes."""
+    """Determina la tendencia en función de los pivotes relevantes."""
     if len(pivotes) < 2:
         return "Sin tendencia clara"
 
     maximos = [p[1] for p in pivotes if p[2] == "maximo"]
     minimos = [p[1] for p in pivotes if p[2] == "minimo"]
 
-    if len(maximos) >= 2 and all(maximos[i] < maximos[i+1] for i in range(len(maximos) -1)) and len(minimos) >= 2 and all(minimos[i] < minimos[i+1] for i in range(len(minimos) -1)):
+    if len(maximos) >= 2 and all(maximos[i] < maximos[i+1] for i in range(len(maximos) - 1)) and \
+       len(minimos) >= 2 and all(minimos[i] < minimos[i+1] for i in range(len(minimos) - 1)):
         return "Tendencia alcista"
-    elif len(maximos) >= 2 and all(maximos[i] > maximos[i+1] for i in range(len(maximos) -1)) and len(minimos) >= 2 and all(minimos[i] > minimos[i+1] for i in range(len(minimos) -1)):
+    elif len(maximos) >= 2 and all(maximos[i] > maximos[i+1] for i in range(len(maximos) - 1)) and \
+         len(minimos) >= 2 and all(minimos[i] > minimos[i+1] for i in range(len(minimos) - 1)):
         return "Tendencia bajista"
     else:
         return "Tendencia lateral o sin tendencia clara"
 
+
 def detectar_cambio_estructura(pivotes):
-    """Detecta cambios de estructura basados en la ruptura de pivotes."""
+    """Detecta cambios de estructura basado en los pivotes recientes."""
     if len(pivotes) < 2:
         return "Sin datos suficientes"
 
@@ -475,45 +439,56 @@ def detectar_cambio_estructura(pivotes):
     penultimo_pivote = pivotes[-2]
 
     if ultimo_pivote[2] == "maximo" and ultimo_pivote[1] < penultimo_pivote[1]:
-        return "Ruptura de máximo bajista. Posible cambio a tendencia alcista."
+        return "Ruptura de máximo bajista. Cambio potencial a tendencia alcista."
     elif ultimo_pivote[2] == "minimo" and ultimo_pivote[1] > penultimo_pivote[1]:
-        return "Ruptura de mínimo alcista. Posible cambio a tendencia bajista."
+        return "Ruptura de mínimo alcista. Cambio potencial a tendencia bajista."
     else:
         return "Sin cambio de estructura detectado"
 
+
 def encontrar_zonas_sr(pivotes, tolerancia=0.01):
-    """Encuentra zonas de soporte/resistencia basadas en la cercanía de pivotes."""
+    """Encuentra las zonas de soporte/resistencia basadas en los pivotes."""
     zonas_sr = []
     if len(pivotes) < 2:
         return zonas_sr
+
     for i in range(len(pivotes)):
         for j in range(i + 1, len(pivotes)):
             if abs(pivotes[i][1] - pivotes[j][1]) / max(pivotes[i][1], pivotes[j][1]) < tolerancia:
                 zonas_sr.append((pivotes[i][1], pivotes[j][1]))
-    return zonas_sr
 
-def analyze_price_action(df, pivotes_historicos, max_velas=200): #Se agrega pivotes_historicos como parametro
+    return list(set(zonas_sr))  # Eliminar duplicados
+
+
+def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
     """Analiza la acción del precio con un rango limitado de datos."""
     try:
+        # Tomar solo las últimas `max_velas`
         df = df.tail(max_velas)
         precios = df['close'].values
+
+        # Identificar pivotes relevantes
         pivotes = encontrar_cambios_de_sentido(precios)
+
+        # Analizar tendencia
         tendencia = analizar_tendencia(pivotes)
+
+        # Detectar cambio de estructura
         cambio_estructura = detectar_cambio_estructura(pivotes)
+
+        # Identificar zonas de soporte/resistencia
         zonas_sr = encontrar_zonas_sr(pivotes)
+
         return {
             "Pivotes": pivotes,
             "Tendencia": tendencia,
             "CambioEstructura": cambio_estructura,
-            "ZonasSR": zonas_sr,
-            "PivotesHistoricos": pivotes_historicos #Se agrega pivotes_historicos al diccionario
+            "ZonasSR": zonas_sr
         }
-    except KeyError as e:
-        print(f"Error KeyError: {e}")
-        return {"Error": f"Columna faltante: {e}"}
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
         return {"Error": str(e)}
+
 
 
 def analyze_indicators(df, timeframe, pivotes_historicos):
@@ -563,49 +538,47 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
 
 
 def main_loop():
-    pivotes_historicos = cargar_pivotes()
+    pivotes_historicos = []  # Lista para almacenar los últimos 10 pivotes
     analisis_inicial_completo = False
 
     # --- ANÁLISIS INICIAL (UNA SOLA VEZ) ---
     print("Iniciando análisis inicial...")
     for timeframe, file_path in CSV_FILES.items():
         df = load_csv(file_path)
-        if df is None:  # Manejo de error si no se puede cargar el DataFrame
+        if df is None:
             print(f"Error al cargar datos iniciales para {timeframe}. Se omitirá esta temporalidad en el análisis inicial.")
-            continue  # Salta a la siguiente temporalidad
+            continue
         if df.empty:
             print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}. Se omitirá esta temporalidad en el análisis inicial.")
             continue
+
         try:
             print(f"Analizando datos iniciales de {timeframe}...")
             indicators = analyze_indicators(df, timeframe, pivotes_historicos)
             report = generate_report(timeframe, indicators)
             export_to_json(report, timeframe)
             LAST_RUN[timeframe] = df.index[-1]
-            actualizar_pivotes_historicos(indicators, pivotes_historicos) #Refactorizado en una funcion
+            pivotes_historicos = mantener_ultimos_pivotes(indicators.get("PriceAction", {}), pivotes_historicos)
         except Exception as e:
             print(f"Error durante el análisis inicial de {timeframe}: {e}")
             traceback.print_exc()
-    guardar_pivotes(pivotes_historicos)
+
     analisis_inicial_completo = True
     print("Análisis inicial completado.")
 
     # --- BUCLE PRINCIPAL ---
     while True:
-        try: #Manejo de errores en el bucle principal
+        try:
             espera_cierre_vela("15m")
             df_15m = load_csv(CSV_FILES["15m"])
 
-            if df_15m is None:
-                print("Error al cargar el dataframe de 15m, revisa el archivo")
-                continue #Continua a la siguiente iteracion
-            if df_15m.empty:
-                print("El dataframe de 15m esta vacio")
-                continue #Continua a la siguiente iteracion
+            if df_15m is None or df_15m.empty:
+                print("Error o DataFrame vacío para 15m. Revisar archivo.")
+                continue
 
             ultima_vela_15m_analizada = LAST_RUN.get("15m")
 
-            if not analisis_inicial_completo: #Espera a que termine el analisis inicial
+            if not analisis_inicial_completo:
                 print("Esperando a que se complete el análisis inicial...")
                 continue
 
@@ -616,11 +589,8 @@ def main_loop():
 
                 for timeframe in ["1h", "4h", "1d"]:
                     df = load_csv(CSV_FILES[timeframe])
-                    if df is None:
-                        print(f"Error al cargar datos de {timeframe}. Se omitirá esta temporalidad en este ciclo.")
-                        continue
-                    if df.empty:
-                        print(f"DataFrame vacío para {timeframe}. Se omitirá esta temporalidad en este ciclo.")
+                    if df is None or df.empty:
+                        print(f"Error o DataFrame vacío para {timeframe}. Se omitirá esta temporalidad en este ciclo.")
                         continue
                     if LAST_RUN.get(timeframe) is None or df.index[-1] != LAST_RUN[timeframe]:
                         print(f"Nueva vela detectada para {timeframe}.")
@@ -629,44 +599,43 @@ def main_loop():
 
                 for timeframe in timeframes_a_procesar:
                     df = load_csv(CSV_FILES[timeframe])
-                    if df is None:
-                        print(f"Error al cargar datos de {timeframe}. Se omitirá esta temporalidad en este ciclo.")
+                    if df is None or df.empty:
+                        print(f"Error o DataFrame vacío para {timeframe}. Se omitirá esta temporalidad en este ciclo.")
                         continue
-                    if df.empty:
-                        print(f"DataFrame vacío para {timeframe}. Se omitirá esta temporalidad en este ciclo.")
-                        continue
+
                     try:
                         print(f"Analizando {timeframe}...")
                         indicators = analyze_indicators(df, timeframe, pivotes_historicos)
                         report = generate_report(timeframe, indicators)
                         export_to_json(report, timeframe)
-                        actualizar_pivotes_historicos(indicators, pivotes_historicos) #Refactorizado en una funcion
+                        pivotes_historicos = mantener_ultimos_pivotes(indicators.get("PriceAction", {}), pivotes_historicos)
                     except Exception as e:
                         print(f"Error durante el análisis de {timeframe}: {e}")
                         traceback.print_exc()
-                guardar_pivotes(pivotes_historicos)
             else:
                 print("No hay nueva vela para 15m. Esperando la siguiente vela...")
+
         except Exception as e:
             print(f"Error en el bucle principal: {e}")
             traceback.print_exc()
-        time.sleep(1) #Pequeña pausa para evitar sobrecargar la CPU
 
-def actualizar_pivotes_historicos(indicators, pivotes_historicos):
-    try:
-        price_action_data = indicators.get("PriceAction", {})
-        if price_action_data and "ZonasSR" in price_action_data:
-            nuevas_zonas = price_action_data["ZonasSR"]
-            for zona in nuevas_zonas:
-                nivel = str(round(np.mean(zona),5))
-                if nivel in pivotes_historicos:
-                    pivotes_historicos[nivel]["conteo"] += 1
-                else:
-                    tipo_zona = "soporte" if zona[0] > zona[1] else "resistencia"
-                    pivotes_historicos[nivel] = {"conteo": 1, "tipo": tipo_zona}
-    except Exception as e:
-        print(f"Error al actualizar pivotes históricos: {e}")
-        traceback.print_exc()
+        time.sleep(1)  # Pausa para evitar sobrecargar la CPU
+
+
+def mantener_ultimos_pivotes(price_action_data, pivotes_historicos):
+    """
+    Actualiza la lista de pivotes históricos para mantener solo los últimos 10.
+    """
+    if price_action_data and "ZonasSR" in price_action_data:
+        nuevas_zonas = price_action_data["ZonasSR"]
+        for zona in nuevas_zonas:
+            nivel = round(np.mean(zona), 5)
+            if nivel not in pivotes_historicos:
+                pivotes_historicos.append(nivel)
+                if len(pivotes_historicos) > 10:
+                    pivotes_historicos.pop(0)  # Elimina el pivote más antiguo
+    return pivotes_historicos
+
 
 if __name__ == "__main__":
     main_loop()
