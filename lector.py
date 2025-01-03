@@ -141,28 +141,15 @@ def analyze_rsi(df):
         return {"value": None, "signal": "Error", "message": "Error al analizar el RSI. DataFrame vacío o datos insuficientes."}
 
 def analyze_vwap(df):
-    """
-    Analiza el VWAP.
-
-    Esta función asume que la columna 'VWAP' YA ESTÁ CALCULADA y presente en el DataFrame 'df',
-    junto con la columna 'close' (Precio de Cierre).
-
-    Args:
-        df (pd.DataFrame): DataFrame con las columnas 'VWAP' y 'close'.
-
-    Returns:
-        dict: Un diccionario con el valor del VWAP ('value'), la señal ('signal') y un mensaje descriptivo ('message').
-              Devuelve un mensaje de error si faltan las columnas necesarias.
-    """
     try:
         if not all(col in df.columns for col in ['vwap', 'close']):
             return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'vwap' o 'close' en el DataFrame."}
 
-        last_vwap = df['vwap'].iloc[-1]
-        last_close = df['close'].iloc[-1]
+        last_vwap = round(df['vwap'].iloc[-1], 2)
+        last_close = round(df['close'].iloc[-1], 2)
 
         signal = "Neutral"
-        message = f"vwap en {last_vwap:.2f}. Precio actual en {last_close:.2f}. "
+        message = f"VWAP en {last_vwap:.2f}. Precio actual en {last_close:.2f}. "
 
         if last_close > last_vwap:
             signal = "Alcista"
@@ -173,11 +160,11 @@ def analyze_vwap(df):
         else:
             message += "El precio actual está en el VWAP."
 
-        # Análisis adicional basado en la distancia del precio al VWAP (en porcentaje)
         distancia_porcentual = abs((last_close - last_vwap) / last_vwap) * 100
+        distancia_porcentual = round(distancia_porcentual, 2)
         message += f" Distancia al VWAP: {distancia_porcentual:.2f}%. "
 
-        if distancia_porcentual > 1:  # Ejemplo: Distancia mayor al 1% se considera significativa (Ajustable)
+        if distancia_porcentual > 1:
             if last_close > last_vwap:
                 message += "El precio se ha alejado significativamente del VWAP al alza."
             else:
@@ -187,6 +174,7 @@ def analyze_vwap(df):
 
     except IndexError:
         return {"value": None, "signal": "Error", "message": "Error al analizar el VWAP. DataFrame vacío o datos insuficientes."}
+
 # Función para analizar ATR
 
 def analyze_atr(df, lookback=5):
