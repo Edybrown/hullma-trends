@@ -407,19 +407,55 @@ def analyze_macd(df):
     except Exception as e:
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
+def analyze_price_action(df):
+    """Analiza la acción del precio buscando máximos, mínimos y patrones de tendencia."""
+    if df.empty or len(df) < 2:
+        return {
+            "maximos": [],
+            "minimos": [],
+            "patrones": [],
+            "mensaje": "Datos insuficientes para analizar la acción del precio."
+        }
 
+    close, high, low = df['close'], df['high'], df['low']
+    maximos = [{"indice": i, "valor": high.iloc[i]} for i in range(1, len(high) - 1)
+               if high.iloc[i] > high.iloc[i - 1] and high.iloc[i] > high.iloc[i + 1]]
+    minimos = [{"indice": i, "valor": low.iloc[i]} for i in range(1, len(low) - 1)
+               if low.iloc[i] < low.iloc[i - 1] and low.iloc[i] < low.iloc[i + 1]]
+    patrones = []
 
+    def calcular_tendencia(puntos, tipo):
+        if len(puntos) >= 2:
+            x = [p["indice"] for p in puntos]
+            y = [p["valor"] for p in puntos]
+            try:
+                coef = np.polyfit(x, y, 1)
+                patrones.append({"tipo": f"Línea de tendencia {tipo}", "coeficientes": coef.tolist()})
+            except Exception as e:
+                print(f"Error al calcular línea de tendencia {tipo}: {e}")
+
+    calcular_tendencia(maximos, "bajista")
+    calcular_tendencia(minimos, "alcista")
+
+    mensaje = ""
+    if 'hullma' in df.columns and len(df) >= 2:
+        if close.iloc[-2] < df['hullma'].iloc[-2] and close.iloc[-1] > df['hullma'].iloc[-1]:
+            mensaje = "Cruce alcista del precio sobre la HULLMA."
+        elif close.iloc[-2] > df['hullma'].iloc[-2] and close.iloc[-1] < df['hullma'].iloc[-1]:
+            mensaje = "Cruce bajista del precio sobre la HULLMA."
+
+    return {"maximos": maximos, "minimos": minimos, "patrones": patrones, "mensaje": mensaje}
 
 
 def analyze_indicators(df, timeframe):
-    """Analiza todos los indicadores relevantes, incluyendo price action."""
+    """Analiza todos los indicadores relevantes."""
     rsi_analysis = analyze_rsi(df)
     vwap_analysis = analyze_vwap(df)
     atr_analysis = analyze_atr(df)
     hullma_analysis = analyze_hullma(df)
     bollinger_analysis = analyze_bollinger_bands(df)
     macd_analysis = analyze_macd(df)
-    price_action_analysis = analyze_price_action(df) # Llamada a analyze_price_action
+    price_action_analysis = analyze_price_action(df)  # Nuevo análisis agregado
 
     return {
         "RSI": rsi_analysis,
@@ -428,7 +464,7 @@ def analyze_indicators(df, timeframe):
         "HULLMA": hullma_analysis,
         "Bollinger": bollinger_analysis,
         "MACD": macd_analysis,
-        "PriceAction": price_action_analysis # Se añade el análisis de Price Action al diccionario
+        "Price Action": price_action_analysis,  # Resultado de la nueva función
     }
 
 # Función para generar un informe
@@ -466,15 +502,7 @@ def main_loop():
         df = load_csv(file_path)
         if df is not None and not df.empty:
             try:
-                #Calculamos los indicadores ANTES del analisis
-                df['macd'], df['macd_signal'], df['macd_hist'] = ta.macd(df['close'], fast=12, slow=26, signal_period=9)
-                df['rsi'] = ta.rsi(df['close'], window=14)
-                df['bollinger_bands'] = ta.BBANDS(df['close'], window=20)
-                df['hullma'] = ta.hull_moving_average(df['close'])
-                df['vwap'] = ta.vwap(df['high'], df['low'], df['close'], volume=df.get('volume'))
-                df['atr'] = ta.ATR(df['high'], df['low'], df['close'], window=14)
-
-                indicators = analyze_indicators(df, timeframe)
+                indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
                 report = generate_report(timeframe, indicators)
                 export_to_json(report, timeframe)
                 LAST_RUN[timeframe] = df.index[-1]
@@ -511,15 +539,7 @@ def main_loop():
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty:
                         try:
-                            #Calculamos los indicadores ANTES del analisis
-                            df['macd'], df['macd_signal'], df['macd_hist'] = ta.macd(df['close'], fast=12, slow=26, signal_period=9)
-                            df['rsi'] = ta.rsi(df['close'], window=14)
-                            df['bollinger_bands'] = ta.BBANDS(df['close'], window=20)
-                            df['hullma'] = ta.hull_moving_average(df['close'])
-                            df['vwap'] = ta.vwap(df['high'], df['low'], df['close'], volume=df.get('volume'))
-                            df['atr'] = ta.ATR(df['high'], df['low'], df['close'], window=14)
-
-                            indicators = analyze_indicators(df, timeframe)
+                            indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
                             report = generate_report(timeframe, indicators)
                             export_to_json(report, timeframe)
                         except Exception as e:
