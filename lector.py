@@ -407,44 +407,66 @@ def analyze_macd(df):
     except Exception as e:
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
-def analyze_price_action(df):
-    """Analiza la acción del precio buscando máximos, mínimos y patrones de tendencia."""
-    if df.empty or len(df) < 2:
-        return {
-            "maximos": [],
-            "minimos": [],
-            "patrones": [],
-            "mensaje": "Datos insuficientes para analizar la acción del precio."
-        }
+def analyze_price_action(df, velas_maximas=200):
+    """Analiza la acción del precio buscando máximos, mínimos y líneas de tendencia."""
 
-    close, high, low = df['close'], df['high'], df['low']
-    maximos = [{"indice": i, "valor": high.iloc[i]} for i in range(1, len(high) - 1)
-               if high.iloc[i] > high.iloc[i - 1] and high.iloc[i] > high.iloc[i + 1]]
-    minimos = [{"indice": i, "valor": low.iloc[i]} for i in range(1, len(low) - 1)
-               if low.iloc[i] < low.iloc[i - 1] and low.iloc[i] < low.iloc[i + 1]]
+    if df.empty or len(df) < 2:
+        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes para analizar la acción del precio."}
+
+    close = df['close']
+    high = df['high']
+    low = df['low']
+
+    maximos = []
+    minimos = []
+    mensaje = ""
+
+    # Encuentra máximos y mínimos locales
+    for i in range(1, len(close) - 1):  # Iteramos desde 1 hasta len(close) - 1
+        if high.iloc[i] > high.iloc[i - 1] and high.iloc[i] > high.iloc[i + 1]:
+            maximos.append({"indice": i, "valor": high.iloc[i]})
+        if low.iloc[i] < low.iloc[i - 1] and low.iloc[i] < low.iloc[i + 1]:
+            minimos.append({"indice": i, "valor": low.iloc[i]})
+
+    # Filtra solo los últimos 5 pivotes
+    maximos = maximos[-5:]
+    minimos = minimos[-5:]
+
     patrones = []
 
-    def calcular_tendencia(puntos, tipo):
-        if len(puntos) >= 2:
-            x = [p["indice"] for p in puntos]
-            y = [p["valor"] for p in puntos]
-            try:
-                coef = np.polyfit(x, y, 1)
-                patrones.append({"tipo": f"Línea de tendencia {tipo}", "coeficientes": coef.tolist()})
-            except Exception as e:
-                print(f"Error al calcular línea de tendencia {tipo}: {e}")
+    # Línea de tendencia bajista
+    if len(maximos) >= 2:
+        x = [maximo["indice"] for maximo in maximos]
+        y = [maximo["valor"] for maximo in maximos]
+        try:
+            coef = np.polyfit(x, y, 1)
+            patrones.append({"tipo": "Linea de tendencia bajista (aproximada)", "coeficientes": coef.tolist()})
+        except np.RankWarning:
+            print("Advertencia: No se pudo ajustar una línea de tendencia bajista.")
+        except Exception as e:
+            print(f"Error al calcular linea de tendencia bajista: {e}")
 
-    calcular_tendencia(maximos, "bajista")
-    calcular_tendencia(minimos, "alcista")
+    # Línea de tendencia alcista
+    if len(minimos) >= 2:
+        x = [minimo["indice"] for minimo in minimos]
+        y = [minimo["valor"] for minimo in minimos]
+        try:
+            coef = np.polyfit(x, y, 1)
+            patrones.append({"tipo": "Linea de tendencia alcista (aproximada)", "coeficientes": coef.tolist()})
+        except np.RankWarning:
+            print("Advertencia: No se pudo ajustar una línea de tendencia alcista.")
+        except Exception as e:
+            print(f"Error al calcular linea de tendencia alcista: {e}")
 
-    mensaje = ""
+    # Cruce de HULLMA
     if 'hullma' in df.columns and len(df) >= 2:
         if close.iloc[-2] < df['hullma'].iloc[-2] and close.iloc[-1] > df['hullma'].iloc[-1]:
-            mensaje = "Cruce alcista del precio sobre la HULLMA."
+            mensaje += "Cruce alcista del precio sobre la HULLMA. "
         elif close.iloc[-2] > df['hullma'].iloc[-2] and close.iloc[-1] < df['hullma'].iloc[-1]:
-            mensaje = "Cruce bajista del precio sobre la HULLMA."
+            mensaje += "Cruce bajista del precio sobre la HULLMA. "
 
     return {"maximos": maximos, "minimos": minimos, "patrones": patrones, "mensaje": mensaje}
+
 
 
 def analyze_indicators(df, timeframe):
