@@ -519,23 +519,18 @@ def encontrar_zonas_sr(pivotes, tolerancia=0.01):
     return list(set(zonas_sr))  # Eliminar duplicados
 
 
-def analyze_price_action(df, max_velas=200):
-    """
-    Analiza la acción del precio con un rango limitado de datos.
-    
-    Args:
-        df (DataFrame): Contiene las columnas 'High' y 'Low'.
-        max_velas (int): Número máximo de velas a analizar.
-
-    Returns:
-        dict: Resultados del análisis de la acción del precio.
-    """
+def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
     try:
         # Tomar solo las últimas `max_velas`
         df = df.tail(max_velas)
+        precios = df[['high', 'low']].values  # Asegúrate de tomar columnas correctas
+
+        # Validar que precios sean numéricos
+        if not all(isinstance(x, (int, float)) for sublist in precios for x in sublist):
+            raise ValueError("Los datos en 'high' o 'low' no son válidos.")
 
         # Identificar pivotes relevantes
-        pivotes = encontrar_cambios_de_sentido(df)
+        pivotes = encontrar_cambios_de_sentido(precios)
 
         # Analizar tendencia
         tendencia = analizar_tendencia(pivotes)
@@ -554,7 +549,9 @@ def analyze_price_action(df, max_velas=200):
         }
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
+        traceback.print_exc()
         return {"Error": str(e)}
+
 
 
 
