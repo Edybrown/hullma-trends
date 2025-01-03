@@ -334,23 +334,24 @@ def analyze_macd(df):
     try:
         if df is None or df.empty:
             return {"signal": "Datos insuficientes", "message": "DataFrame vacío o None."}
-        df = df.rename(columns={'Close': 'close', 'CLOSE':'close', 'cLOSE':'close'}) #Nos aseguramos que close este en minuscula
-        # Verificar que las columnas necesarias estén en el DataFrame
-        if not all(col in df.columns for col in ['MACD', 'MACD_Signal', 'MACD_Hist', 'close']):
+
+        # Verificar que las columnas NECESARIAS (con los nombres EXACTOS del DataFrame) estén presentes
+        if not all(col in df.columns for col in ['MACD', 'MACD_Signal', 'MACD_Hist', 'close']): #Aqui estan los nombres exactos
             return {"signal": "Datos insuficientes", "message": "Faltan columnas de MACD (MACD, MACD_Signal, MACD_Hist, close)."}
 
-        # Últimos valores de las columnas necesarias
+        # Acceder a las columnas usando los nombres EXACTOS del DataFrame
         last_macd = df['MACD'].iloc[-1]
         last_signal = df['MACD_Signal'].iloc[-1]
         last_histogram = df['MACD_Hist'].iloc[-1]
         last_close = df['close'].iloc[-1]
+
         if len(df) >= 2:
             prev_close = df['close'].iloc[-2]
 
         signal = "Neutral"
         message = f"MACD: {last_macd:.2f}, Señal: {last_signal:.2f}, Histograma: {last_histogram:.2f}. "
 
-        # Analizar cruces entre MACD y Signal
+        # Analizar cruces entre MACD y Signal (usando los nombres EXACTOS)
         if last_macd > last_signal and df['MACD'].iloc[-2] <= df['MACD_Signal'].iloc[-2]:
             signal = "Compra"
             message += "Cruce alcista detectado (MACD supera a la Señal)."
@@ -386,7 +387,7 @@ def analyze_macd(df):
     except Exception as e:
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
-
+        
 def encontrar_cambios_de_sentido(df, min_velas=8, max_pivotes=10):
     """
     Detecta pivotes relevantes basados en cambios de sentido del precio.
@@ -502,10 +503,10 @@ def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
         # Tomar solo las últimas `max_velas`
         df = df.tail(max_velas)
 
-        # Asegurarnos que tenemos las columnas necesarias
-        if 'high' not in df.columns or 'low' not in df.columns or 'close' not in df.columns or 'HULLMA' not in df.columns:
+        # Asegurarnos que tenemos las columnas necesarias (con los nombres EXACTOS del DataFrame)
+        if not all(col in df.columns for col in ['high', 'low', 'close', 'HULLMA']): #Nombres exactos
             raise ValueError("El DataFrame no tiene las columnas esperadas ('high', 'low', 'close', 'HULLMA').")
-        
+
         # Detectar pivotes con la lógica de cambios de dirección y verificación con HullMA
         pivotes = encontrar_cambios_de_sentido(df)
 
