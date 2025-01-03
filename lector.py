@@ -520,17 +520,19 @@ def encontrar_zonas_sr(pivotes, tolerancia=0.01):
 
 
 def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
+    """
+    Analiza la acción del precio considerando un rango limitado de datos.
+    """
     try:
-        # Tomar solo las últimas `max_velas`
+        # Limitar el DataFrame a las últimas `max_velas`
         df = df.tail(max_velas)
-        precios = df[['high', 'low']].values  # Asegúrate de tomar columnas correctas
 
-        # Validar que precios sean numéricos
-        if not all(isinstance(x, (int, float)) for sublist in precios for x in sublist):
-            raise ValueError("Los datos en 'high' o 'low' no son válidos.")
+        # Validar que hay suficientes datos para el análisis
+        if df.empty or len(df) < 3:
+            raise ValueError("El DataFrame no contiene suficientes datos para el análisis.")
 
         # Identificar pivotes relevantes
-        pivotes = encontrar_cambios_de_sentido(precios)
+        pivotes = encontrar_cambios_de_sentido(df)
 
         # Analizar tendencia
         tendencia = analizar_tendencia(pivotes)
@@ -549,11 +551,7 @@ def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
         }
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
-        traceback.print_exc()
         return {"Error": str(e)}
-
-
-
 
 
 def analyze_indicators(df, timeframe, pivotes_historicos):
