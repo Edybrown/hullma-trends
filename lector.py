@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import ta
 import traceback
+import re
 
 # --- CONFIGURACIÓN DE ARCHIVOS Y CARPETAS ---
 DATA_DIR = "datos_BTC"
@@ -35,11 +36,35 @@ TIME_INTERVALS = {
 
 LAST_RUN = {key: None for key in CSV_FILES.keys()}
 
-# --- FUNCIÓN PARA CARGAR DATOS ---
+COLUMN_MAPPING = {
+    "Close": "close",
+    "CLOSE": "close",
+    "cLOSE": "close"
+}
+
 def load_csv(file_path):
     try:
         if os.path.exists(file_path):
             df = pd.read_csv(file_path, index_col='time', parse_dates=True)
+
+            # Normalización de nombres de columna (con manejo de excepciones)
+            try:
+                def normalize_column_name(name):
+                    name = name.lower()
+                    name = re.sub(r"[^a-zA-Z0-9]+", "_", name)  # Sustituye caracteres no alfanuméricos por _
+                    name = re.sub(r"__+", "_", name)  # Sustituye múltiples _ por uno solo
+                    name = name.strip("_")  # Elimina _ al principio y al final
+                    return name
+                df.columns = [normalize_column_name(col) for col in df.columns]
+            except AttributeError as e:
+                print(f"Error al normalizar nombres de columna: {e}. Asegúrate de que las columnas sean strings")
+                return None
+            except Exception as e:
+                print(f"Error desconocido al normalizar nombres de columna: {e}")
+                return None
+
+            df = df.rename(columns=COLUMN_MAPPING)
+
             if not df.empty:
                 return df
             else:
@@ -57,8 +82,6 @@ def load_csv(file_path):
     except Exception as e:
         print(f"Error desconocido al cargar el archivo {file_path}: {e}")
         return None
-
-
 
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
@@ -132,14 +155,14 @@ def analyze_vwap(df):
               Devuelve un mensaje de error si faltan las columnas necesarias.
     """
     try:
-        if not all(col in df.columns for col in ['VWAP', 'close']):
-            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'VWAP' o 'close' en el DataFrame."}
+        if not all(col in df.columns for col in ['vwap', 'close']):
+            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'vwap' o 'close' en el DataFrame."}
 
-        last_vwap = df['VWAP'].iloc[-1]
+        last_vwap = df['vwap'].iloc[-1]
         last_close = df['close'].iloc[-1]
 
         signal = "Neutral"
-        message = f"VWAP en {last_vwap:.2f}. Precio actual en {last_close:.2f}. "
+        message = f"vwap en {last_vwap:.2f}. Precio actual en {last_close:.2f}. "
 
         if last_close > last_vwap:
             signal = "Alcista"
@@ -339,63 +362,50 @@ def analyze_bollinger_bands(df):
         return {"signal": "Error", "message": f"Error al analizar las Bandas de Bollinger: {e}"}
 
 def analyze_macd(df):
-    """Analiza el indicador MACD precalculado en el DataFrame."""
+    print(f"Columnas disponibles en MACD: {df.columns.tolist()}")
+    required_columns = ['macd', 'macd_signal', 'macd_hist', 'close']
+    if not all(col in df.columns for col in required_columns):
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        return {"signal": "Datos insuficientes", "message": f"Faltan las columnas: {missing_columns}. Columnas presentes: {df.columns.tolist()}"}
     try:
-        if df is None or df.empty:
-            return {"signal": "Datos insuficientes", "message": "DataFrame vacío o None."}
-        df = df.rename(columns={'Close': 'close', 'CLOSE':'close', 'cLOSE':'close'}) #Nos aseguramos que close este en minuscula
-        # Verificar que las columnas necesarias estén en el DataFrame
-        if not all(col in df.columns for col in ['MACD', 'MACD_Signal', 'MACD_Hist', 'close']):
-            return {"signal": "Datos insuficientes", "message": "Faltan columnas de MACD (MACD, MACD_Signal, MACD_Hist, close)."}
-
-        # Últimos valores de las columnas necesarias
-        last_macd = df['MACD'].iloc[-1]
-        last_signal = df['MACD_Signal'].iloc[-1]
-        last_histogram = df['MACD_Hist'].iloc[-1]
+        if df.empty:
+            return {"signal": "Datos insuficientes", "message": "DataFrame vacío."}
+        
+        last_macd = df['macd'].iloc[-1]
+        last_signal = df['macd_signal'].iloc[-1]
+        last_histogram = df['macd_hist'].iloc[-1]
         last_close = df['close'].iloc[-1]
+        
+        if pd.isna(last_macd) or pd.isna(last_signal) or pd.isna(last_histogram) or pd.isna(last_close):
+            return {"signal": "Datos insuficientes", "message": "Valores MACD, Señal, Histograma o Close faltantes (NaN)."}
+
         if len(df) >= 2:
-            prev_close = df['close'].iloc[-2]
-
-        signal = "Neutral"
-        message = f"MACD: {last_macd:.2f}, Señal: {last_signal:.2f}, Histograma: {last_histogram:.2f}. "
-
-        # Analizar cruces entre MACD y Signal
-        if last_macd > last_signal and df['MACD'].iloc[-2] <= df['MACD_Signal'].iloc[-2]:
-            signal = "Compra"
-            message += "Cruce alcista detectado (MACD supera a la Señal)."
-        elif last_macd < last_signal and df['MACD'].iloc[-2] >= df['MACD_Signal'].iloc[-2]:
-            signal = "Venta"
-            message += "Cruce bajista detectado (MACD cae por debajo de la Señal)."
-
-        # Analizar la posición respecto a la línea cero
-        if last_macd > 0:
-            message += " MACD por encima de cero: Momentum alcista."
-        elif last_macd < 0:
-            message += " MACD por debajo de cero: Momentum bajista."
-
-        # Análisis del Histograma
-        if last_histogram > 0 and df['MACD_Hist'].iloc[-2] <= 0:
-            message += " Incremento en momentum alcista."
-        elif last_histogram < 0 and df['MACD_Hist'].iloc[-2] >= 0:
-            message += " Incremento en momentum bajista."
-
-        # Análisis de divergencias
-        if len(df) >= 3:
-            if last_macd < df['MACD'].iloc[-2] and last_close > prev_close:
-                message += " Divergencia bajista: MACD baja mientras precio sube."
-                signal = "Divergencia Bajista"
-            elif last_macd > df['MACD'].iloc[-2] and last_close < prev_close:
-                message += " Divergencia alcista: MACD sube mientras precio baja."
-                signal = "Divergencia Alcista"
-
+            prev_macd = df['macd'].iloc[-2]
+            prev_signal = df['macd_signal'].iloc[-2]
+            if last_macd > last_signal and prev_macd <= prev_signal:
+                signal = "Cruce Alcista"
+                message = f"Cruce alcista del MACD. MACD ({last_macd:.2f}) cruza por encima de la señal ({last_signal:.2f})."
+            elif last_macd < last_signal and prev_macd >= prev_signal:
+                signal = "Cruce Bajista"
+                message = f"Cruce bajista del MACD. MACD ({last_macd:.2f}) cruza por debajo de la señal ({last_signal:.2f})."
+            elif last_histogram > 0:
+                signal = "Tendencia Alcista"
+                message = f"Histograma MACD positivo ({last_histogram:.2f}). Tendencia alcista."
+            elif last_histogram < 0:
+                signal = "Tendencia Bajista"
+                message = f"Histograma MACD negativo ({last_histogram:.2f}). Tendencia bajista."
+            else:
+                 signal = "Sin señal clara"
+                 message = f"Sin señal clara del MACD. Histograma en cero ({last_histogram:.2f})"
+        else:
+            signal = "Datos insuficientes"
+            message = "Se necesitan al menos dos periodos para analizar cruces del MACD."
         return {"signal": signal, "message": message}
 
     except IndexError:
-        return {"signal": "Error", "message": "Error al analizar el MACD. Datos insuficientes"}
+        return {"signal": "Error", "message": "Error de índice al analizar MACD. Datos insuficientes."}
     except Exception as e:
-        print(f"Error en analyze_macd: {e}")
-        return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
-
+        return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
 
 def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
