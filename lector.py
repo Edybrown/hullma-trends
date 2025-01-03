@@ -527,35 +527,12 @@ def generate_report(timeframe, indicators, price_action_analysis):
     return report
     
 def export_to_json(report, timeframe):
-    """
-    Exporta un informe a JSON, limpiando los mensajes antes de guardarlo.
-    
-    Args:
-        report (dict): Informe generado por las funciones de análisis.
-        timeframe (str): Marco temporal asociado al informe.
-    """
-    def clean_message(message):
-        """Subfunción: Elimina caracteres no imprimibles de un string."""
-        return re.sub(r'[^\x20-\x7E]+', '', message)
-
-    def clean_report(report):
-        """Subfunción: Limpia todos los mensajes en el informe."""
-        for key, data in report.items():
-            if "message" in data:
-                data["message"] = clean_message(data["message"])
-        return report
-
-    # Limpiar el informe
-    cleaned_report = clean_report(report)
-
-    # Definir el nombre del archivo de salida
-    output_file = os.path.join("OUTPUT_DIR", f"report_{timeframe}.json")
-    
-    # Exportar el informe limpio a JSON
+    """Exporta a JSON, guardando solo el último informe."""
+    output_file = os.path.join(OUTPUT_DIR, f"report_{timeframe}.json")
     with open(output_file, "w") as f:
-        json.dump(cleaned_report, f, indent=4)
-
+        json.dump(report, f, indent=4)
     print(f"Informe para {timeframe} exportado a {output_file}")
+    
 def espera_cierre_vela(timeframe, margen_segundos=5):
     """Espera hasta el cierre de la próxima vela, con un margen."""
     ahora = time.time()
