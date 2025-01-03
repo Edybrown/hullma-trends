@@ -455,8 +455,7 @@ def analyze_indicators(df, timeframe):
     hullma_analysis = analyze_hullma(df)
     bollinger_analysis = analyze_bollinger_bands(df)
     macd_analysis = analyze_macd(df)
-    price_action_analysis = analyze_price_action(df)  # Nuevo análisis agregado
-
+     price_action_analysis = analyze_price_action(df.tail(100)
     return {
         "RSI": rsi_analysis,
         "VWAP": vwap_analysis,
