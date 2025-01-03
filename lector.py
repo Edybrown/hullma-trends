@@ -408,131 +408,22 @@ def analyze_macd(df):
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
 
-def analyze_price_action(df, velas_maximas=200):  # Parámetro velas_maximas
-    # Usar min para evitar errores si velas_maximas es mayor que la longitud del DataFrame
-    df = df.iloc[-min(velas_maximas, len(df)):]  # Limita el DataFrame a las últimas velas_maximas
-
-    if len(df) < 2:
-        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes."}
-
-    hullma = df['hullma']
-    close = df['close']
-    high = df['high']
-    low = df['low']
-    maximos = []
-    minimos = []
-    cruces = []
-
-    # 1. Identificación de cruces (últimos 10 dentro del límite de velas)
-    for i in range(len(df) - 1):
-        if (close[i] < hullma[i] and close[i + 1] > hullma[i + 1]):  # Cruce alcista
-            cruces.append({"tipo": "alcista", "indice": i + 1})
-        elif (close[i] > hullma[i] and close[i + 1] < hullma[i + 1]):  # Cruce bajista
-            cruces.append({"tipo": "bajista", "indice": i + 1})
-
-    cruces = cruces[-10:]  # Solo los últimos 10 cruces
-
-    if not cruces:  # Si no hay cruces regresa vacío
-        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "No se encontraron cruces de HULLMA dentro del rango especificado."}
-
-    # 2. Localización de pivotes (dentro del límite de velas)
-    for cruce in cruces:
-        indice_cruce = cruce["indice"]
-        tipo_cruce = cruce["tipo"]
-        ventana_inicio = max(0, indice_cruce - 6) #Usar max para evitar indices negativos
-
-        if tipo_cruce == "alcista":
-            pivote = high[ventana_inicio:indice_cruce + 1].max()
-            if abs((pivote - hullma[indice_cruce]) / hullma[indice_cruce]) > 0.02:  # Confirma que se aleja un 2% de la hullma
-                maximos.append({"valor": pivote, "indice": indice_cruce})
-        elif tipo_cruce == "bajista":
-            pivote = low[ventana_inicio:indice_cruce + 1].min()
-            if abs((pivote - hullma[indice_cruce]) / hullma[indice_cruce]) > 0.02:  # Confirma que se aleja un 2% de la hullma
-                minimos.append({"valor": pivote, "indice": indice_cruce})
-
-    # Mantener solo los últimos 5 pivotes
-    maximos = maximos[-5:]
-    minimos = minimos[-5:]
-
-    # 3. Análisis de secuencia y patrones (ejemplo simplificado de línea de tendencia)
-    patrones = []
-
-    if len(maximos) >= 2:
-        x = [maximo["indice"] for maximo in maximos]
-        y = [maximo["valor"] for maximo in maximos]
-        try: #Manejo de excepciones para np.polyfit por si no hay suficientes puntos
-          coef = np.polyfit(x, y, 1)
-          poly1d_fn = np.poly1d(coef)
-          patrones.append({"tipo": "Linea de tendencia bajista (aproximada)", "ecuacion": poly1d_fn})
-        except np.RankWarning:
-          print("Advertencia: No se pudo ajustar una línea de tendencia bajista debido a la falta de puntos distintos.")
-        except Exception as e:
-          print(f"Error al calcular linea de tendencia bajista: {e}")
-
-
-    if len(minimos) >= 2:
-        x = [minimo["indice"] for minimo in minimos]
-        y = [minimo["valor"] for minimo in minimos]
-        try: #Manejo de excepciones para np.polyfit por si no hay suficientes puntos
-          coef = np.polyfit(x, y, 1)
-          poly1d_fn = np.poly1d(coef)
-          patrones.append({"tipo": "Linea de tendencia alcista (aproximada)", "ecuacion": poly1d_fn})
-        except np.RankWarning:
-          print("Advertencia: No se pudo ajustar una línea de tendencia alcista debido a la falta de puntos distintos.")
-        except Exception as e:
-          print(f"Error al calcular linea de tendencia alcista: {e}")
-
-    mensaje = ""
-    if patrones:
-        mensaje = "Se detectaron los siguientes patrones:\n"
-        for patron in patrones:
-            mensaje += f"- {patron['tipo']}\n"
-    else:
-        mensaje = "No se detectaron patrones claros con los últimos cruces de HULLMA dentro del rango especificado."
-
-    return {"maximos": maximos, "minimos": minimos, "patrones": patrones, "mensaje": mensaje}
-    
-
-def analyze_indicators(df, timeframe, velas_maximas=200):
-    resultados = {}
-    try:
-        if 'hullma' not in df.columns:
-            df['hullma'] = ta.trend.HullMovingAverage(df['close']).hull_moving_average()
-        resultados["PriceAction"] = analyze_price_action(df, velas_maximas)
-    except Exception as e:
-        resultados["PriceAction"] = f"Error al analizar Price Action: {e}"
-
-    try:
-        resultados["RSI"] = analyze_rsi(df)
-    except Exception as e:
-        resultados["RSI"] = f"Error al analizar RSI: {e}"
-
-    try:
-        resultados["VWAP"] = analyze_vwap(df)
-    except Exception as e:
-        resultados["VWAP"] = f"Error al analizar VWAP: {e}"
-
-    try:
-        resultados["ATR"] = analyze_atr(df)
-    except Exception as e:
-        resultados["ATR"] = f"Error al analizar ATR: {e}"
-
-    try:
-        resultados["HULLMA"] = analyze_hullma(df)
-    except Exception as e:
-        resultados["HULLMA"] = f"Error al analizar HULLMA: {e}"
-
-    try:
-        resultados["Bollinger"] = analyze_bollinger_bands(df)
-    except Exception as e:
-        resultados["Bollinger"] = f"Error al analizar Bandas de Bollinger: {e}"
-
-    try:
-        resultados["MACD"] = analyze_macd(df)
-    except Exception as e:
-        resultados["MACD"] = f"Error al analizar MACD: {e}"
-
-    return resultados
+def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
+    """Analiza todos los indicadores relevantes."""
+    rsi_analysis = analyze_rsi(df)
+    vwap_analysis = analyze_vwap(df)
+    atr_analysis = analyze_atr(df)
+    hullma_analysis = analyze_hullma(df)
+    bollinger_analysis = analyze_bollinger_bands(df)
+    macd_analysis = analyze_macd(df)
+    return {
+        "RSI": rsi_analysis,
+        "VWAP": vwap_analysis,
+        "ATR": atr_analysis,
+        "HULLMA": hullma_analysis,
+        "Bollinger": bollinger_analysis,
+        "MACD": macd_analysis,
+    }
 
 # Función para generar un informe
 def generate_report(timeframe, analysis):
@@ -564,23 +455,20 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
 def main_loop():
     analisis_inicial_completo = False
 
+    # Procesamiento inicial
     for timeframe, file_path in CSV_FILES.items():
         df = load_csv(file_path)
         if df is not None and not df.empty:
             try:
-                indicators = analyze_indicators(df, timeframe)
+                indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
                 report = generate_report(timeframe, indicators)
                 export_to_json(report, timeframe)
                 LAST_RUN[timeframe] = df.index[-1]
             except Exception as e:
-                print(f"Error grave durante el análisis inicial de {timeframe}: {e}") #Mensaje más claro
-                traceback.print_exc() #Imprime el traceback completo para depuración
-                #Aquí podrías considerar salir del programa si el error es crítico
-                #exit()
+                print(f"Error durante el análisis inicial de {timeframe}: {e}")
+                traceback.print_exc()
         elif df is not None and df.empty:
             print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
-        elif df is None:
-            print(f"Error al cargar el archivo para {timeframe}.")
 
     analisis_inicial_completo = True
 
@@ -609,7 +497,7 @@ def main_loop():
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty:
                         try:
-                            indicators = analyze_indicators(df, timeframe)
+                            indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
                             report = generate_report(timeframe, indicators)
                             export_to_json(report, timeframe)
                         except Exception as e:
