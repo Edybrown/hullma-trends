@@ -415,10 +415,10 @@ def encontrar_cambios_de_sentido(precios, min_velas=5, max_pivotes=6):
 def encontrar_cambios_de_sentido(df, tolerancia=0.01):
     """
     Identifica los máximos y mínimos relevantes del precio.
-    Basado en los valores de High y Low de las velas y filtrado por un umbral.
+    Basado en los valores de high y low de las velas y filtrado por un umbral.
     
     Args:
-        df (DataFrame): Contiene columnas 'High' y 'Low'.
+        df (DataFrame): Contiene columnas 'high' y 'low'.
         tolerancia (float): Umbral para definir cambios relevantes.
 
     Returns:
@@ -429,12 +429,12 @@ def encontrar_cambios_de_sentido(df, tolerancia=0.01):
     
     for i in range(1, n - 1):
         # Detectar máximos locales
-        if df['High'].iloc[i] > df['High'].iloc[i - 1] and df['High'].iloc[i] > df['High'].iloc[i + 1]:
-            pivotes.append((i, df['High'].iloc[i], "maximo"))
+        if df['high'].iloc[i] > df['high'].iloc[i - 1] and df['high'].iloc[i] > df['high'].iloc[i + 1]:
+            pivotes.append((i, df['high'].iloc[i], "maximo"))
 
         # Detectar mínimos locales
-        if df['Low'].iloc[i] < df['Low'].iloc[i - 1] and df['Low'].iloc[i] < df['Low'].iloc[i + 1]:
-            pivotes.append((i, df['Low'].iloc[i], "minimo"))
+        if df['low'].iloc[i] < df['low'].iloc[i - 1] and df['low'].iloc[i] < df['low'].iloc[i + 1]:
+            pivotes.append((i, df['low'].iloc[i], "minimo"))
     
     # Filtrar por tolerancia
     pivotes_relevantes = []
