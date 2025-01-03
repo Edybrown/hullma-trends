@@ -408,6 +408,87 @@ def analyze_macd(df):
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
 
+def analyze_price_action(df, velas_limite=200): # Parámetro velas_limite
+    df = df.iloc[-velas_limite:] # Limita el DataFrame a las últimas velas_limite
+    hullma = df['hullma']
+    close = df['close']
+    high = df['high']
+    low = df['low']
+    maximos = []
+    minimos = []
+    cruces = []
+
+    if len(df)<2:
+        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes."}
+
+    # 1. Identificación de cruces (últimos 10 dentro del límite de velas)
+    for i in range(len(df) - 1):
+        if (close[i] < hullma[i] and close[i + 1] > hullma[i + 1]):  # Cruce alcista
+            cruces.append({"tipo": "alcista", "indice": i+1})
+        elif (close[i] > hullma[i] and close[i + 1] < hullma[i + 1]):  # Cruce bajista
+            cruces.append({"tipo": "bajista", "indice": i+1})
+
+    cruces = cruces[-10:] #Solo los ultimos 10 cruces
+
+    if not cruces: #Si no hay cruces regresa vacio
+        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "No se encontraron cruces de HULLMA dentro del rango especificado."}
+
+    # 2. Localización de pivotes (dentro del límite de velas)
+    for cruce in cruces:
+        indice_cruce = cruce["indice"]
+        tipo_cruce = cruce["tipo"]
+        if tipo_cruce == "alcista":
+            if indice_cruce > 6:
+                ventana_inicio = indice_cruce - 6
+            else:
+                ventana_inicio = 0
+            pivote = high[ventana_inicio:indice_cruce+1].max()
+            if abs((pivote - hullma[indice_cruce])/hullma[indice_cruce]) > 0.02: #Confirma que se aleja un 2% de la hullma
+                maximos.append({"valor": pivote, "indice": indice_cruce})
+        elif tipo_cruce == "bajista":
+            if indice_cruce > 6:
+                ventana_inicio = indice_cruce - 6
+            else:
+                ventana_inicio = 0
+            pivote = low[ventana_inicio:indice_cruce+1].min()
+            if abs((pivote - hullma[indice_cruce])/hullma[indice_cruce]) > 0.02: #Confirma que se aleja un 2% de la hullma
+                minimos.append({"valor": pivote, "indice": indice_cruce})
+
+    #Mantener solo los ultimos 5 pivotes
+    maximos = maximos[-5:]
+    minimos = minimos[-5:]
+
+    # 3. Análisis de secuencia y patrones (ejemplo simplificado de línea de tendencia)
+    patrones = []
+
+    if len(maximos) >= 2:
+        # Intento simplificado de detección de línea de tendencia bajista
+        x = [maximo["indice"] for maximo in maximos]
+        y = [maximo["valor"] for maximo in maximos]
+        coef = np.polyfit(x, y, 1)
+        poly1d_fn = np.poly1d(coef)
+        patrones.append({"tipo": "Linea de tendencia bajista (aproximada)", "ecuacion": poly1d_fn})
+
+    if len(minimos) >= 2:
+        # Intento simplificado de detección de línea de tendencia alcista
+        x = [minimo["indice"] for minimo in minimos]
+        y = [minimo["valor"] for minimo in minimos]
+        coef = np.polyfit(x, y, 1)
+        poly1d_fn = np.poly1d(coef)
+        patrones.append({"tipo": "Linea de tendencia alcista (aproximada)", "ecuacion": poly1d_fn})
+
+    mensaje = ""
+    if patrones:
+        mensaje = "Se detectaron los siguientes patrones:\n"
+        for patron in patrones:
+            mensaje += f"- {patron['tipo']}\n"
+    else:
+        mensaje = "No se detectaron patrones claros con los últimos cruces de HULLMA dentro del rango especificado."
+
+    return {"maximos": maximos, "minimos": minimos, "patrones": patrones, "mensaje": mensaje}
+
+
+
 def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
     """Analiza todos los indicadores relevantes."""
     rsi_analysis = analyze_rsi(df)
@@ -416,6 +497,8 @@ def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
     hullma_analysis = analyze_hullma(df)
     bollinger_analysis = analyze_bollinger_bands(df)
     macd_analysis = analyze_macd(df)
+    price_action_analysis = analyze_price_action(df, velas_maximas)
+
     return {
         "RSI": rsi_analysis,
         "VWAP": vwap_analysis,
@@ -423,6 +506,7 @@ def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
         "HULLMA": hullma_analysis,
         "Bollinger": bollinger_analysis,
         "MACD": macd_analysis,
+        "PriceAction": price_action_analysis,
     }
 
 # Función para generar un informe
