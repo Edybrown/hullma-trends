@@ -387,29 +387,38 @@ def analyze_macd(df):
         print(f"Error en analyze_macd: {e}")
         return {"signal": "Error", "message": f"Error al analizar el MACD: {e}"}
 
-def encontrar_cambios_de_sentido(precios, min_velas=10, max_pivotes=6):
-    """Encuentra los pivotes principales (máximos y mínimos) en un rango de precios."""
-    if len(precios) < 2:
-        return []
-
+def encontrar_cambios_de_sentido(df, min_velas=8, max_pivotes=10):
+    """
+    Detecta pivotes relevantes basados en cambios de sentido del precio.
+    Un pivote es relevante si, después de un máximo o mínimo, el precio se mantiene en la misma dirección
+    (por encima o por debajo de la HullMA) durante al menos `min_velas` velas.
+    Solo se retornan los últimos `max_pivotes` pivotes relevantes.
+    """
     pivotes = []
-    direccion_anterior = 0
 
-    for i in range(1, len(precios) - 1):
-        if precios[i] > precios[i - 1] and precios[i] > precios[i + 1]:  # Máximo local
-            direccion_actual = 1
-        elif precios[i] < precios[i - 1] and precios[i] < precios[i + 1]:  # Mínimo local
-            direccion_actual = -1
-        else:
-            continue
+    # Asegúrate de que las columnas necesarias existen en el DataFrame
+    if 'high' not in df.columns or 'low' not in df.columns or 'close' not in df.columns or 'HULLMA' not in df.columns:
+        raise ValueError("El DataFrame no tiene las columnas esperadas ('high', 'low', 'close', 'HULLMA').")
 
-        if direccion_actual != direccion_anterior:
-            if len(pivotes) == 0 or abs(i - pivotes[-1][0]) >= min_velas:
-                pivotes.append((i, precios[i], "maximo" if direccion_actual == 1 else "minimo"))
-                direccion_anterior = direccion_actual
+    # Iteramos sobre las velas para detectar los pivotes
+    for i in range(1, len(df) - 1):  # Comenzamos desde la segunda vela hasta la penúltima
+        # Verificamos si hay un pivote máximo (precio más alto comparado con las velas anteriores y posteriores)
+        if df['high'].iloc[i] > df['high'].iloc[i - 1] and df['high'].iloc[i] > df['high'].iloc[i + 1]:
+            # Verificar si el precio se mantiene por debajo de la HullMA durante al menos `min_velas` velas después del pivote
+            if all(df['close'].iloc[i:i + min_velas] < df['HULLMA'].iloc[i:i + min_velas]):
+                pivotes.append((df.index[i], df['high'].iloc[i], "maximo"))
 
-    # Limitar a los últimos `max_pivotes` pivotes relevantes
-    return pivotes[-max_pivotes:]
+        # Verificamos si hay un pivote mínimo (precio más bajo comparado con las velas anteriores y posteriores)
+        elif df['low'].iloc[i] < df['low'].iloc[i - 1] and df['low'].iloc[i] < df['low'].iloc[i + 1]:
+            # Verificar si el precio se mantiene por encima de la HullMA durante al menos `min_velas` velas después del pivote
+            if all(df['close'].iloc[i:i + min_velas] > df['HULLMA'].iloc[i:i + min_velas]):
+                pivotes.append((df.index[i], df['low'].iloc[i], "minimo"))
+
+        # Limitar el número de pivotes a `max_pivotes` (solo los últimos 10)
+        if len(pivotes) > max_pivotes:
+            pivotes.pop(0)  # Elimina el pivote más antiguo si hay más de 10
+
+    return pivotes
 
 
 
@@ -487,27 +496,25 @@ def encontrar_zonas_sr(pivotes, tolerancia=0.01):
 
 
 def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
-    """
-    Analiza la acción del precio considerando un rango limitado de datos.
-    """
+    """Analiza la acción del precio con un rango limitado de datos y detecta pivotes relevantes."""
     try:
-        # Limitar el DataFrame a las últimas `max_velas`
+        # Tomar solo las últimas `max_velas`
         df = df.tail(max_velas)
 
-        # Validar que hay suficientes datos para el análisis
-        if df.empty or len(df) < 3:
-            raise ValueError("El DataFrame no contiene suficientes datos para el análisis.")
+        # Asegurarnos que tenemos las columnas necesarias
+        if 'high' not in df.columns or 'low' not in df.columns or 'close' not in df.columns or 'HULLMA' not in df.columns:
+            raise ValueError("El DataFrame no tiene las columnas esperadas ('high', 'low', 'close', 'HULLMA').")
+        
+        # Detectar pivotes con la lógica de cambios de dirección y verificación con HullMA
+        pivotes = encontrar_cambios_de_sentido(df)
 
-        # Identificar pivotes relevantes
-        pivotes = encontrar_cambios_de_sentido(df) 
-
-        # Analizar tendencia
+        # Análisis de la tendencia basado en pivotes
         tendencia = analizar_tendencia(pivotes)
 
-        # Detectar cambio de estructura
+        # Detectar cambio de estructura en la tendencia
         cambio_estructura = detectar_cambio_estructura(pivotes)
 
-        # Identificar zonas de soporte/resistencia
+        # Identificar zonas de soporte y resistencia
         zonas_sr = encontrar_zonas_sr(pivotes)
 
         return {
@@ -519,7 +526,6 @@ def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
     except Exception as e:
         print(f"Error en analyze_price_action: {e}")
         return {"Error": str(e)}
-
 
 def analyze_indicators(df, timeframe, pivotes_historicos):
     """Analiza todos los indicadores relevantes."""
