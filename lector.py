@@ -408,14 +408,19 @@ def analyze_macd(df):
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
 
-def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
-    """Analiza todos los indicadores relevantes."""
+
+
+
+def analyze_indicators(df, timeframe):
+    """Analiza todos los indicadores relevantes, incluyendo price action."""
     rsi_analysis = analyze_rsi(df)
     vwap_analysis = analyze_vwap(df)
     atr_analysis = analyze_atr(df)
     hullma_analysis = analyze_hullma(df)
     bollinger_analysis = analyze_bollinger_bands(df)
     macd_analysis = analyze_macd(df)
+    price_action_analysis = analyze_price_action(df) # Llamada a analyze_price_action
+
     return {
         "RSI": rsi_analysis,
         "VWAP": vwap_analysis,
@@ -423,6 +428,7 @@ def analyze_indicators(df, timeframe):  # Se elimina pivotes_historicos
         "HULLMA": hullma_analysis,
         "Bollinger": bollinger_analysis,
         "MACD": macd_analysis,
+        "PriceAction": price_action_analysis # Se añade el análisis de Price Action al diccionario
     }
 
 # Función para generar un informe
@@ -460,7 +466,15 @@ def main_loop():
         df = load_csv(file_path)
         if df is not None and not df.empty:
             try:
-                indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
+                #Calculamos los indicadores ANTES del analisis
+                df['macd'], df['macd_signal'], df['macd_hist'] = ta.macd(df['close'], fast=12, slow=26, signal_period=9)
+                df['rsi'] = ta.rsi(df['close'], window=14)
+                df['bollinger_bands'] = ta.BBANDS(df['close'], window=20)
+                df['hullma'] = ta.hull_moving_average(df['close'])
+                df['vwap'] = ta.vwap(df['high'], df['low'], df['close'], volume=df.get('volume'))
+                df['atr'] = ta.ATR(df['high'], df['low'], df['close'], window=14)
+
+                indicators = analyze_indicators(df, timeframe)
                 report = generate_report(timeframe, indicators)
                 export_to_json(report, timeframe)
                 LAST_RUN[timeframe] = df.index[-1]
@@ -497,7 +511,15 @@ def main_loop():
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty:
                         try:
-                            indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
+                            #Calculamos los indicadores ANTES del analisis
+                            df['macd'], df['macd_signal'], df['macd_hist'] = ta.macd(df['close'], fast=12, slow=26, signal_period=9)
+                            df['rsi'] = ta.rsi(df['close'], window=14)
+                            df['bollinger_bands'] = ta.BBANDS(df['close'], window=20)
+                            df['hullma'] = ta.hull_moving_average(df['close'])
+                            df['vwap'] = ta.vwap(df['high'], df['low'], df['close'], volume=df.get('volume'))
+                            df['atr'] = ta.ATR(df['high'], df['low'], df['close'], window=14)
+
+                            indicators = analyze_indicators(df, timeframe)
                             report = generate_report(timeframe, indicators)
                             export_to_json(report, timeframe)
                         except Exception as e:
