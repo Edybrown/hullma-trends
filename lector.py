@@ -529,8 +529,8 @@ def generate_report(timeframe, indicators, price_action_analysis):
 def export_to_json(report, timeframe):
     """Exporta a JSON, guardando solo el último informe."""
     output_file = os.path.join(OUTPUT_DIR, f"report_{timeframe}.json")
-    with open(output_file, "w") as f:
-        json.dump(report, f, indent=4)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=4, ensure_ascii=False)
     print(f"Informe para {timeframe} exportado a {output_file}")
     
 def espera_cierre_vela(timeframe, margen_segundos=5):
