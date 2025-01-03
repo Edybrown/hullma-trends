@@ -35,19 +35,61 @@ TIME_INTERVALS = {
 
 LAST_RUN = {key: None for key in CSV_FILES.keys()} #Inicializar a None
 
-# --- FUNCIÓN PARA CARGAR DATOS ---
-def load_csv(file_path):
+
+COLUMN_MAPPING = {  # Mapeo básico para inconsistencias comunes
+    "Close": "close",
+    "CLOSE": "close",
+    "cLOSE": "close",
+    "HULLMA": "hullma",
+    "hullma": "hullma",
+    "High": "high",
+    "HIGH": "high",
+    "Low": "low",
+    "LOW": "low"
+}
+
+REQUIRED_COLUMNS = {  # Columnas requeridas por cada análisis
+    "analyze_rsi": ["rsi", "close"],
+    "analyze_vwap": ["vwap", "close"],
+    "analyze_atr": ["atr"],
+    "analyze_hullma": ["hullma", "close"],
+    "analyze_bollinger_bands": ["bb_upper", "bb_middle", "bb_lower", "close"],
+    "analyze_macd": ["macd", "macd_signal", "macd_hist", "close"],
+    "analyze_price_action": ["high", "low", "close", "hullma"]
+}
+
+def load_csv(file_path, required_for=None):  # Nuevo argumento: required_for
     try:
         if os.path.exists(file_path):
-            df = pd.read_csv(file_path, index_col=0, parse_dates=True) #Parsea las fechas
+            df = pd.read_csv(file_path, index_col=0, parse_dates=True)
+
+            def normalize_column_name(name):
+                name = name.lower()
+                name = re.sub(r"[^a-zA-Z0-9]+", "_", name)
+                name = re.sub(r"__+", "_", name)
+                name = name.strip("_")
+                return name
+            df.columns = [normalize_column_name(col) for col in df.columns]
+            df = df.rename(columns=COLUMN_MAPPING)
+
+            if required_for:  # Verificación de columnas requeridas
+                missing_columns = set(REQUIRED_COLUMNS[required_for]) - set(df.columns)
+                if missing_columns:
+                    raise ValueError(f"Faltan las siguientes columnas para {required_for}: {missing_columns}")
+
             return df
         else:
             print(f"Archivo no encontrado: {file_path}")
             return None
-    except pd.errors.ParserError as e: #Manejo de errores al parsear el csv
+    except pd.errors.ParserError as e:
         print(f"Error al leer el archivo CSV {file_path}: {e}")
         return None
-
+    except ValueError as e: #Capturamos el error de columnas faltantes
+        print(e)
+        return None
+    except Exception as e:
+        print(f"Ocurrió un error inesperado: {e}")
+        return None
 
 
 
