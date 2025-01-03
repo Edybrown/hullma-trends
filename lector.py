@@ -89,7 +89,7 @@ def analyze_rsi(df):
         if 'RSI' not in df.columns or 'close' not in df.columns:
             return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'RSI' o 'close' en el DataFrame."}
 
-        last_rsi = df['RSI'].iloc[-1]
+        last_rsi = df['rsi'].iloc[-1]
         signal = "Neutral"
         message = f"RSI en {last_rsi:.2f}. "
 
@@ -112,13 +112,13 @@ def analyze_rsi(df):
         # Detección de divergencias (incluyendo ocultas)
         if len(df) >= 3:
             # Divergencias regulares (sin cambios)
-            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2]:
+            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['rsi'].iloc[-1] < df['rsi'].iloc[-2]:
                 message += " Posible divergencia bajista."
                 if signal == "Sobrecompra":
                     signal = "Divergencia Bajista en Sobrecompra"
                 else:
                     signal = "Divergencia Bajista"
-            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2]:
+            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['rsi'].iloc[-1] > df['rsi'].iloc[-2]:
                 message += " Posible divergencia alcista."
                 if signal == "Sobreventa":
                     signal = "Divergencia Alcista en Sobreventa"
@@ -127,12 +127,12 @@ def analyze_rsi(df):
 
             # Divergencias ocultas (AÑADIDO)
             # Divergencia oculta alcista (precio hace un mínimo más alto, RSI hace un mínimo más bajo)
-            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2] and df['close'].iloc[-2] > df['close'].iloc[-3] and df['RSI'].iloc[-2] > df['RSI'].iloc[-3]:
+            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['rsi'].iloc[-1] < df['rsi'].iloc[-2] and df['close'].iloc[-2] > df['close'].iloc[-3] and df['rsi'].iloc[-2] > df['rsi'].iloc[-3]:
                 message += " Posible divergencia oculta alcista."
                 signal = "Divergencia Oculta Alcista"
 
             # Divergencia oculta bajista (precio hace un máximo más bajo, RSI hace un máximo más alto)
-            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2] and df['close'].iloc[-2] < df['close'].iloc[-3] and df['RSI'].iloc[-2] < df['RSI'].iloc[-3]:
+            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['rsi'].iloc[-1] > df['rsi'].iloc[-2] and df['close'].iloc[-2] < df['close'].iloc[-3] and df['rsi'].iloc[-2] < df['rsi'].iloc[-3]:
                 message += " Posible divergencia oculta bajista."
                 signal = "Divergencia Oculta Bajista"
         return {"value": last_rsi, "signal": signal, "message": message}
@@ -204,16 +204,16 @@ def analyze_atr(df, lookback=5):
               Devuelve un mensaje de error si faltan las columnas necesarias o si no hay suficientes datos.
     """
     try:
-        if 'ATR' not in df.columns:
+        if 'atr' not in df.columns:
             return {"value": None, "signal": "Datos insuficientes", "message": "Falta la columna 'ATR' en el DataFrame."}
 
         if len(df) < lookback + 1:
             return {"value": None, "signal": "Datos insuficientes", "message": f"No hay suficientes datos para analizar el comportamiento del ATR en los últimos {lookback} periodos."}
 
-        last_atr = df['ATR'].iloc[-1]
+        last_atr = df['atr'].iloc[-1]
         message = f"ATR en {last_atr:.2f}. "
 
-        atr_lookback = df['ATR'].iloc[-lookback:]
+        atr_lookback = df['atr'].iloc[-lookback:]
         atr_change = np.diff(atr_lookback)
 
         # Calcula el cambio porcentual para mejor entendimiento
@@ -252,15 +252,15 @@ def analyze_hullma(df):
               Devuelve un mensaje de error si faltan las columnas necesarias o si no hay suficientes datos.
     """
     try:
-        if not all(col in df.columns for col in ['HULLMA', 'close']):
+        if not all(col in df.columns for col in ['hullma', 'close']):
             return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'HULLMA' o 'close' en el DataFrame."}
 
         if len(df) < 3:  # Necesitamos al menos tres datos para comparar aceleración
             return {"value": None, "signal": "Datos insuficientes", "message": "No hay suficientes datos para analizar la HULLMA y detectar impulsos."}
 
-        last_hullma = df['HULLMA'].iloc[-1]
-        previous_hullma = df['HULLMA'].iloc[-2]
-        previous_previous_hullma = df['HULLMA'].iloc[-3]
+        last_hullma = df['hullma'].iloc[-1]
+        previous_hullma = df['hullma'].iloc[-2]
+        previous_previous_hullma = df['hullma'].iloc[-3]
         last_close = df['close'].iloc[-1]
         previous_close = df['close'].iloc[-2]
 
