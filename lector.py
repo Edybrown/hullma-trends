@@ -532,7 +532,7 @@ def analyze_price_action(df, pivotes_historicos=None, max_velas=200):
             raise ValueError("El DataFrame no contiene suficientes datos para el análisis.")
 
         # Identificar pivotes relevantes
-        pivotes = encontrar_cambios_de_sentido(df)
+        pivotes = encontrar_cambios_de_sentido(df) 
 
         # Analizar tendencia
         tendencia = analizar_tendencia(pivotes)
