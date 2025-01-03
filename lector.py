@@ -86,7 +86,7 @@ def load_csv(file_path):
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     try:
-        if 'RSI' not in df.columns or 'close' not in df.columns:
+        if 'rsi' not in df.columns or 'close' not in df.columns:
             return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'RSI' o 'close' en el DataFrame."}
 
         last_rsi = df['rsi'].iloc[-1]
