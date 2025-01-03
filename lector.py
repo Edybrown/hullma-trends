@@ -528,15 +528,16 @@ def analyze_indicators(df, timeframe):
     }
 
 # Función para generar un informe
-def generate_report(timeframe, analysis):
-    """Genera un informe basado en el análisis."""
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
-    return {
+def generate_report(timeframe, indicators, price_action_analysis):
+    # Código de generación de reporte con indicadores y análisis de acción del precio
+    report = {
         "timeframe": timeframe,
-        "timestamp": timestamp,
-        "analysis": analysis
+        "indicators": indicators,
+        "price_action_analysis": price_action_analysis,
+        # Agrega otros campos según sea necesario
     }
-
+    return report
+    
 def export_to_json(report, timeframe):
     """Exporta a JSON, guardando solo el último informe."""
     output_file = os.path.join(OUTPUT_DIR, f"report_{timeframe}.json")
