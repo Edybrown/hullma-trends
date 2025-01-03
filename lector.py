@@ -407,8 +407,9 @@ def analyze_macd(df):
     except Exception as e:
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
+
 def analyze_price_action(df, velas_maximas=200):
-    """Analiza la acción del precio buscando máximos, mínimos y líneas de tendencia."""
+    """Analiza la acción del precio buscando máximos, mínimos, líneas de tendencia y figuras chartistas."""
 
     if df.empty or len(df) < 2:
         return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes para analizar la acción del precio."}
@@ -465,8 +466,46 @@ def analyze_price_action(df, velas_maximas=200):
         elif close.iloc[-2] > df['hullma'].iloc[-2] and close.iloc[-1] < df['hullma'].iloc[-1]:
             mensaje += "Cruce bajista del precio sobre la HULLMA. "
 
-    return {"maximos": maximos, "minimos": minimos, "patrones": patrones, "mensaje": mensaje}
+    # Detectar patrones chartistas
+    chart_patterns = analyze_chart_patterns(df, maximos, minimos)
 
+    return {"maximos": maximos, "minimos": minimos, "patrones": patrones + chart_patterns, "mensaje": mensaje}
+
+def analyze_chart_patterns(df, maximos, minimos):
+    """Detecta patrones chartistas como triángulos, hombros-cabeza-hombros, doble suelo, etc."""
+    patrones_chartistas = []
+    
+    # Detectar Triángulos Ascendentes, Descendentes y Simétricos
+    highs = [maximo["valor"] for maximo in maximos]
+    lows = [minimo["valor"] for minimo in minimos]
+    
+    if len(highs) >= 2 and len(lows) >= 2:
+        # Triángulo Ascendente (Higher Lows, igual Highs)
+        if all(lows[i] > lows[i-1] for i in range(1, len(lows))) and highs[-1] == highs[-2]:
+            patrones_chartistas.append("Triángulo Ascendente")
+        
+        # Triángulo Descendente (Lower Highs, igual Lows)
+        if all(highs[i] < highs[i-1] for i in range(1, len(highs))) and lows[-1] == lows[-2]:
+            patrones_chartistas.append("Triángulo Descendente")
+        
+        # Triángulo Simétrico (Convergencia)
+        if highs[0] > highs[-1] and lows[0] < lows[-1]:
+            patrones_chartistas.append("Triángulo Simétrico")
+    
+    # Detectar Doble Suelo (Double Bottom)
+    if len(lows) >= 2 and lows[-1] < lows[0] * 1.05:  # 5% variación
+        patrones_chartistas.append("Doble Suelo")
+    
+    # Detectar Hombro-Cabeza-Hombro (HCH)
+    if len(highs) >= 3:
+        if highs[1] > highs[0] and highs[1] > highs[2]:
+            patrones_chartistas.append("Hombro-Cabeza-Hombro")
+    
+    # Detectar Triple Techo
+    if len(highs) == 3 and abs(highs[0] - highs[1]) < 0.02 * highs[0] and abs(highs[1] - highs[2]) < 0.02 * highs[1]:
+        patrones_chartistas.append("Triple Techo")
+
+    return patrones_chartistas
 
 
 def analyze_indicators(df, timeframe):
@@ -523,9 +562,15 @@ def main_loop():
         df = load_csv(file_path)
         if df is not None and not df.empty:
             try:
-                indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
-                report = generate_report(timeframe, indicators)
+                # Analiza indicadores
+                indicators = analyze_indicators(df, timeframe)  # Se elimina pivotes_historicos
+                # Analiza la acción del precio y patrones chartistas
+                price_action_analysis = analyze_price_action(df)  # Aquí analizamos la acción del precio
+                # Genera el informe con indicadores y análisis de la acción del precio
+                report = generate_report(timeframe, indicators, price_action_analysis)
+                # Exporta el informe generado
                 export_to_json(report, timeframe)
+                # Actualiza la última fecha de análisis
                 LAST_RUN[timeframe] = df.index[-1]
             except Exception as e:
                 print(f"Error durante el análisis inicial de {timeframe}: {e}")
@@ -535,6 +580,7 @@ def main_loop():
 
     analisis_inicial_completo = True
 
+    # Procesamiento posterior a la inicialización
     while True:
         espera_cierre_vela("15m")
         df_15m = load_csv(CSV_FILES["15m"])
@@ -549,6 +595,7 @@ def main_loop():
                 LAST_RUN["15m"] = df_15m.index[-1]
                 timeframes_a_procesar = ["15m"]
 
+                # Verifica otras temporalidades
                 for timeframe in ["1h", "4h", "1d"]:
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty and df.index[-1] != LAST_RUN[timeframe]:
@@ -556,12 +603,18 @@ def main_loop():
                         timeframes_a_procesar.append(timeframe)
                         LAST_RUN[timeframe] = df.index[-1]
 
+                # Analiza las velas nuevas de las temporalidades seleccionadas
                 for timeframe in timeframes_a_procesar:
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty:
                         try:
-                            indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
-                            report = generate_report(timeframe, indicators)
+                            # Analiza indicadores
+                            indicators = analyze_indicators(df, timeframe)  # Se elimina pivotes_historicos
+                            # Analiza la acción del precio y patrones chartistas
+                            price_action_analysis = analyze_price_action(df)  # Aquí analizamos la acción del precio
+                            # Genera el informe con indicadores y análisis de la acción del precio
+                            report = generate_report(timeframe, indicators, price_action_analysis)
+                            # Exporta el informe generado
                             export_to_json(report, timeframe)
                         except Exception as e:
                             print(f"Error durante el análisis de {timeframe}: {e}")
@@ -574,7 +627,7 @@ def main_loop():
         elif df_15m is None:
             print("Error al cargar el dataframe de 15m, revisa el archivo")
         else:
-            print("El dataframe de 15m esta vacio")
+            print("El dataframe de 15m está vacío")
 
 if __name__ == "__main__":
     main_loop()
