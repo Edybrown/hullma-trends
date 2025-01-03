@@ -498,26 +498,41 @@ def analyze_indicators(df, timeframe, velas_maximas=200):
     try:
         if 'hullma' not in df.columns:
             df['hullma'] = ta.trend.HullMovingAverage(df['close']).hull_moving_average()
-        resultados["PriceAction"] = analyze_price_action(df, velas_maximas) #Usa velas_maximas aqui
+        resultados["PriceAction"] = analyze_price_action(df, velas_maximas)
     except Exception as e:
         resultados["PriceAction"] = f"Error al analizar Price Action: {e}"
 
-    rsi_analysis = analyze_rsi(df)
-    vwap_analysis = analyze_vwap(df)
-    atr_analysis = analyze_atr(df)
-    hullma_analysis = analyze_hullma(df)
-    bollinger_analysis = analyze_bollinger_bands(df)
-    macd_analysis = analyze_macd(df)
+    try:
+        resultados["RSI"] = analyze_rsi(df)
+    except Exception as e:
+        resultados["RSI"] = f"Error al analizar RSI: {e}"
 
-    return {
-        "RSI": rsi_analysis,
-        "VWAP": vwap_analysis,
-        "ATR": atr_analysis,
-        "HULLMA": hullma_analysis,
-        "Bollinger": bollinger_analysis,
-        "MACD": macd_analysis,
-        "PriceAction": resultados["PriceAction"], #Usa el valor guardado en resultados
-    }
+    try:
+        resultados["VWAP"] = analyze_vwap(df)
+    except Exception as e:
+        resultados["VWAP"] = f"Error al analizar VWAP: {e}"
+
+    try:
+        resultados["ATR"] = analyze_atr(df)
+    except Exception as e:
+        resultados["ATR"] = f"Error al analizar ATR: {e}"
+
+    try:
+        resultados["HULLMA"] = analyze_hullma(df)
+    except Exception as e:
+        resultados["HULLMA"] = f"Error al analizar HULLMA: {e}"
+
+    try:
+        resultados["Bollinger"] = analyze_bollinger_bands(df)
+    except Exception as e:
+        resultados["Bollinger"] = f"Error al analizar Bandas de Bollinger: {e}"
+
+    try:
+        resultados["MACD"] = analyze_macd(df)
+    except Exception as e:
+        resultados["MACD"] = f"Error al analizar MACD: {e}"
+
+    return resultados
 
 # Función para generar un informe
 def generate_report(timeframe, analysis):
@@ -549,20 +564,23 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
 def main_loop():
     analisis_inicial_completo = False
 
-    # Procesamiento inicial
     for timeframe, file_path in CSV_FILES.items():
         df = load_csv(file_path)
         if df is not None and not df.empty:
             try:
-                indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
+                indicators = analyze_indicators(df, timeframe)
                 report = generate_report(timeframe, indicators)
                 export_to_json(report, timeframe)
                 LAST_RUN[timeframe] = df.index[-1]
             except Exception as e:
-                print(f"Error durante el análisis inicial de {timeframe}: {e}")
-                traceback.print_exc()
+                print(f"Error grave durante el análisis inicial de {timeframe}: {e}") #Mensaje más claro
+                traceback.print_exc() #Imprime el traceback completo para depuración
+                #Aquí podrías considerar salir del programa si el error es crítico
+                #exit()
         elif df is not None and df.empty:
             print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
+        elif df is None:
+            print(f"Error al cargar el archivo para {timeframe}.")
 
     analisis_inicial_completo = True
 
@@ -591,7 +609,7 @@ def main_loop():
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty:
                         try:
-                            indicators = analyze_indicators(df, timeframe) # Se elimina pivotes_historicos
+                            indicators = analyze_indicators(df, timeframe)
                             report = generate_report(timeframe, indicators)
                             export_to_json(report, timeframe)
                         except Exception as e:
