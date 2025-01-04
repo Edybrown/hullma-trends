@@ -87,7 +87,7 @@ def calcular_bandas_bollinger(df, period=20, stddev=2):
     return df
 
 
-def calcular_hullma(df, period=9):
+def calcular_hullma(df, period=12):
 
     df['HULLMA'] = talib.WMA(talib.WMA(df['close'], period//2).multiply(2).sub(talib.WMA(df['close'], period)), int(period**0.5))
 
