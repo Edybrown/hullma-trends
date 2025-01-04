@@ -396,61 +396,17 @@ def analyze_macd(df):
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
 
-import numpy as np
-
-def analyze_price_action(df, velas_maximas=200):
-    """Analiza la acción del precio, incluyendo cruces, máximos/mínimos relativos y patrones chartistas."""
-
-    if df.empty or len(df) < 7:
-        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes para analizar la acción del precio."}
-
-    close = df['close']
-    high = df['high']
-    low = df['low']
-    hullma = df['hullma'] if 'hullma' in df.columns else None
-
-    maximos = []
-    minimos = []
-    mensaje = ""
-
-    # Detección de cruces y análisis de máximos/mínimos relativos
-    if hullma is not None and len(df) >= 7:
-        for i in range(6, len(df)):
-            if close.iloc[i - 1] < hullma.iloc[i - 1] and close.iloc[i] > hullma.iloc[i]:
-                min_valor = min(low.iloc[i - 5:i])
-                min_indice = low.iloc[i - 5:i].idxmin()
-                if all(close.iloc[j] > hullma.iloc[j] for j in range(i, min(i + 6, len(df)))):
-                    minimos.append({"indice": min_indice, "valor": min_valor})
-
-            elif close.iloc[i - 1] > hullma.iloc[i - 1] and close.iloc[i] < hullma.iloc[i]:
-                max_valor = max(high.iloc[i - 5:i])
-                max_indice = high.iloc[i - 5:i].idxmax()
-                if all(close.iloc[j] < hullma.iloc[j] for j in range(i, min(i + 6, len(df)))):
-                    maximos.append({"indice": max_indice, "valor": max_valor})
-
-    # Patrones chartistas (invocando la subfunción interna)
-    chart_patterns = analyze_chart_patterns(maximos[-5:], minimos[-5:])
-
-    return {
-        "maximos": maximos[-5:],  # Últimos 5 máximos
-        "minimos": minimos[-5:],  # Últimos 5 mínimos
-        "patrones": chart_patterns,
-        "mensaje": mensaje
-    }
-
 def analyze_chart_patterns(maximos, minimos):
-    """Subfunción interna para analizar patrones chartistas con base en los máximos y mínimos recientes."""
+    """Subfunción interna para analizar patrones chartistas."""
     patrones = []
 
-    # Asegurar que hay suficientes datos para el análisis
     if len(maximos) < 2 or len(minimos) < 2:
         return patrones
 
-    # Extraer valores para el análisis
     max_vals = [m["valor"] for m in maximos]
     min_vals = [m["valor"] for m in minimos]
 
-    # Análisis de tendencias
+    # Análisis de tendencias y patrones (sin cambios importantes en la lógica)
     if all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
         patrones.append("Tendencia alcista detectada.")
     elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x > y for x, y in zip(min_vals[:-1], min_vals[1:])):
@@ -462,7 +418,7 @@ def analyze_chart_patterns(maximos, minimos):
     elif all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x == min_vals[0] for x in min_vals):
         patrones.append("Triángulo descendente detectado.")
     elif max(abs(max_vals[i] - max_vals[i + 1]) for i in range(len(max_vals) - 1)) < 0.01 and \
-         max(abs(min_vals[i] - min_vals[i + 1]) for i in range(len(min_vals) - 1)) < 0.01:
+            max(abs(min_vals[i] - min_vals[i + 1]) for i in range(len(min_vals) - 1)) < 0.01:
         patrones.append("Consolidación lateral detectada.")
     elif len(maximos) >= 2 and len(minimos) >= 2:
         if abs(max_vals[-1] - max_vals[-2]) < 0.01 and min_vals[-1] < min_vals[-2]:
@@ -472,6 +428,41 @@ def analyze_chart_patterns(maximos, minimos):
 
     return patrones
 
+def analyze_price_action(df, velas_maximas=200):
+    """Analiza la acción del precio, incluyendo cruces, máximos/mínimos relativos y patrones chartistas."""
+
+    if df.empty or len(df) < 7:
+        return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes."}
+
+    close = df['close']
+    high = df['high']
+    low = df['low']
+    hullma = df['hullma'] if 'hullma' in df.columns else None
+
+    maximos = []
+    minimos = []
+    mensaje = ""
+
+    if hullma is not None and len(df) >= 7:
+        for i in range(6, len(df)):
+            if close.iloc[i - 1] < hullma.iloc[i - 1] and close.iloc[i] > hullma.iloc[i]:
+                min_valor = min(low.iloc[i - 5:i])
+                min_indice = low.iloc[i - 5:i].idxmin()
+                minimos.append({"indice": min_indice.isoformat(), "valor": min_valor}) # Convierte a ISO antes de guardar
+
+            elif close.iloc[i - 1] > hullma.iloc[i - 1] and close.iloc[i] < hullma.iloc[i]:
+                max_valor = max(high.iloc[i - 5:i])
+                max_indice = high.iloc[i - 5:i].idxmax()
+                maximos.append({"indice": max_indice.isoformat(), "valor": max_valor}) # Convierte a ISO antes de guardar
+
+    chart_patterns = analyze_chart_patterns(maximos[-5:], minimos[-5:])
+
+    return {
+        "maximos": maximos[-5:],
+        "minimos": minimos[-5:],
+        "patrones": chart_patterns,
+        "mensaje": mensaje
+    }
 
 def analyze_indicators(df, timeframe):
     """Analiza todos los indicadores relevantes."""
@@ -503,13 +494,22 @@ def generate_report(timeframe, indicators, price_action_analysis):
     }
     return report
     
+def datetime_to_iso(o):
+    if isinstance(o, pd.Timestamp):
+        return o.isoformat()
+    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
 def export_to_json(report, timeframe):
-    """Exporta a JSON, guardando solo el último informe."""
+    """Exporta a JSON, manejando objetos Timestamp."""
     output_file = os.path.join(OUTPUT_DIR, f"report_{timeframe}.json")
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=4, ensure_ascii=False)
-    print(f"Informe para {timeframe} exportado a {output_file}")
-    
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=4, ensure_ascii=False, default=datetime_to_iso)
+        print(f"Informe para {timeframe} exportado a {output_file}")
+    except Exception as e:
+        print(f"Error al exportar a JSON: {e}")
+        traceback.print_exc()
+        
 def espera_cierre_vela(timeframe, margen_segundos=5):
     """Espera hasta el cierre de la próxima vela, con un margen."""
     ahora = time.time()
@@ -523,20 +523,14 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
 def main_loop():
     analisis_inicial_completo = False
 
-    # Procesamiento inicial
     for timeframe, file_path in CSV_FILES.items():
         df = load_csv(file_path)
         if df is not None and not df.empty:
             try:
-                # Analiza indicadores
-                indicators = analyze_indicators(df, timeframe)  # Se elimina pivotes_historicos
-                # Analiza la acción del precio y patrones chartistas
-                price_action_analysis = analyze_price_action(df)  # Aquí analizamos la acción del precio
-                # Genera el informe con indicadores y análisis de la acción del precio
+                indicators = analyze_indicators(df, timeframe)
+                price_action_analysis = analyze_price_action(df)
                 report = generate_report(timeframe, indicators, price_action_analysis)
-                # Exporta el informe generado
-                export_to_json(report, timeframe)
-                # Actualiza la última fecha de análisis
+                export_to_json(report, timeframe) #Usa la funcion export_to_json que maneja timestamps
                 LAST_RUN[timeframe] = df.index[-1]
             except Exception as e:
                 print(f"Error durante el análisis inicial de {timeframe}: {e}")
@@ -546,7 +540,6 @@ def main_loop():
 
     analisis_inicial_completo = True
 
-    # Procesamiento posterior a la inicialización
     while True:
         espera_cierre_vela("15m")
         df_15m = load_csv(CSV_FILES["15m"])
@@ -561,7 +554,6 @@ def main_loop():
                 LAST_RUN["15m"] = df_15m.index[-1]
                 timeframes_a_procesar = ["15m"]
 
-                # Verifica otras temporalidades
                 for timeframe in ["1h", "4h", "1d"]:
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty and df.index[-1] != LAST_RUN[timeframe]:
@@ -569,31 +561,23 @@ def main_loop():
                         timeframes_a_procesar.append(timeframe)
                         LAST_RUN[timeframe] = df.index[-1]
 
-                # Analiza las velas nuevas de las temporalidades seleccionadas
                 for timeframe in timeframes_a_procesar:
                     df = load_csv(CSV_FILES[timeframe])
                     if df is not None and not df.empty:
                         try:
-                            # Analiza indicadores
-                            indicators = analyze_indicators(df, timeframe)  # Se elimina pivotes_historicos
-                            # Analiza la acción del precio y patrones chartistas
-                            price_action_analysis = analyze_price_action(df)  # Aquí analizamos la acción del precio
-                            # Genera el informe con indicadores y análisis de la acción del precio
+                            indicators = analyze_indicators(df, timeframe)
+                            price_action_analysis = analyze_price_action(df)
                             report = generate_report(timeframe, indicators, price_action_analysis)
-                            # Exporta el informe generado
-                            export_to_json(report, timeframe)
+                            export_to_json(report, timeframe) #Usa la funcion export_to_json que maneja timestamps
                         except Exception as e:
                             print(f"Error durante el análisis de {timeframe}: {e}")
                             traceback.print_exc()
                     elif df is not None and df.empty:
                         print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
-
-            else:
-                print("No hay nueva vela para 15m. Esperando la siguiente vela...")
         elif df_15m is None:
             print("Error al cargar el dataframe de 15m, revisa el archivo")
         else:
             print("El dataframe de 15m está vacío")
-
+            
 if __name__ == "__main__":
     main_loop()
