@@ -396,104 +396,81 @@ def analyze_macd(df):
         return {"signal": "Error", "message": f"Error inesperado al analizar MACD: {e}"}
 
 
-def analyze_price_action(df, velas_maximas=200):
-    """Analiza la acción del precio buscando máximos, mínimos, líneas de tendencia y figuras chartistas."""
+import numpy as np
 
-    if df.empty or len(df) < 2:
+def analyze_price_action(df, velas_maximas=200):
+    """Analiza la acción del precio, incluyendo cruces, máximos/mínimos relativos y patrones chartistas."""
+
+    if df.empty or len(df) < 7:
         return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes para analizar la acción del precio."}
 
     close = df['close']
     high = df['high']
     low = df['low']
+    hullma = df['hullma'] if 'hullma' in df.columns else None
 
     maximos = []
     minimos = []
     mensaje = ""
 
-    # Encuentra máximos y mínimos locales
-    for i in range(1, len(close) - 1):  # Iteramos desde 1 hasta len(close) - 1
-        if high.iloc[i] > high.iloc[i - 1] and high.iloc[i] > high.iloc[i + 1]:
-            maximos.append({"indice": i, "valor": high.iloc[i]})
-        if low.iloc[i] < low.iloc[i - 1] and low.iloc[i] < low.iloc[i + 1]:
-            minimos.append({"indice": i, "valor": low.iloc[i]})
+    # Detección de cruces y análisis de máximos/mínimos relativos
+    if hullma is not None and len(df) >= 7:
+        for i in range(6, len(df)):
+            if close.iloc[i - 1] < hullma.iloc[i - 1] and close.iloc[i] > hullma.iloc[i]:
+                min_valor = min(low.iloc[i - 5:i])
+                min_indice = low.iloc[i - 5:i].idxmin()
+                if all(close.iloc[j] > hullma.iloc[j] for j in range(i, min(i + 6, len(df)))):
+                    minimos.append({"indice": min_indice, "valor": min_valor})
 
-    # Filtra solo los últimos 5 pivotes
-    maximos = maximos[-5:]
-    minimos = minimos[-5:]
+            elif close.iloc[i - 1] > hullma.iloc[i - 1] and close.iloc[i] < hullma.iloc[i]:
+                max_valor = max(high.iloc[i - 5:i])
+                max_indice = high.iloc[i - 5:i].idxmax()
+                if all(close.iloc[j] < hullma.iloc[j] for j in range(i, min(i + 6, len(df)))):
+                    maximos.append({"indice": max_indice, "valor": max_valor})
 
+    # Patrones chartistas (invocando la subfunción interna)
+    chart_patterns = analyze_chart_patterns(maximos[-5:], minimos[-5:])
+
+    return {
+        "maximos": maximos[-5:],  # Últimos 5 máximos
+        "minimos": minimos[-5:],  # Últimos 5 mínimos
+        "patrones": chart_patterns,
+        "mensaje": mensaje
+    }
+
+def analyze_chart_patterns(maximos, minimos):
+    """Subfunción interna para analizar patrones chartistas con base en los máximos y mínimos recientes."""
     patrones = []
 
-    # Línea de tendencia bajista
-    if len(maximos) >= 2:
-        x = [maximo["indice"] for maximo in maximos]
-        y = [maximo["valor"] for maximo in maximos]
-        try:
-            coef = np.polyfit(x, y, 1)
-            patrones.append({"tipo": "Linea de tendencia bajista (aproximada)", "coeficientes": coef.tolist()})
-        except np.RankWarning:
-            print("Advertencia: No se pudo ajustar una línea de tendencia bajista.")
-        except Exception as e:
-            print(f"Error al calcular linea de tendencia bajista: {e}")
+    # Asegurar que hay suficientes datos para el análisis
+    if len(maximos) < 2 or len(minimos) < 2:
+        return patrones
 
-    # Línea de tendencia alcista
-    if len(minimos) >= 2:
-        x = [minimo["indice"] for minimo in minimos]
-        y = [minimo["valor"] for minimo in minimos]
-        try:
-            coef = np.polyfit(x, y, 1)
-            patrones.append({"tipo": "Linea de tendencia alcista (aproximada)", "coeficientes": coef.tolist()})
-        except np.RankWarning:
-            print("Advertencia: No se pudo ajustar una línea de tendencia alcista.")
-        except Exception as e:
-            print(f"Error al calcular linea de tendencia alcista: {e}")
+    # Extraer valores para el análisis
+    max_vals = [m["valor"] for m in maximos]
+    min_vals = [m["valor"] for m in minimos]
 
-    # Cruce de HULLMA
-    if 'hullma' in df.columns and len(df) >= 2:
-        if close.iloc[-2] < df['hullma'].iloc[-2] and close.iloc[-1] > df['hullma'].iloc[-1]:
-            mensaje += "Cruce alcista del precio sobre la HULLMA. "
-        elif close.iloc[-2] > df['hullma'].iloc[-2] and close.iloc[-1] < df['hullma'].iloc[-1]:
-            mensaje += "Cruce bajista del precio sobre la HULLMA. "
+    # Análisis de tendencias
+    if all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
+        patrones.append("Tendencia alcista detectada.")
+    elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x > y for x, y in zip(min_vals[:-1], min_vals[1:])):
+        patrones.append("Tendencia bajista detectada.")
+    elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
+        patrones.append("Triángulo simétrico detectado.")
+    elif all(x == max_vals[0] for x in max_vals) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
+        patrones.append("Triángulo ascendente detectado.")
+    elif all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x == min_vals[0] for x in min_vals):
+        patrones.append("Triángulo descendente detectado.")
+    elif max(abs(max_vals[i] - max_vals[i + 1]) for i in range(len(max_vals) - 1)) < 0.01 and \
+         max(abs(min_vals[i] - min_vals[i + 1]) for i in range(len(min_vals) - 1)) < 0.01:
+        patrones.append("Consolidación lateral detectada.")
+    elif len(maximos) >= 2 and len(minimos) >= 2:
+        if abs(max_vals[-1] - max_vals[-2]) < 0.01 and min_vals[-1] < min_vals[-2]:
+            patrones.append("Doble techo detectado.")
+        elif abs(min_vals[-1] - min_vals[-2]) < 0.01 and max_vals[-1] > max_vals[-2]:
+            patrones.append("Doble suelo detectado.")
 
-    # Detectar patrones chartistas
-    chart_patterns = analyze_chart_patterns(df, maximos, minimos)
-
-    return {"maximos": maximos, "minimos": minimos, "patrones": patrones + chart_patterns, "mensaje": mensaje}
-
-def analyze_chart_patterns(df, maximos, minimos):
-    """Detecta patrones chartistas como triángulos, hombros-cabeza-hombros, doble suelo, etc."""
-    patrones_chartistas = []
-    
-    # Detectar Triángulos Ascendentes, Descendentes y Simétricos
-    highs = [maximo["valor"] for maximo in maximos]
-    lows = [minimo["valor"] for minimo in minimos]
-    
-    if len(highs) >= 2 and len(lows) >= 2:
-        # Triángulo Ascendente (Higher Lows, igual Highs)
-        if all(lows[i] > lows[i-1] for i in range(1, len(lows))) and highs[-1] == highs[-2]:
-            patrones_chartistas.append("Triángulo Ascendente")
-        
-        # Triángulo Descendente (Lower Highs, igual Lows)
-        if all(highs[i] < highs[i-1] for i in range(1, len(highs))) and lows[-1] == lows[-2]:
-            patrones_chartistas.append("Triángulo Descendente")
-        
-        # Triángulo Simétrico (Convergencia)
-        if highs[0] > highs[-1] and lows[0] < lows[-1]:
-            patrones_chartistas.append("Triángulo Simétrico")
-    
-    # Detectar Doble Suelo (Double Bottom)
-    if len(lows) >= 2 and lows[-1] < lows[0] * 1.05:  # 5% variación
-        patrones_chartistas.append("Doble Suelo")
-    
-    # Detectar Hombro-Cabeza-Hombro (HCH)
-    if len(highs) >= 3:
-        if highs[1] > highs[0] and highs[1] > highs[2]:
-            patrones_chartistas.append("Hombro-Cabeza-Hombro")
-    
-    # Detectar Triple Techo
-    if len(highs) == 3 and abs(highs[0] - highs[1]) < 0.02 * highs[0] and abs(highs[1] - highs[2]) < 0.02 * highs[1]:
-        patrones_chartistas.append("Triple Techo")
-
-    return patrones_chartistas
+    return patrones
 
 
 def analyze_indicators(df, timeframe):
