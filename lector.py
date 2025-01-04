@@ -428,9 +428,12 @@ def analyze_chart_patterns(maximos, minimos):
 
     return patrones
 
-def analyze_price_action(df, velas_maximas=200):
-    """Analiza la acción del precio, incluyendo cruces, máximos/mínimos relativos y patrones chartistas."""
-
+def analyze_price_action(df, velas_maximas=200, min_velas=5, min_movimiento=0.011):
+    """
+    Analiza la acción del precio, incluyendo cruces, máximos/mínimos relativos y patrones chartistas.
+    Prioriza la separación mínima de 5 velas, pero permite señales con menos separación
+    si el movimiento porcentual entre ellas es mayor al 1.1%.
+    """
     if df.empty or len(df) < 7:
         return {"maximos": [], "minimos": [], "patrones": [], "mensaje": "Datos insuficientes."}
 
@@ -442,18 +445,39 @@ def analyze_price_action(df, velas_maximas=200):
     maximos = []
     minimos = []
     mensaje = ""
+    ultima_senal = None  # Para rastrear la última señal procesada
 
     if hullma is not None and len(df) >= 7:
         for i in range(7, len(df)):
+            # Validar cruce al alza
             if close.iloc[i - 1] < hullma.iloc[i - 1] and close.iloc[i] > hullma.iloc[i]:
                 min_valor = min(low.iloc[i - 5:i])
                 min_indice = low.iloc[i - 5:i].idxmin()
-                minimos.append({"indice": min_indice.isoformat(), "valor": min_valor}) # Convierte a ISO antes de guardar
 
+                if ultima_senal is None or (i - ultima_senal['indice']) >= min_velas:
+                    # Si cumple con la separación de 5 velas, aceptar directamente
+                    minimos.append({"indice": min_indice.isoformat(), "valor": min_valor})
+                    ultima_senal = {"indice": i, "valor": min_valor}
+                else:
+                    # Evaluar si el porcentaje de movimiento es suficiente
+                    if abs(min_valor - ultima_senal['valor']) / ultima_senal['valor'] >= min_movimiento:
+                        minimos.append({"indice": min_indice.isoformat(), "valor": min_valor})
+                        ultima_senal = {"indice": i, "valor": min_valor}
+
+            # Validar cruce a la baja
             elif close.iloc[i - 1] > hullma.iloc[i - 1] and close.iloc[i] < hullma.iloc[i]:
                 max_valor = max(high.iloc[i - 5:i])
                 max_indice = high.iloc[i - 5:i].idxmax()
-                maximos.append({"indice": max_indice.isoformat(), "valor": max_valor}) # Convierte a ISO antes de guardar
+
+                if ultima_senal is None or (i - ultima_senal['indice']) >= min_velas:
+                    # Si cumple con la separación de 5 velas, aceptar directamente
+                    maximos.append({"indice": max_indice.isoformat(), "valor": max_valor})
+                    ultima_senal = {"indice": i, "valor": max_valor}
+                else:
+                    # Evaluar si el porcentaje de movimiento es suficiente
+                    if abs(max_valor - ultima_senal['valor']) / ultima_senal['valor'] >= min_movimiento:
+                        maximos.append({"indice": max_indice.isoformat(), "valor": max_valor})
+                        ultima_senal = {"indice": i, "valor": max_valor}
 
     chart_patterns = analyze_chart_patterns(maximos[-5:], minimos[-5:])
 
