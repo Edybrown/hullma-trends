@@ -444,7 +444,7 @@ def analyze_price_action(df, velas_maximas=200):
     mensaje = ""
 
     if hullma is not None and len(df) >= 7:
-        for i in range(6, len(df)):
+        for i in range(7, len(df)):
             if close.iloc[i - 1] < hullma.iloc[i - 1] and close.iloc[i] > hullma.iloc[i]:
                 min_valor = min(low.iloc[i - 5:i])
                 min_indice = low.iloc[i - 5:i].idxmin()
