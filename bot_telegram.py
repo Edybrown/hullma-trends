@@ -7,7 +7,12 @@ import markdown
 import logging
 import asyncio  # Importamos asyncio
 
-from telegram import Update, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup,
+from telegram import (
+    Update,
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 from telegram.constants import ParseMode
 
