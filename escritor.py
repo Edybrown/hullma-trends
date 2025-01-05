@@ -349,7 +349,7 @@ def generar_analisis_texto(informe):
 
     if conclusiones:
         analisis += "\n**Conclusiones Generales:**\n" + "".join(conclusiones)
-        analisis += "\nBasado en el análisis, ajusta tu estrategia. Si la tendencia es alcista, considera oportunidades de compra; si es bajista, busca cerrar posiciones largas o abrir cortas. En mercados laterales, opera dentro del rango."
+        analisis += "\nBasado en el análisis, ajusta tu estrategia, esperamos sea de ayuda."
     else:
         analisis += "\n**Conclusiones Generales:** Los indicadores no ofrecen señales claras en este momento. Mantén precaución y espera confirmaciones adicionales antes de operar."
 
