@@ -8,7 +8,7 @@ import logging
 
 # Configuración
 DATABASE_FILE = "usuarios.db"
-TOKEN = "TU_TOKEN_AQUI"  # ¡REEMPLAZA CON TU TOKEN REAL!
+TOKEN = "7465892171:AAGR8UyG6nFujlllAVHRi_UTlCAUEmwi0jU"  # ¡REEMPLAZA CON TU TOKEN REAL!
 RUTA_INFORMES = "Informe Final"
 ultima_modificacion_guardada = {}
 
