@@ -90,13 +90,7 @@ def generar_analisis_texto(informe):
         analisis += f"*   **VWAP (Precio Promedio Ponderado por Volumen):** {vwap['message']}\n"
 
         # Explicación del VWAP (solo la primera vez que se encuentra)
-        if "explicacion_vwap" not in analisis: # usamos una variable temporal para que solo se imprima una vez la explicacion
-            analisis += "    *   El VWAP representa el precio promedio al que se ha negociado un activo durante un período de tiempo, ponderado por el volumen. Se utiliza principalmente para identificar la dirección de la tendencia intradía y como nivel de soporte/resistencia dinámico.\n"
-            analisis += "    *   Un precio por encima del VWAP sugiere una tendencia alcista intradía, mientras que un precio por debajo del VWAP sugiere una tendencia bajista intradía.\n"
-            analisis += "    *   La *distancia porcentual al VWAP* indica cuánto se ha alejado el precio del promedio. Desviaciones significativas pueden indicar posibles reversiones o consolidaciones.\n"
-            analisis += "    *   En el mercado de criptomonedas, el VWAP puede ser útil para traders intradía, pero su relevancia disminuye en timeframes mayores debido a la volatilidad y las tendencias más prolongadas.\n"
-            analisis += "explicacion_vwap" # agregamos la variable para que no se vuelva a imprimir la explicacion
-
+        
         if vwap["signal"] == "Alcista":
             analisis += "    *   El precio se mantiene por encima del VWAP, sugiriendo una posible continuación de la tendencia alcista intradía.\n"
         elif vwap["signal"] == "Bajista":
@@ -116,12 +110,6 @@ def generar_analisis_texto(informe):
     if "ATR" in indicators: #Comprobamos que exista la clave ATR
         atr = indicators["ATR"]
         analisis += f"*   **ATR (Rango Promedio Verdadero):** {atr['message']}\n"
-
-        # Explicación del ATR (solo la primera vez)
-        if "explicacion_atr" not in analisis:
-            analisis += "    *   El ATR mide la volatilidad del precio de un activo. Un ATR alto indica mayor volatilidad (mayores fluctuaciones de precio), mientras que un ATR bajo indica menor volatilidad (fluctuaciones de precio más pequeñas).\n"
-            analisis += "    *   El ATR no predice la dirección del precio, solo la magnitud de los movimientos. Es útil para establecer stops de pérdida, dimensionar posiciones y anticipar posibles rupturas.\n"
-            analisis += "explicacion_atr"
 
         if "aumentando" in atr["message"]:
             analisis += "    *   La volatilidad está aumentando, lo que sugiere que los movimientos de precio serán más amplios. Esto podría generar oportunidades de trading a corto plazo, pero también implica mayor riesgo.\n"
@@ -144,13 +132,7 @@ def generar_analisis_texto(informe):
         hullma = indicators["HULLMA"]
         analisis += f"*   **HULLMA (Media Móvil de Hull):** {hullma['message']}\n"
 
-        # Explicación de la HULLMA (solo la primera vez)
-        if "explicacion_hullma" not in analisis:
-            analisis += "    *   La HULLMA es una media móvil diseñada para reducir el retraso (lag) que presentan otras medias móviles, ofreciendo señales más rápidas y precisas.\n"
-            analisis += "    *   Un cruce del precio por encima de la HULLMA se interpreta como una señal alcista, mientras que un cruce por debajo se interpreta como una señal bajista.\n"
-            analisis += "    *   La 'aceleración' de la HULLMA indica la fuerza del movimiento. Una aceleración alcista sugiere un fuerte impulso comprador, y una aceleración bajista sugiere un fuerte impulso vendedor.\n"
-            analisis += "explicacion_hullma"
-
+        
         if "Cruce alcista" in hullma["message"]:
             analisis += "    *   Se ha producido un cruce alcista, lo que sugiere una posible entrada en largo (compra). Se recomienda considerar el último mínimo relevante para colocar un stop-loss por debajo de este.\n"
             if "aceleración alcista" in hullma["message"]:
@@ -174,13 +156,6 @@ def generar_analisis_texto(informe):
         bollinger = indicators["Bollinger"]
         analisis += f"*   **Bandas de Bollinger:** {bollinger['message']}\n"
 
-        # Explicación de las Bandas de Bollinger (solo la primera vez)
-        if "explicacion_bollinger" not in analisis:
-            analisis += "    *   Las Bandas de Bollinger consisten en una media móvil central, una banda superior (desviación estándar positiva) y una banda inferior (desviación estándar negativa).\n"
-            analisis += "    *   Se utilizan para medir la volatilidad del mercado y para identificar posibles zonas de sobrecompra/sobreventa, aunque en mercados volátiles como las criptomonedas, estas señales deben interpretarse con cautela.\n"
-            analisis += "    *   Cuando el precio toca o supera la Banda Superior, se considera que el activo está relativamente 'caro' (pero no necesariamente sobrecomprado). Cuando el precio toca o cae por debajo de la Banda Inferior, se considera que el activo está relativamente 'barato' (pero no necesariamente sobrevendido).\n"
-            analisis += "    *   El 'Squeeze' de Bollinger ocurre cuando las bandas se estrechan, lo que indica un período de baja volatilidad que a menudo precede a un aumento de la volatilidad y un posible movimiento de precio significativo.\n"
-            analisis += "explicacion_bollinger"
 
         if "Precio en o por encima de la Banda Superior" in bollinger["message"]:
             analisis += "    *   El precio ha alcanzado o superado la Banda Superior. Esto sugiere que el activo está relativamente 'caro' y podría experimentar un retroceso, pero en mercados volátiles, podría indicar también un fuerte impulso alcista. Se recomienda buscar confirmación con otros indicadores.\n"
@@ -214,16 +189,7 @@ def generar_analisis_texto(informe):
         macd = indicators["MACD"]
         analisis += f"*   **MACD (Convergencia/Divergencia de Medias Móviles):** {macd['message']}\n"
 
-        # Explicación del MACD (solo la primera vez)
-        if "explicacion_macd" not in analisis:
-            analisis += "    *   El MACD se compone de:\n"
-            analisis += "        *   **Línea MACD:** Diferencia entre dos medias móviles exponenciales (generalmente de 12 y 26 períodos).\n"
-            analisis += "        *   **Línea de Señal:** Media móvil exponencial de la línea MACD (generalmente de 9 períodos).\n"
-            analisis += "        *   **Histograma:** Diferencia entre la línea MACD y la línea de Señal.\n"
-            analisis += "    *   Los cruces de la línea MACD por encima de la línea de Señal se interpretan como señales alcistas, y los cruces por debajo como señales bajistas.\n"
-            analisis += "    *   El histograma indica la fuerza del impulso. Un histograma creciente (en valor absoluto) indica un fortalecimiento de la tendencia, mientras que un histograma decreciente indica un debilitamiento.\n"
-            analisis += "explicacion_macd"
-
+       
         if "Cruce Alcista" in macd["message"]:
             analisis += "    *   Se ha producido un cruce alcista del MACD (la línea MACD cruza por encima de la línea de Señal), lo que sugiere una posible señal de compra. Es importante buscar confirmación con otros indicadores.\n"
             macd_value = float(macd["message"].split("MACD (")[1].split(")")[0])
@@ -260,11 +226,6 @@ def generar_analisis_texto(informe):
         else:
             analisis += "**Análisis de la Acción del Precio:**\n"
 
-            # Explicación general de Price Action (solo la primera vez)
-            if "explicacion_price_action" not in analisis:
-                analisis += "    *   El análisis de la Acción del Precio se centra en el estudio de los movimientos del precio en un gráfico, buscando patrones y formaciones que puedan predecir futuros movimientos.\n"
-                analisis += "    *   Se basa en la premisa de que toda la información relevante está reflejada en el precio y que el estudio de este puede proporcionar señales de trading.\n"
-                analisis += "explicacion_price_action"
 
             if price_action["patrones"]:
                 analisis += "    *   **Patrones Chartistas Detectados:**\n"
@@ -321,131 +282,6 @@ def generar_analisis_texto(informe):
     analisis += "\n**Conclusión:**\n"
     # Lógica de conclusión (ejemplo básico)
   # Sección de Conclusiones
-    conclusiones = []
-
-    # 1. Momento (Sobrecompra/Sobreventa)
-    momento_conclusiones = []
-    if "RSI" in indicators and "Bollinger" in indicators:
-        rsi = indicators["RSI"]
-        bollinger = indicators["Bollinger"]
-        if "Sobrecompra" in rsi["signal"] and "Precio en o por encima de la Banda Superior" in bollinger["message"]:
-            momento_conclusiones.append("Fuerte presión vendedora detectada por RSI y Bandas de Bollinger.")
-        elif "Sobrecompra" in rsi["signal"]:
-            momento_conclusiones.append("Presión vendedora detectada por RSI.")
-        elif "Precio en o por encima de la Banda Superior" in bollinger["message"]:
-            momento_conclusiones.append("Posible presión vendedora al alcanzar la Banda Superior de Bollinger.")
-        if "Sobreventa" in rsi["signal"] and "Precio en o por debajo de la Banda Inferior" in bollinger["message"]:
-            momento_conclusiones.append("Fuerte presión compradora detectada por RSI y Bandas de Bollinger.")
-        elif "Sobreventa" in rsi["signal"]:
-            momento_conclusiones.append("Presión compradora detectada por RSI.")
-        elif "Precio en o por debajo de la Banda Inferior" in bollinger["message"]:
-            momento_conclusiones.append("Posible presión compradora al alcanzar la Banda Inferior de Bollinger.")
-    if momento_conclusiones:
-        conclusiones.append("**Análisis de Momento:** " + " ".join(momento_conclusiones) + "\n")
-
-    # 2. Tendencia
-    tendencia_conclusiones = []
-    if "MACD" in indicators and "HULLMA" in indicators:
-        macd = indicators["MACD"]
-        hullma = indicators["HULLMA"]
-        if "Cruce Alcista" in macd["message"] and "Cruce alcista" in hullma["message"]:
-            tendencia_conclusiones.append("Fuerte señal de tendencia alcista confirmada por MACD y HULLMA.")
-        elif "Cruce Alcista" in macd["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia alcista según el MACD.")
-        elif "Cruce alcista" in hullma["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia alcista según la HULLMA.")
-        if "Cruce Bajista" in macd["message"] and "Cruce bajista" in hullma["message"]:
-            tendencia_conclusiones.append("Fuerte señal de tendencia bajista confirmada por MACD y HULLMA.")
-        elif "Cruce Bajista" in macd["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia bajista según el MACD.")
-        elif "Cruce bajista" in hullma["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia bajista según la HULLMA.")
-
-    if tendencia_conclusiones:
-        conclusiones.append("**Análisis de Tendencia:** " + " ".join(tendencia_conclusiones) + "\n")
-
-    # 3. Volatilidad
-    volatilidad_conclusiones = []
-    if "ATR" in indicators and "Bollinger" in indicators:
-        atr = indicators["ATR"]
-        bollinger = indicators["Bollinger"]
-        if "Posible Squeeze detectado" in bollinger["message"]:
-            volatilidad_conclusiones.append("Se ha detectado un posible Squeeze de Bollinger, lo que anticipa un aumento de la volatilidad.")
-        if "Volatilidad en aumento" in bollinger["message"]:
-            volatilidad_conclusiones.append("La volatilidad está en aumento según las Bandas de Bollinger.")
-        if "aumentando" in atr["message"]:
-            volatilidad_conclusiones.append("La volatilidad está aumentando según el ATR.")
-        elif "disminuyendo" in atr["message"]:
-            volatilidad_conclusiones.append("La volatilidad está disminuyendo según el ATR.")
-        if volatilidad_conclusiones:
-            conclusiones.append("**Análisis de Volatilidad:** " + " ".join(volatilidad_conclusiones) + "\n")
-    # 4. Accion del precio-------------------------------------------------------------------------------------------------------------------------
-   # Análisis de la Acción del Precio
-    if "Price Action" in indicators:
-        price_action = indicators["Price Action"]
-        if price_action["mensaje"] == "Datos insuficientes.":
-            analisis += "*   **Acción del Precio:** Datos insuficientes para realizar un análisis de Price Action.\n"
-        else:
-            analisis += "**Análisis de la Acción del Precio:**\n"
-
-            # Explicación general de Price Action (solo la primera vez)
-            if "explicacion_price_action" not in analisis:
-                analisis += "    *   El análisis de la Acción del Precio se centra en el estudio de los movimientos del precio en un gráfico, buscando patrones y formaciones que puedan predecir futuros movimientos.\n"
-                analisis += "    *   Se basa en la premisa de que toda la información relevante está reflejada en el precio y que el estudio de este puede proporcionar señales de trading.\n"
-                analisis += "explicacion_price_action"
-
-            if price_action["patrones"]:
-                analisis += "    *   **Patrones Chartistas Detectados:**\n"
-                for patron in price_action["patrones"]:
-                    analisis += f"        *   {patron}\n"
-                    #Añadir explicaciones de los patrones
-                    if patron == "Tendencia alcista detectada.":
-                        analisis += "            *   Se caracteriza por una serie de máximos y mínimos ascendentes.\n"
-                    elif patron == "Tendencia bajista detectada.":
-                        analisis += "            *   Se caracteriza por una serie de máximos y mínimos descendentes.\n"
-                    elif patron == "Triángulo simétrico detectado.":
-                        analisis += "            *   Se forma por dos líneas de tendencia convergentes. Indica un periodo de consolidación antes de una posible ruptura en cualquier dirección.\n"
-                    elif patron == "Triángulo ascendente detectado.":
-                        analisis += "            *   Se forma por una línea de tendencia superior horizontal (resistencia) y una línea de tendencia inferior ascendente. Suele ser una figura alcista.\n"
-                    elif patron == "Triángulo descendente detectado.":
-                        analisis += "            *   Se forma por una línea de tendencia superior descendente y una línea de tendencia inferior horizontal (soporte). Suele ser una figura bajista.\n"
-                    elif patron == "Consolidación lateral detectada.":
-                        analisis += "            *   El precio se mueve dentro de un rango horizontal definido por niveles de soporte y resistencia. Indica un equilibrio entre compradores y vendedores.\n"
-                    elif patron == "Doble techo detectado.":
-                        analisis += "            *   Se forma cuando el precio alcanza dos máximos aproximadamente al mismo nivel, indicando una posible reversión bajista.\n"
-                    elif patron == "Doble suelo detectado.":
-                        analisis += "            *   Se forma cuando el precio alcanza dos mínimos aproximadamente al mismo nivel, indicando una posible reversión alcista.\n"
-            else:
-                analisis += "    * No se han detectado patrones chartistas.\n"
-
-            # Análisis de Máximos y Mínimos (Solo valores y enfoque en zonas de interés)
-            if price_action["maximos"] and price_action["minimos"]:
-                analisis += "    *   **Posibles Zonas de Interés (Máximos y Mínimos Relevantes):**\n"
-                maximos = sorted(price_action["maximos"], key=lambda x: x["valor"], reverse=True) #Ordenamos los maximos de mayor a menor
-                minimos = sorted(price_action["minimos"], key=lambda x: x["valor"]) #Ordenamos los minimos de menor a mayor
-
-                analisis += "        *   **Máximos (Posibles Resistencias/Áreas de Venta):**\n"
-                for maximo in maximos:
-                    analisis += f"            *   {maximo['valor']}\n"
-
-                analisis += "        *   **Mínimos (Posibles Soportes/Áreas de Compra):**\n"
-                for minimo in minimos:
-                    analisis += f"            *   {minimo['valor']}\n"
-            elif price_action["maximos"]:
-                analisis += "    *   **Posibles Zonas de Interés (Máximos Relevantes/Áreas de Venta):**\n"
-                maximos = sorted(price_action["maximos"], key=lambda x: x["valor"], reverse=True) #Ordenamos los maximos de mayor a menor
-                for maximo in maximos:
-                    analisis += f"            *   {maximo['valor']}\n"
-            elif price_action["minimos"]:
-                analisis += "    *   **Posibles Zonas de Interés (Mínimos Relevantes/Áreas de Compra):**\n"
-                minimos = sorted(price_action["minimos"], key=lambda x: x["valor"]) #Ordenamos los minimos de menor a mayor
-                for minimo in minimos:
-                    analisis += f"            *   {minimo['valor']}\n"
-            else:
-                analisis += "    * No se han detectado máximos ni mínimos relevantes.\n"
-    else:
-        analisis += "*   **Acción del Precio:** No hay datos disponibles para el análisis de Price Action en este informe.\n"
-
     conclusiones = []
 
     # 1. Momento (Sobrecompra/Sobreventa)-----------------------------------------------------------
