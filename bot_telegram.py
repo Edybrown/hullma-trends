@@ -218,16 +218,20 @@ def lista_suscripciones(update, context):
     finally:
         conn.close()
 async def main():
-    application = Application.builder().token(TOKEN).build()
+    application = Application.builder().token(TOKEN).post_init(Application.initialize_job_queue).build()
 
+    # Handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
-    application.job_queue.run_repeating(enviar_informes, interval=15*60, first=10)
 
+    # Inicialización de la cola de trabajos
+    application.initialize_job_queue()
+
+    # Agregar un trabajo periódico
+    application.job_queue.run_repeating(enviar_informes, interval=15 * 60, first=10)
+
+    # Iniciar el bot
     await application.initialize()
     await application.start_polling()
     await application.idle()
-
-if __name__ == '__main__':
-    asyncio.run(main())
