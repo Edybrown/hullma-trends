@@ -549,7 +549,7 @@ def main():
 
         tiempo_maximo_esperado_15m = tiempo_inicio_ciclo - timedelta(minutes=15)
 
-        # Reintentos para el informe de 15m (revisa el json)
+        # Reintentos para el informe de 15m
         for intento in range(REINTENTOS_MAXIMOS):
             if archivos_actualizados("15m", tiempo_maximo_esperado_15m):
                 print("Archivo de 15m actualizado.")
@@ -566,6 +566,21 @@ def main():
         analizar_temporalidad("1h")
         analizar_temporalidad("4h")
         analizar_temporalidad("1d")
+        
+        # Guardar análisis en archivos .md
+        try:
+            for timeframe in ["15m", "1h", "4h", "1d"]:
+                with open(os.path.join(OUTPUT_DIR, f"report_{timeframe}.md"), "r", encoding='utf-8') as f:
+                    report_content = f.read()
+                # Aquí podrías agregar lógica para procesar aún más el contenido del informe antes de guardarlo si fuera necesario.
+                with open(os.path.join(OUTPUT_DIR, f"analisis_{timeframe}.md"), "w", encoding='utf-8') as outfile:
+                    outfile.write(report_content)
+                print(f"Análisis de {timeframe} guardado en analisis_{timeframe}.md")
+
+        except FileNotFoundError as e:
+            print(f"Error: No se encontró el informe para guardar el análisis: {e}")
+        except Exception as e:
+            print(f"Error al guardar el análisis en archivo: {e}")
 
         tiempo_fin_ciclo = datetime.now()
         tiempo_transcurrido = tiempo_fin_ciclo - tiempo_inicio_ciclo
@@ -578,16 +593,6 @@ def main():
             time.sleep(tiempo_espera)
         else:
             print("El analisis tardo mas de 15 minutos. Iniciando ciclo inmediatamente...")
-
-        #Enviar mensaje por telegram
-        try:
-            with open(os.path.join(OUTPUT_DIR, f"report_15m.md"), "r", encoding='utf-8') as f:
-                mensaje_final = f.read()
-            enviar_mensaje_telegram(mensaje_final)
-        except FileNotFoundError:
-            print("Error: No se encontró el informe de 15m para enviar por Telegram.")
-        except Exception as e:
-            print(f"Error al enviar el mensaje por Telegram: {e}")
 
 if __name__ == "__main__":
     main()
