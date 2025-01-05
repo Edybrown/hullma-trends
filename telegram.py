@@ -4,6 +4,7 @@ import time
 import schedule
 import sqlite3
 import markdown
+import logging
 
 # Configuración
 DATABASE_FILE = "usuarios.db"
