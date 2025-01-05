@@ -282,7 +282,7 @@ def generar_analisis_texto(informe):
     analisis += "\n**Conclusión:**\n"
     # Lógica de conclusión (ejemplo básico)
   # Sección de Conclusiones
-    
+    conclusiones = []
     momento_conclusiones = []
     if "RSI" in indicators and "Bollinger" in indicators:
         rsi = indicators["RSI"]
