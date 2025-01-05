@@ -282,79 +282,76 @@ def generar_analisis_texto(informe):
     analisis += "\n**Conclusión:**\n"
     # Lógica de conclusión (ejemplo básico)
   # Sección de Conclusiones
-    conclusiones = []
-
-    # 1. Momento (Sobrecompra/Sobreventa)-----------------------------------------------------------
+    
     momento_conclusiones = []
     if "RSI" in indicators and "Bollinger" in indicators:
         rsi = indicators["RSI"]
         bollinger = indicators["Bollinger"]
         if "Sobrecompra" in rsi["signal"] and "Precio en o por encima de la Banda Superior" in bollinger["message"]:
-            momento_conclusiones.append("Fuerte presión vendedora detectada por RSI y Bandas de Bollinger.")
+            momento_conclusiones.append("Alta probabilidad de corrección bajista debido a RSI en sobrecompra y precio cerca de la Banda Superior de Bollinger.")
         elif "Sobrecompra" in rsi["signal"]:
-            momento_conclusiones.append("Presión vendedora detectada por RSI.")
+            momento_conclusiones.append("RSI en sobrecompra sugiere posible presión vendedora.")
         elif "Precio en o por encima de la Banda Superior" in bollinger["message"]:
-            momento_conclusiones.append("Posible presión vendedora al alcanzar la Banda Superior de Bollinger.")
-        if "Sobreventa" in rsi["signal"] and "Precio en o por debajo de la Banda Inferior" in bollinger["message"]:
-            momento_conclusiones.append("Fuerte presión compradora detectada por RSI y Bandas de Bollinger.")
+            momento_conclusiones.append("El precio cerca de la Banda Superior de Bollinger indica posible presión vendedora.")
+        elif "Sobreventa" in rsi["signal"] and "Precio en o por debajo de la Banda Inferior" in bollinger["message"]:
+            momento_conclusiones.append("Alta probabilidad de rebote alcista debido a RSI en sobreventa y precio cerca de la Banda Inferior de Bollinger.")
         elif "Sobreventa" in rsi["signal"]:
-            momento_conclusiones.append("Presión compradora detectada por RSI.")
+            momento_conclusiones.append("RSI en sobreventa sugiere posible presión compradora.")
         elif "Precio en o por debajo de la Banda Inferior" in bollinger["message"]:
-            momento_conclusiones.append("Posible presión compradora al alcanzar la Banda Inferior de Bollinger.")
+            momento_conclusiones.append("El precio cerca de la Banda Inferior de Bollinger indica posible presión compradora.")
     if momento_conclusiones:
         conclusiones.append("**Análisis de Momento:** " + " ".join(momento_conclusiones) + "\n")
 
-    # 2. Tendencia
+    # Análisis de Tendencia
     tendencia_conclusiones = []
     if "MACD" in indicators and "HULLMA" in indicators:
         macd = indicators["MACD"]
         hullma = indicators["HULLMA"]
         if "Cruce Alcista" in macd["message"] and "Cruce alcista" in hullma["message"]:
-            tendencia_conclusiones.append("Fuerte señal de tendencia alcista confirmada por MACD y HULLMA.")
+            tendencia_conclusiones.append("Confirmación de tendencia alcista por MACD y HULLMA. Considera oportunidades de compra.")
         elif "Cruce Alcista" in macd["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia alcista según el MACD.")
+            tendencia_conclusiones.append("MACD sugiere un posible inicio de tendencia alcista.")
         elif "Cruce alcista" in hullma["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia alcista según la HULLMA.")
-        if "Cruce Bajista" in macd["message"] and "Cruce bajista" in hullma["message"]:
-            tendencia_conclusiones.append("Fuerte señal de tendencia bajista confirmada por MACD y HULLMA.")
+            tendencia_conclusiones.append("HULLMA indica un posible inicio de tendencia alcista.")
+        elif "Cruce Bajista" in macd["message"] and "Cruce bajista" in hullma["message"]:
+            tendencia_conclusiones.append("Confirmación de tendencia bajista por MACD y HULLMA. Considera cerrar posiciones largas o abrir cortas.")
         elif "Cruce Bajista" in macd["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia bajista según el MACD.")
+            tendencia_conclusiones.append("MACD sugiere un posible inicio de tendencia bajista.")
         elif "Cruce bajista" in hullma["message"]:
-            tendencia_conclusiones.append("Posible inicio de tendencia bajista según la HULLMA.")
-
+            tendencia_conclusiones.append("HULLMA indica un posible inicio de tendencia bajista.")
     if tendencia_conclusiones:
         conclusiones.append("**Análisis de Tendencia:** " + " ".join(tendencia_conclusiones) + "\n")
 
-    # 3. Volatilidad
+    # Análisis de Volatilidad
     volatilidad_conclusiones = []
     if "ATR" in indicators and "Bollinger" in indicators:
         atr = indicators["ATR"]
         bollinger = indicators["Bollinger"]
         if "Posible Squeeze detectado" in bollinger["message"]:
-            volatilidad_conclusiones.append("Se ha detectado un posible Squeeze de Bollinger, lo que anticipa un aumento de la volatilidad.")
-        if "Volatilidad en aumento" in bollinger["message"]:
-            volatilidad_conclusiones.append("La volatilidad está en aumento según las Bandas de Bollinger.")
-        if "aumentando" in atr["message"]:
-            volatilidad_conclusiones.append("La volatilidad está aumentando según el ATR.")
+            volatilidad_conclusiones.append("Se anticipa un aumento significativo de volatilidad debido a un posible Squeeze de Bollinger.")
+        elif "Volatilidad en aumento" in bollinger["message"] or "aumentando" in atr["message"]:
+            volatilidad_conclusiones.append("Aumento de volatilidad detectado. Prepárate para movimientos rápidos en ambas direcciones.")
         elif "disminuyendo" in atr["message"]:
-            volatilidad_conclusiones.append("La volatilidad está disminuyendo según el ATR.")
-        if volatilidad_conclusiones:
-            conclusiones.append("**Análisis de Volatilidad:** " + " ".join(volatilidad_conclusiones) + "\n")
-    # 4. Accion del precio
+            volatilidad_conclusiones.append("Volatilidad disminuyendo. Es probable que el mercado se mueva en un rango estrecho.")
+    if volatilidad_conclusiones:
+        conclusiones.append("**Análisis de Volatilidad:** " + " ".join(volatilidad_conclusiones) + "\n")
+
+    # Análisis de Acción del Precio
     price_action_conclusiones = []
     if "Price Action" in indicators:
         price_action = indicators["Price Action"]
         if price_action["patrones"]:
-            price_action_conclusiones.append("Se han detectado patrones chartistas que pueden indicar posibles cambios en la tendencia o continuación de la misma.")
+            price_action_conclusiones.append("Patrones chartistas detectados. Evalúa la dirección para anticipar movimientos futuros.")
         if price_action["maximos"] and price_action["minimos"]:
-            price_action_conclusiones.append("Se han identificado niveles de precios relevantes que podrían actuar como soporte o resistencia.")
+            price_action_conclusiones.append("Se han identificado niveles clave de soporte y resistencia. Úsalos para planificar entradas y salidas.")
     if price_action_conclusiones:
         conclusiones.append("**Análisis de Acción del Precio:** " + " ".join(price_action_conclusiones) + "\n")
 
     if conclusiones:
         analisis += "\n**Conclusiones Generales:**\n" + "".join(conclusiones)
+        analisis += "\nBasado en el análisis, ajusta tu estrategia. Si la tendencia es alcista, considera oportunidades de compra; si es bajista, busca cerrar posiciones largas o abrir cortas. En mercados laterales, opera dentro del rango."
     else:
-        analisis += "\n**Conclusiones Generales:** Los indicadores no ofrecen una señal clara en este momento.\n"
+        analisis += "\n**Conclusiones Generales:** Los indicadores no ofrecen señales claras en este momento. Mantén precaución y espera confirmaciones adicionales antes de operar."
 
     return analisis
 
