@@ -5,6 +5,10 @@ import schedule
 import sqlite3
 import markdown
 import logging
+import asyncio  # Importamos asyncio
+
+from telegram import Update, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
 # Configuración
 DATABASE_FILE = "usuarios.db"
@@ -15,10 +19,10 @@ ultima_modificacion_guardada = {}
 # Configuración de logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 bot = telegram.Bot(token=TOKEN)
 
-def enviar_informes():
+async def enviar_informes(context: ContextTypes.DEFAULT_TYPE):
+    bot = context.bot
     for temporalidad in ["1d", "4h", "1h", "15m"]:
         nombre_archivo = f"report_{temporalidad}.md"
         ruta_archivo = os.path.join(RUTA_INFORMES, nombre_archivo)
@@ -34,7 +38,7 @@ def enviar_informes():
                         usuarios = obtener_usuarios_suscritos(temporalidad)
                         for usuario in usuarios:
                             try:
-                                bot.send_message(chat_id=usuario[0], text=html, parse_mode=telegram.ParseMode.HTML)
+                                await bot.send_message(chat_id=usuario[0], text=html, parse_mode=ParseMode.HTML)
                             except telegram.error.TelegramError as e:
                                 logger.error(f"Error al enviar mensaje a {usuario[0]}: {e}")
                 else:
@@ -46,6 +50,8 @@ def enviar_informes():
                 logger.error(f"Error al procesar {ruta_archivo}: {e}")
         else:
             logger.warning(f"No existe el archivo {ruta_archivo}")
+
+
 
 
 def obtener_usuarios_suscritos(temporalidad):
@@ -79,16 +85,7 @@ def crear_tabla_usuarios():
     finally:
         conn.close()
 
-def start(update, context):
-    crear_tabla_usuarios()
-    keyboard = [[telegram.InlineKeyboardButton("Suscribirme a todo", callback_data='suscribir_todo')]]
-    reply_markup = telegram.InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(
-        "¡Bienvenido a BTCStream! Recibe informes de análisis técnico de Bitcoin.\n"
-        "Presiona 'Suscribirme a todo' para comenzar a recibir informes de todas las temporalidades.\n"
-        "Luego podrás desactivar las temporalidades que no te interesen.",
-        reply_markup=reply_markup
-    )
+
 def suscribir(update, context):
     user_id = update.effective_user.id
     if context.args:
@@ -136,11 +133,11 @@ def desuscribir(update, context):
         update.message.reply_text("Usa /desuscribir <temporalidad>. Ejemplo: /desuscribir 1h")
 
 
-def start(update, context):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): #Se elimina la otra definicion de start
     crear_tabla_usuarios()
-    keyboard = [[telegram.InlineKeyboardButton("Suscribirme a todo", callback_data='suscribir_todo')]]
-    reply_markup = telegram.InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(
+    keyboard = [[InlineKeyboardButton("Suscribirme a todo", callback_data='suscribir_todo')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
         "¡Bienvenido a BTCStream! Recibe informes de análisis técnico de Bitcoin.\n"
         "Presiona 'Suscribirme a todo' para comenzar a recibir informes de todas las temporalidades.\n"
         "Luego podrás desactivar las temporalidades que no te interesen.",
@@ -148,7 +145,7 @@ def start(update, context):
     )
 
 
-def mostrar_botones_temporalidades(update, context, user_id):
+async def mostrar_botones_temporalidades(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     try:
@@ -170,9 +167,9 @@ def mostrar_botones_temporalidades(update, context, user_id):
         conn.close()
 
 
-def button(update, context):
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer() #Eliminar el query.answer() duplicado
     user_id = query.from_user.id
     data = query.data
 
@@ -181,7 +178,7 @@ def button(update, context):
     try:
         if data == 'suscribir_todo':
             cursor.execute("INSERT OR REPLACE INTO usuarios (user_id, temporalidades_suscritas) VALUES (?, ?)", (user_id, '15m,1h,4h,1d'))
-        else: #Esta parte se ejecuta si no es el boton de suscribir todo
+        else:
             cursor.execute("SELECT temporalidades_suscritas FROM usuarios WHERE user_id=?", (user_id,))
             resultado = cursor.fetchone()
             temporalidades = resultado[0].split(',') if resultado else []
@@ -197,7 +194,7 @@ def button(update, context):
         logger.error(f"Error al interactuar con la base de datos: {e}")
     finally:
         conn.close()
-    mostrar_botones_temporalidades(update, context, user_id)
+    await mostrar_botones_temporalidades(update, context, user_id) #Se agrega await
 
 def lista_suscripciones(update, context):
     user_id = update.effective_user.id
@@ -214,19 +211,17 @@ def lista_suscripciones(update, context):
         logger.error(f"Error al obtener la lista de suscripciones: {e}")
     finally:
         conn.close()
+async def main():
+    application = Application.builder().token(TOKEN).build()
 
-def main():
-    updater = telegram.ext.Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
+    application.job_queue.run_repeating(enviar_informes, interval=15*60, first=10)
 
-    dp.add_handler(telegram.ext.CommandHandler("start", start))
-    dp.add_handler(telegram.ext.CallbackQueryHandler(button))
-    dp.add_handler(telegram.ext.CommandHandler("lista_suscripciones", lista_suscripciones))
-
-    schedule.every(15).minutes.do(enviar_informes)
-
-    updater.start_polling()
-    updater.idle()
+    await application.initialize()
+    await application.start_polling()
+    await application.idle()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
