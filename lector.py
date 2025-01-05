@@ -400,31 +400,38 @@ def analyze_chart_patterns(maximos, minimos):
     """Subfunción interna para analizar patrones chartistas."""
     patrones = []
 
-    if len(maximos) < 2 or len(minimos) < 2:
-        return patrones
+    # Revisar el número de elementos disponibles
+    for n in [5, 3, 2]:  # Probar con 5, 3 y 2 puntos
+        if len(maximos) >= n and len(minimos) >= n:
+            max_vals = [m["valor"] for m in maximos[-n:]]  # Usar solo los últimos n puntos
+            min_vals = [m["valor"] for m in minimos[-n:]]  # Usar solo los últimos n puntos
 
-    max_vals = [m["valor"] for m in maximos]
-    min_vals = [m["valor"] for m in minimos]
-
-    # Análisis de tendencias y patrones (sin cambios importantes en la lógica)
-    if all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
-        patrones.append("Tendencia alcista detectada.")
-    elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x > y for x, y in zip(min_vals[:-1], min_vals[1:])):
-        patrones.append("Tendencia bajista detectada.")
-    elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
-        patrones.append("Triángulo simétrico detectado.")
-    elif all(x == max_vals[0] for x in max_vals) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
-        patrones.append("Triángulo ascendente detectado.")
-    elif all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x == min_vals[0] for x in min_vals):
-        patrones.append("Triángulo descendente detectado.")
-    elif max(abs(max_vals[i] - max_vals[i + 1]) for i in range(len(max_vals) - 1)) < 0.01 and \
-            max(abs(min_vals[i] - min_vals[i + 1]) for i in range(len(min_vals) - 1)) < 0.01:
-        patrones.append("Consolidación lateral detectada.")
-    elif len(maximos) >= 2 and len(minimos) >= 2:
-        if abs(max_vals[-1] - max_vals[-2]) < 0.01 and min_vals[-1] < min_vals[-2]:
-            patrones.append("Doble techo detectado.")
-        elif abs(min_vals[-1] - min_vals[-2]) < 0.01 and max_vals[-1] > max_vals[-2]:
-            patrones.append("Doble suelo detectado.")
+            # Análisis de tendencias y patrones
+            if all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
+                patrones.append(f"Tendencia alcista detectada con {n} puntos.")
+                break
+            elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x > y for x, y in zip(min_vals[:-1], min_vals[1:])):
+                patrones.append(f"Tendencia bajista detectada con {n} puntos.")
+                break
+            elif all(x > y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
+                patrones.append(f"Triángulo simétrico detectado con {n} puntos.")
+                break
+            elif all(x == max_vals[0] for x in max_vals) and all(x < y for x, y in zip(min_vals[:-1], min_vals[1:])):
+                patrones.append(f"Triángulo ascendente detectado con {n} puntos.")
+                break
+            elif all(x < y for x, y in zip(max_vals[:-1], max_vals[1:])) and all(x == min_vals[0] for x in min_vals):
+                patrones.append(f"Triángulo descendente detectado con {n} puntos.")
+                break
+            elif max(abs(max_vals[i] - max_vals[i + 1]) for i in range(len(max_vals) - 1)) < 0.01 and \
+                    max(abs(min_vals[i] - min_vals[i + 1]) for i in range(len(min_vals) - 1)) < 0.01:
+                patrones.append(f"Consolidación lateral detectada con {n} puntos.")
+                break
+            elif abs(max_vals[-1] - max_vals[-2]) < 0.01 and min_vals[-1] < min_vals[-2]:
+                patrones.append(f"Doble techo detectado con {n} puntos.")
+                break
+            elif abs(min_vals[-1] - min_vals[-2]) < 0.01 and max_vals[-1] > max_vals[-2]:
+                patrones.append(f"Doble suelo detectado con {n} puntos.")
+                break
 
     return patrones
 
