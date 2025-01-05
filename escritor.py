@@ -753,7 +753,14 @@ def guardar_informe(timeframe, analisis_markdown):
     archivo = os.path.join(OUTPUT_DIR, f"report_{timeframe}.md") # Guarda con extensión .md
     with open(archivo, "w", encoding="utf-8") as f:
         f.write(analisis_markdown) # Escribe directamente el string Markdown
-        
+
+def analizar_temporalidad(timeframe):
+    """Analiza una temporalidad y guarda el informe."""
+    informe = leer_informe_json(timeframe)
+    if informe:
+        analisis_markdown = generar_analisis_texto(informe)
+        guardar_informe(timeframe, analisis_markdown)
+
 def main():
     while True:
         tiempo_inicio_ciclo = datetime.now()
