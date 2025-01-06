@@ -1,19 +1,10 @@
-import telegram
 import os
-import time
-import schedule
+import logging
 import sqlite3
 import markdown
-import logging
-import asyncio  # Importamos asyncio
-
-from telegram import (
-    Update,
-    ForceReply,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
+import telegram
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 
 # Configuración
@@ -27,6 +18,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 bot = telegram.Bot(token=TOKEN)
 
+# Función para enviar informes periódicamente
 async def enviar_informes(context: ContextTypes.DEFAULT_TYPE):
     bot = context.bot
     for temporalidad in ["1d", "4h", "1h", "15m"]:
@@ -49,7 +41,6 @@ async def enviar_informes(context: ContextTypes.DEFAULT_TYPE):
                                 logger.error(f"Error al enviar mensaje a {usuario[0]}: {e}")
                 else:
                     logger.info(f"El archivo {ruta_archivo} no ha sido modificado.")
-
             except FileNotFoundError:
                 logger.error(f"Archivo no encontrado: {ruta_archivo}")
             except Exception as e:
@@ -57,9 +48,7 @@ async def enviar_informes(context: ContextTypes.DEFAULT_TYPE):
         else:
             logger.warning(f"No existe el archivo {ruta_archivo}")
 
-
-
-
+# Función para obtener los usuarios suscritos a una temporalidad
 def obtener_usuarios_suscritos(temporalidad):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -73,6 +62,7 @@ def obtener_usuarios_suscritos(temporalidad):
     finally:
         conn.close()
 
+# Función para crear la tabla de usuarios
 def crear_tabla_usuarios():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -91,12 +81,12 @@ def crear_tabla_usuarios():
     finally:
         conn.close()
 
-
+# Comando /suscribir para agregar una temporalidad
 def suscribir(update, context):
     user_id = update.effective_user.id
     if context.args:
         temporalidad = context.args[0]
-        conn = sqlite3.connect('usuarios.db')
+        conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         cursor.execute("SELECT temporalidades_suscritas FROM usuarios WHERE user_id=?", (user_id,))
         resultado = cursor.fetchone()
@@ -117,11 +107,12 @@ def suscribir(update, context):
     else:
         update.message.reply_text("Usa /suscribir <temporalidad>. Ejemplo: /suscribir 1h")
 
+# Comando /desuscribir para eliminar una temporalidad
 def desuscribir(update, context):
     user_id = update.effective_user.id
     if context.args:
         temporalidad = context.args[0]
-        conn = sqlite3.connect('usuarios.db')
+        conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         cursor.execute("SELECT temporalidades_suscritas FROM usuarios WHERE user_id=?", (user_id,))
         resultado = cursor.fetchone()
@@ -138,8 +129,8 @@ def desuscribir(update, context):
     else:
         update.message.reply_text("Usa /desuscribir <temporalidad>. Ejemplo: /desuscribir 1h")
 
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): #Se elimina la otra definicion de start
+# Comando /start para iniciar el bot
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     crear_tabla_usuarios()
     keyboard = [[InlineKeyboardButton("Suscribirme a todo", callback_data='suscribir_todo')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -150,7 +141,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): #Se elimina
         reply_markup=reply_markup
     )
 
-
+# Función para mostrar los botones de temporalidades
 async def mostrar_botones_temporalidades(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -161,21 +152,21 @@ async def mostrar_botones_temporalidades(update: Update, context: ContextTypes.D
         keyboard = []
         for temporalidad in ["15m", "1h", "4h", "1d"]:
             texto_boton = f"Desactivar {temporalidad}" if temporalidad in temporalidades_suscritas else f"Activar {temporalidad}"
-            keyboard.append([telegram.InlineKeyboardButton(texto_boton, callback_data=temporalidad)])
-        reply_markup = telegram.InlineKeyboardMarkup(keyboard)
+            keyboard.append([InlineKeyboardButton(texto_boton, callback_data=temporalidad)])
+        reply_markup = InlineKeyboardMarkup(keyboard)
         try:
-            update.callback_query.edit_message_reply_markup(reply_markup=reply_markup)
-        except telegram.error.BadRequest:  # Captura la excepción BadRequest
-             update.callback_query.message.reply_text("Temporalidades:", reply_markup=reply_markup) #envia un nuevo mensaje en caso de que el anterior ya no exista
+            await update.callback_query.edit_message_reply_markup(reply_markup=reply_markup)
+        except telegram.error.BadRequest:
+            await update.callback_query.message.reply_text("Temporalidades:", reply_markup=reply_markup)
     except sqlite3.Error as e:
         logger.error(f"Error al obtener las suscripciones del usuario: {e}")
     finally:
         conn.close()
 
-
+# Función para gestionar los botones interactivos
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer() #Eliminar el query.answer() duplicado
+    await query.answer()  
     user_id = query.from_user.id
     data = query.data
 
@@ -200,8 +191,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error al interactuar con la base de datos: {e}")
     finally:
         conn.close()
-    await mostrar_botones_temporalidades(update, context, user_id) #Se agrega await
+    await mostrar_botones_temporalidades(update, context, user_id)
 
+# Comando para ver las suscripciones
 def lista_suscripciones(update, context):
     user_id = update.effective_user.id
     conn = sqlite3.connect(DATABASE_FILE)
@@ -214,24 +206,4 @@ def lista_suscripciones(update, context):
         else:
             update.message.reply_text("No estás suscrito a ninguna temporalidad.")
     except sqlite3.Error as e:
-        logger.error(f"Error al obtener la lista de suscripciones: {e}")
-    finally:
-        conn.close()
-async def main():
-    application = Application.builder().token(TOKEN).post_init(Application.initialize_job_queue).build()
-
-    # Handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))
-    application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
-
-    # Inicialización de la cola de trabajos
-    application.initialize_job_queue()
-
-    # Agregar un trabajo periódico
-    application.job_queue.run_repeating(enviar_informes, interval=15 * 60, first=10)
-
-    # Iniciar el bot
-    await application.initialize()
-    await application.start_polling()
-    await application.idle()
+        logger.error(f"Error al obtener la lista de suscripciones
