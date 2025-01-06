@@ -206,4 +206,25 @@ def lista_suscripciones(update, context):
         else:
             update.message.reply_text("No estás suscrito a ninguna temporalidad.")
     except sqlite3.Error as e:
-        logger.error(f"Error al obtener la lista de suscripciones
+        logger.error(f"Error al obtener la lista de suscripciones: {e}")
+    finally:
+        conn.close()
+
+# Función principal para configurar el bot
+def main():
+    application = Application.builder().token(TOKEN).build()
+
+    # Comandos
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("suscribir", suscribir))
+    application.add_handler(CommandHandler("desuscribir", desuscribir))
+    application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
+
+    # Botones interactivos
+    application.add_handler(CallbackQueryHandler(button))
+
+    # Iniciar el bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
