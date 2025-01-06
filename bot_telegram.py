@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 
-# Configuración
+# Configuració
 DATABASE_FILE = "usuarios.db"
 TOKEN = "7465892171:AAGR8UyG6nFujlllAVHRi_UTlCAUEmwi0jU"  # ¡REEMPLAZA CON TU TOKEN REAL!
 RUTA_INFORMES = "Informe Final"
