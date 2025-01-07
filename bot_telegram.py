@@ -165,16 +165,19 @@ def desuscribir(update, context):
 
 # Comando /start para iniciar el bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     crear_tabla_usuarios()
-    # ... (resto de la función start)
-    # IMPORTANTE: Iniciar el job_queue DENTRO del handler start, después de crear la tabla.
-    context.job_queue.run_repeating(
-        revisar_informes,
-        interval=INTERVALO_REINTENTO_15M,
-        first=INTERVALO_REINTENTO_15M,
-        name="revisar_informes",
-        data={"reintentos": 0} # Inicializar reintentos
-    )
+    if "revisar_informes" not in context.job_queue.jobs():
+        context.job_queue.run_repeating(
+            revisar_informes,
+            interval=INTERVALO_REINTENTO_15M,
+            first=INTERVALO_REINTENTO_15M,
+            name="revisar_informes",
+            data={"reintentos": 0}
+        )
+        await update.message.reply_text("¡Hola! Bot iniciado y programado para revisar informes.")
+    else:
+        await update.message.reply_text("El bot ya está programado para revisar informes.")
 # Función para mostrar los botones de temporalidades
 
 async def mostrar_botones_temporalidades(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id):
@@ -264,5 +267,6 @@ async def main():
         logger.exception("Error general en la función main")
 
 if __name__ == "__main__":
-    print("Bot iniciado")
-
+    print("Iniciando el bot...")
+    asyncio.run(main())  # AQUÍ DEBE ESTAR: EN EL BLOQUE if __name__ == "__main__":
+    print("Bot finalizado.")
