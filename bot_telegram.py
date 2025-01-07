@@ -14,7 +14,6 @@ RUTA_INFORMES = "Informe Final"
 ultima_modificacion_guardada = {}
 MAX_REINTENTOS_15M = 8
 INTERVALO_REINTENTO_15M = 15  # Intervalo en segundos
-TELEGRAM_TOKEN = "7465892171:AAGR8UyG6nFujlllAVHRi_UTlCAUEmwi0jU"
 
 # Configuración de logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
