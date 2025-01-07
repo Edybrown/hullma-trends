@@ -250,23 +250,35 @@ def lista_suscripciones(update, context):
 
 # Función principal para configurar el bot
 async def main():
+    # Leer el token del entorno
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+    if not TELEGRAM_TOKEN:
+        logger.error("El token de Telegram no está configurado en las variables de entorno.")
+        raise ValueError("El token de Telegram no está configurado en las variables de entorno.")
+
+    # Crear la aplicación del bot
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    # Agregar handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+
+    # Ejecutar el bot con polling
     try:
-        application = ApplicationBuilder().token(TOKEN).build()
-
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("suscribir", suscribir))
-        application.add_handler(CommandHandler("desuscribir", desuscribir))
-        application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
-        application.add_handler(CallbackQueryHandler(button)) # Manejador de botones
-
+        logger.info("El bot está iniciando...")
         await application.run_polling()
-
-    except telegram.error.InvalidToken as e:
-        logger.error(f"Error de token inválido: {e}")
     except Exception as e:
-        logger.exception("Error general en la función main")
+        logger.exception("Error ejecutando el bot: %s", e)
 
+# Punto de entrada del script
 if __name__ == "__main__":
-    print("Iniciando el bot...")
-    asyncio.run(main())  # AQUÍ DEBE ESTAR: EN EL BLOQUE if __name__ == "__main__":
-    print("Bot finalizado.")
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        if "This event loop is already running" in str(e):
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+        else:
+            logger.exception("Error crítico en el bucle principal: %s", e)
+            raise
+
