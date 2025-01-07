@@ -4,49 +4,52 @@ import sqlite3
 import markdown
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, JobQueue
 from telegram.constants import ParseMode
+from telegram import Update
+import asyncio
+import time
 
 # Configuració
 DATABASE_FILE = "usuarios.db"
 TOKEN = "7465892171:AAGR8UyG6nFujlllAVHRi_UTlCAUEmwi0jU"  # ¡REEMPLAZA CON TU TOKEN REAL!
 RUTA_INFORMES = "Informe Final"
 ultima_modificacion_guardada = {}
+MAX_REINTENTOS_15M = 8  # Máximo 8 reintentos (2 minutos)
+INTERVALO_REINTENTO_15M = 15 #Intervalo de 15 segundos
+
+
 
 # Configuración de logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 bot = telegram.Bot(token=TOKEN)
 
-# Función para enviar informes periódicamente
-async def enviar_informes(context: ContextTypes.DEFAULT_TYPE):
-    bot = context.bot
-    for temporalidad in ["1d", "4h", "1h", "15m"]:
-        nombre_archivo = f"report_{temporalidad}.md"
-        ruta_archivo = os.path.join(RUTA_INFORMES, nombre_archivo)
 
-        if os.path.exists(ruta_archivo):
-            try:
-                ultima_modificacion = os.path.getmtime(ruta_archivo)
-                if ultima_modificacion > ultima_modificacion_guardada.get(nombre_archivo, 0):
-                    ultima_modificacion_guardada[nombre_archivo] = ultima_modificacion
-                    with open(ruta_archivo, "r", encoding="utf-8") as archivo:
-                        contenido_informe = archivo.read()
-                        html = markdown.markdown(contenido_informe)
-                        usuarios = obtener_usuarios_suscritos(temporalidad)
-                        for usuario in usuarios:
-                            try:
-                                await bot.send_message(chat_id=usuario[0], text=html, parse_mode=ParseMode.HTML)
-                            except telegram.error.TelegramError as e:
-                                logger.error(f"Error al enviar mensaje a {usuario[0]}: {e}")
-                else:
-                    logger.info(f"El archivo {ruta_archivo} no ha sido modificado.")
-            except FileNotFoundError:
-                logger.error(f"Archivo no encontrado: {ruta_archivo}")
-            except Exception as e:
-                logger.error(f"Error al procesar {ruta_archivo}: {e}")
-        else:
-            logger.warning(f"No existe el archivo {ruta_archivo}")
+# Función para enviar informes periódicamente
+async def enviar_informe(context: ContextTypes.DEFAULT_TYPE, temporalidad):
+    bot = context.bot
+    nombre_archivo = f"report_{temporalidad}.md"
+    ruta_archivo = os.path.join(RUTA_INFORMES, nombre_archivo)
+    if os.path.exists(ruta_archivo):
+        try:
+            with open(ruta_archivo, "r", encoding="utf-8") as archivo:
+                contenido_informe = archivo.read()
+                html = markdown.markdown(contenido_informe)
+                usuarios = obtener_usuarios_suscritos(temporalidad)
+                for usuario in usuarios:
+                    try:
+                        await bot.send_message(chat_id=usuario[0], text=html, parse_mode=ParseMode.HTML)
+                        logger.info(f"Informe {temporalidad} enviado a {usuario[0]}")
+                    except telegram.error.TelegramError as e:
+                        logger.error(f"Error al enviar mensaje a {usuario[0]}: {e}")
+        except FileNotFoundError:
+            logger.error(f"Archivo no encontrado: {ruta_archivo}")
+        except Exception as e:
+            logger.error(f"Error al procesar {ruta_archivo}: {e}")
+    else:
+        logger.warning(f"No existe el archivo {ruta_archivo}")
+
 
 # Función para obtener los usuarios suscritos a una temporalidad
 def obtener_usuarios_suscritos(temporalidad):
@@ -61,6 +64,48 @@ def obtener_usuarios_suscritos(temporalidad):
         return []
     finally:
         conn.close()
+    pass
+    
+async def revisar_informe_15m(context: ContextTypes.DEFAULT_TYPE):
+    ruta_archivo = os.path.join(RUTA_INFORMES, "report_15m.md")
+    if not os.path.exists(ruta_archivo):
+        return
+
+    ultima_modificacion = os.path.getmtime(ruta_archivo)
+
+    if ultima_modificacion > ultima_modificacion_guardada.get("report_15m.md", 0):
+        ultima_modificacion_guardada["report_15m.md"] = ultima_modificacion
+        await enviar_informe(context, "15m")
+        context.job.schedule_removal() # Eliminar el job actual
+        context.job_queue.run_repeating(revisar_informes, interval=INTERVALO_REINTENTO_15M, first=INTERVALO_REINTENTO_15M, name="revisar_informes")
+        return
+
+    elif context.job.data["reintentos"] < MAX_REINTENTOS_15M:
+        context.job.data["reintentos"] += 1
+        logger.info(f"Reintento {context.job.data['reintentos']} para report_15m.md")
+        return
+    else:
+        logger.info("Máximo de reintentos alcanzado para report_15m.md. Revisando otras temporalidades.")
+        context.job.schedule_removal()
+        context.job_queue.run_repeating(revisar_informes, interval=INTERVALO_REINTENTO_15M, first=INTERVALO_REINTENTO_15M, name="revisar_informes")
+
+
+
+
+async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
+    if context.job.name == "revisar_informes":
+        if "reintentos" not in context.job.data:
+            context.job.data["reintentos"] = 0
+        await revisar_informe_15m(context)
+        await revisar_otros_informes(context)
+        context.job.data["reintentos"] = 0 #Reiniciar los reintentos
+    else:
+        await revisar_otros_informes(context)
+            
+async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
+    await revisar_informe_15m(context)
+    await revisar_otros_informes(context)
+
 
 # Función para crear la tabla de usuarios
 def crear_tabla_usuarios():
@@ -140,6 +185,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Luego podrás desactivar las temporalidades que no te interesen.",
         reply_markup=reply_markup
     )
+    context.job_queue.run_repeating(revisar_informes, interval=INTERVALO_REINTENTO_15M, first=INTERVALO_REINTENTO_15M, name="revisar_informes")
+
 
 # Función para mostrar los botones de temporalidades
 async def mostrar_botones_temporalidades(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id):
@@ -211,7 +258,7 @@ def lista_suscripciones(update, context):
         conn.close()
 
 # Función principal para configurar el bot
-def main():
+async def main():
     application = Application.builder().token(TOKEN).build()
 
     # Comandos
@@ -222,9 +269,10 @@ def main():
 
     # Botones interactivos
     application.add_handler(CallbackQueryHandler(button))
-
-    # Iniciar el bot
-    application.run_polling()
+    application.job_queue.context_types = [ContextTypes.DEFAULT_TYPE]
+    await application.initialize()
+    await application.start_polling()
+    await application.idle()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
