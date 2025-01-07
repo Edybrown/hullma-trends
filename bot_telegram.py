@@ -272,12 +272,15 @@ async def main():
 
     # Inicialización de JobQueue después de application.initialize()
     await application.initialize()
-    application.job_queue.context_types = [ContextTypes.DEFAULT_TYPE]
 
     # Job para revisar informe 15 minutos (se puede agregar más para otras temporalidades)
     context_data = {"reintentos": 0}  # Contador de reintentos para report_15m.md
-    context.job_queue.run_repeating(
-        revisar_informe_15m, interval=INTERVALO_REINTENTO_15M, first=INTERVALO_REINTENTO_15M, data=context_data, name="revisar_informes"
+    application.job_queue.run_repeating(
+        revisar_informe_15m,
+        interval=INTERVALO_REINTENTO_15M,
+        first=INTERVALO_REINTENTO_15M,
+        data=context_data,
+        name="revisar_informes",
     )
 
     await application.start_polling()
@@ -285,4 +288,5 @@ async def main():
 
 
 if __name__ == '__main__':
+    import asyncio
     asyncio.run(main())
