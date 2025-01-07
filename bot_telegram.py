@@ -4,12 +4,12 @@ import sqlite3
 import markdown
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram.constants import ParseMode
 import asyncio
 import time
 
-# Configuracion
+# Configuración
 DATABASE_FILE = "usuarios.db"
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 if not TOKEN:
@@ -19,7 +19,7 @@ ultima_modificacion_guardada = {}
 MAX_REINTENTOS_15M = 3
 INTERVALO_REINTENTO_15M = 15
 
-# Configuracion de logging
+# Configuración de logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -76,10 +76,7 @@ async def revisar_informe(context: ContextTypes.DEFAULT_TYPE, nombre_archivo):
         logger.info(f"Máximo de reintentos alcanzado para {nombre_archivo}.")
         context.job.data["reintentos"][nombre_archivo] = 0  # Reiniciar contador
 
-async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
-    archivos_informes = ["report_15m.md", "report_1h.md", "report_4h.md", "report_1d.md"]
-    for archivo in archivos_informes:
-        await revisar_informe(context, archivo)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("¡Hola! Bienvenido al bot de informes.")
@@ -97,16 +94,12 @@ async def setup_bot():
     return application
 
 async def main():
+    application = await setup_bot()
     try:
-        application = await setup_bot()
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling()
-        await application.updater.idle()
+        await application.run_polling()
     except Exception as e:
         logger.exception(f"Error inesperado en main: {e}")
     finally:
-        await application.stop()
         await application.shutdown()
 
 if __name__ == '__main__':
