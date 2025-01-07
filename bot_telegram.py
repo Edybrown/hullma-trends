@@ -20,12 +20,18 @@ INTERVALO_REINTENTO_15M = 15 #Intervalo de 15 segundos
 
 
 
-# Configuración de logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Configuración del logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
-bot = telegram.Bot(token=TOKEN)
+# Token del bot (usando variable de entorno)
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+if not TOKEN:
+    print("Error: No se ha encontrado el token del bot. Define la variable de entorno TELEGRAM_BOT_TOKEN.")
+    exit()
 
-
+INTERVALO_REINTENTO_15M = 15 * 60  # 15 minutos en segundos
 # Función para enviar informes periódicamente
 async def enviar_informe(context: ContextTypes.DEFAULT_TYPE, temporalidad):
     bot = context.bot
@@ -247,17 +253,15 @@ def lista_suscripciones(update, context):
 
 # Función principal para configurar el bot
 async def main():
-    """Función principal que inicia el bot."""
     try:
-        application = Application.builder().token(TOKEN).build()
+        # Construye la aplicación usando ApplicationBuilder
+        application = ApplicationBuilder().token(TOKEN).build()
 
         # Manejadores de comandos
         application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("suscribir", suscribir))
-        application.add_handler(CommandHandler("desuscribir", desuscribir))
-        application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
+        # ... (añade el resto de tus handlers)
 
-        # Programar el job (con manejo de excepciones para la creación del JobQueue)
+        # Programar el job (con manejo de excepciones)
         try:
             application.job_queue.run_repeating(
                 revisar_informes,
@@ -268,14 +272,13 @@ async def main():
         except AttributeError as e:
             logger.error(f"Error al programar el JobQueue (puede que no esté instalado): {e}")
 
-        # Iniciar el bot
-        await application.start_polling()
-        await application.idle()
+        # Inicia el polling usando run_polling()
+        await application.run_polling()  # <-- CAMBIO CLAVE
+
     except telegram.error.InvalidToken as e:
         logger.error(f"Error de token inválido: {e}")
     except Exception as e:
         logger.exception("Error general en la función main")
-
 
 if __name__ == "__main__":
     import asyncio
