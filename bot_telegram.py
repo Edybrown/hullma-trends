@@ -262,12 +262,12 @@ async def main():
     await application.initialize()
 
     # Job para revisar informe 15 minutos (se puede agregar más para otras temporalidades)
-   application.job_queue.run_repeating(
+    application.job_queue.run_repeating(
         revisar_informes,
         interval=INTERVALO_REINTENTO_15M,
         first=INTERVALO_REINTENTO_15M,
         name="revisar_informes", # Nombre para el job
-    )
+         )
 
     await application.start_polling()
     await application.idle()
