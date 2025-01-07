@@ -264,4 +264,4 @@ async def main():
         logger.exception("Error general en la función main")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+
