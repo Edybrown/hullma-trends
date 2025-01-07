@@ -22,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Token del bot (usando variable de entorno)
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
 if not TOKEN:
     logger.error("Error: No se ha encontrado el token del bot. Define la variable de entorno TELEGRAM_BOT_TOKEN.")
     exit(1)
