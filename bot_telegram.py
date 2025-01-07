@@ -4,7 +4,7 @@ import sqlite3
 import markdown
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, Application, MessageHandler, filters
 from telegram.constants import ParseMode
 import asyncio
 
@@ -114,6 +114,11 @@ def crear_tabla_usuarios():
         logger.error(f"Error al crear la tabla usuarios: {e}")
     finally:
         conn.close()
+
+async def echo(update, context):
+    user_message = update.message.text
+    await update.message.reply_text(f"Dijiste: {user_message}")
+
 
 # Comando /suscribir para agregar una temporalidad
 def suscribir(update, context):
