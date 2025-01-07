@@ -255,35 +255,44 @@ def lista_suscripciones(update, context):
 
 # Función principal para configurar el bot
 async def main():
-    # Leer el token del entorno
-    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-    if not TELEGRAM_TOKEN:
-        logger.error("El token de Telegram no está configurado en las variables de entorno.")
-        raise ValueError("El token de Telegram no está configurado en las variables de entorno.")
-
-    # Crear la aplicación del bot
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    # Agregar handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-
-    # Ejecutar el bot con polling
+    """Función principal para iniciar el bot."""
+    logger.info("El bot está iniciando...")
     try:
-        logger.info("El bot está iniciando...")
+        # Obtiene el token desde las variables de entorno
+        telegram_token = os.getenv("TELEGRAM_TOKEN")
+        if not telegram_token:
+            raise ValueError("El token de Telegram no está configurado en las variables de entorno.")
+
+        # Construcción de la aplicación
+        application = (
+            ApplicationBuilder()
+            .token(telegram_token)
+            .build()
+        )
+
+        # Agregar handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+
+        # Ejecutar la aplicación
+        try:
+            # Verificar si el loop ya está en ejecución
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # No hay un loop corriendo
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        logger.info("Iniciando polling...")
         await application.run_polling()
     except Exception as e:
         logger.exception("Error ejecutando el bot: %s", e)
 
-# Punto de entrada del script
+# Ejecutar el bot
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except RuntimeError as e:
-        if "This event loop is already running" in str(e):
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(main())
-        else:
-            logger.exception("Error crítico en el bucle principal: %s", e)
-            raise
-
+        logger.error("Error en asyncio.run: %s", e)
+        # Intentar ejecutar con el loop existente
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
