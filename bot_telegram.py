@@ -58,6 +58,12 @@ def obtener_todos_usuarios():
     finally:
         conn.close()
 
+async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
+    archivos_informes = ["report_15m.md", "report_1h.md", "report_4h.md", "report_1d.md"]
+    for archivo in archivos_informes:
+        await revisar_informe(context, archivo)
+
+
 async def revisar_informe(context: ContextTypes.DEFAULT_TYPE, nombre_archivo):
     ruta_archivo = os.path.join(RUTA_INFORMES, nombre_archivo)
     if not os.path.exists(ruta_archivo):
