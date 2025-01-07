@@ -4,35 +4,30 @@ import sqlite3
 import markdown
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, JobQueue
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
-from telegram import Update
 import asyncio
-import time
 
 # Configuració
 DATABASE_FILE = "usuarios.db"
-TOKEN = "7465892171:AAGR8UyG6nFujlllAVHRi_UTlCAUEmwi0jU"  # ¡REEMPLAZA CON TU TOKEN REAL!
 RUTA_INFORMES = "Informe Final"
 ultima_modificacion_guardada = {}
-MAX_REINTENTOS_15M = 8  # Máximo 8 reintentos (2 minutos)
-INTERVALO_REINTENTO_15M = 15 #Intervalo de 15 segundos
-
-
+MAX_REINTENTOS_15M = 8  # Máximo 8 reintentos
+INTERVALO_REINTENTO_15M = 15 * 60  # 15 minutos en segundos
 
 # Configuración del logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
 # Token del bot (usando variable de entorno)
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not TOKEN:
-    print("Error: No se ha encontrado el token del bot. Define la variable de entorno TELEGRAM_BOT_TOKEN.")
-    exit()
-
-INTERVALO_REINTENTO_15M = 15 * 60  # 15 minutos en segundos
+    logger.error("Error: No se ha encontrado el token del bot. Define la variable de entorno TELEGRAM_BOT_TOKEN.")
+    exit(1)
 # Función para enviar informes periódicamente
+
 async def enviar_informe(context: ContextTypes.DEFAULT_TYPE, temporalidad):
     bot = context.bot
     nombre_archivo = f"report_{temporalidad}.md"
@@ -100,7 +95,7 @@ async def revisar_otros_informes(context: ContextTypes.DEFAULT_TYPE):
 async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
     await revisar_informe_15m(context)
     await revisar_otros_informes(context)
-    
+
 # Función para crear la tabla de usuarios
 def crear_tabla_usuarios():
     conn = sqlite3.connect(DATABASE_FILE)
@@ -171,18 +166,17 @@ def desuscribir(update, context):
 # Comando /start para iniciar el bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     crear_tabla_usuarios()
-    keyboard = [[InlineKeyboardButton("Suscribirme a todo", callback_data='suscribir_todo')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "¡Bienvenido a BTCStream! Recibe informes de análisis técnico de Bitcoin.\n"
-        "Presiona 'Suscribirme a todo' para comenzar a recibir informes de todas las temporalidades.\n"
-        "Luego podrás desactivar las temporalidades que no te interesen.",
-        reply_markup=reply_markup
+    # ... (resto de la función start)
+    # IMPORTANTE: Iniciar el job_queue DENTRO del handler start, después de crear la tabla.
+    context.job_queue.run_repeating(
+        revisar_informes,
+        interval=INTERVALO_REINTENTO_15M,
+        first=INTERVALO_REINTENTO_15M,
+        name="revisar_informes",
+        data={"reintentos": 0} # Inicializar reintentos
     )
-    context.job_queue.run_repeating(revisar_informes, interval=INTERVALO_REINTENTO_15M, first=INTERVALO_REINTENTO_15M, name="revisar_informes")
-
-
 # Función para mostrar los botones de temporalidades
+
 async def mostrar_botones_temporalidades(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -254,26 +248,15 @@ def lista_suscripciones(update, context):
 # Función principal para configurar el bot
 async def main():
     try:
-        # Construye la aplicación usando ApplicationBuilder
         application = ApplicationBuilder().token(TOKEN).build()
 
-        # Manejadores de comandos
         application.add_handler(CommandHandler("start", start))
-        # ... (añade el resto de tus handlers)
+        application.add_handler(CommandHandler("suscribir", suscribir))
+        application.add_handler(CommandHandler("desuscribir", desuscribir))
+        application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
+        application.add_handler(CallbackQueryHandler(button)) # Manejador de botones
 
-        # Programar el job (con manejo de excepciones)
-        try:
-            application.job_queue.run_repeating(
-                revisar_informes,
-                interval=INTERVALO_REINTENTO_15M,
-                first=INTERVALO_REINTENTO_15M,
-                name="revisar_informes",
-            )
-        except AttributeError as e:
-            logger.error(f"Error al programar el JobQueue (puede que no esté instalado): {e}")
-
-        # Inicia el polling usando run_polling()
-        await application.run_polling()  # <-- CAMBIO CLAVE
+        await application.run_polling()
 
     except telegram.error.InvalidToken as e:
         logger.error(f"Error de token inválido: {e}")
@@ -281,5 +264,4 @@ async def main():
         logger.exception("Error general en la función main")
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
