@@ -254,45 +254,43 @@ def lista_suscripciones(update, context):
         conn.close()
 
 # Función principal para configurar el bot
-async def main():
-    """Función principal para iniciar el bot."""
+async def run_bot():
+    """Configura y ejecuta el bot."""
     logger.info("El bot está iniciando...")
+    # Obtiene el token desde las variables de entorno
+    telegram_token = os.getenv("TELEGRAM_TOKEN")
+    if not telegram_token:
+        raise ValueError("El token de Telegram no está configurado en las variables de entorno.")
+
+    # Construcción de la aplicación
+    application = (
+        ApplicationBuilder()
+        .token(telegram_token)
+        .build()
+    )
+
+    # Agregar handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+
+    # Ejecutar la aplicación en modo polling
+    logger.info("Iniciando polling...")
+    await application.run_polling()
+
+def main():
+    """Gestiona la ejecución del bot."""
     try:
-        # Obtiene el token desde las variables de entorno
-        telegram_token = os.getenv("TELEGRAM_TOKEN")
-        if not telegram_token:
-            raise ValueError("El token de Telegram no está configurado en las variables de entorno.")
-
-        # Construcción de la aplicación
-        application = (
-            ApplicationBuilder()
-            .token(telegram_token)
-            .build()
-        )
-
-        # Agregar handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-
-        # Ejecutar la aplicación
+        # Verificar si hay un loop en ejecución
         try:
-            # Verificar si el loop ya está en ejecución
             loop = asyncio.get_running_loop()
-        except RuntimeError:  # No hay un loop corriendo
+        except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-        logger.info("Iniciando polling...")
-        await application.run_polling()
+        
+        # Ejecutar el bot con el loop existente
+        loop.run_until_complete(run_bot())
     except Exception as e:
         logger.exception("Error ejecutando el bot: %s", e)
 
-# Ejecutar el bot
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        logger.error("Error en asyncio.run: %s", e)
-        # Intentar ejecutar con el loop existente
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
+    main()
