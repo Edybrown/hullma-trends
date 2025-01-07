@@ -10,6 +10,7 @@ import markdown
 # Configuración
 DATABASE_FILE = "usuarios.db"
 TOKEN = os.getenv("TELEGRAM_TOKEN")  # Usa una variable de entorno para el token
+print(f"Retrieved token: {TOKEN}")
 RUTA_INFORMES = "Informe Final"
 ultima_modificacion_guardada = {}
 MAX_REINTENTOS_15M = 8
