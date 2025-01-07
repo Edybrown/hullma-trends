@@ -59,6 +59,7 @@ def registrar_usuario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def revisar_informe_15m(context: ContextTypes.DEFAULT_TYPE):
     try:
         reintentos = context.job.data.get("reintentos", 0)
+        chat_id = context.job.data.get("chat_id") # Recuperar chat_id de job.data
         if reintentos >= MAX_REINTENTOS_15M:
             logger.warning("Máximo número de reintentos alcanzado para la tarea de revisión.")
             return
@@ -75,24 +76,27 @@ def revisar_informe_15m(context: ContextTypes.DEFAULT_TYPE):
             with open(archivo, "r") as f:
                 contenido = f.read()
             mensaje = f"Informe actualizado:\n{contenido}"
-            context.bot.send_message(chat_id=context.job.chat_id, text=mensaje)
+            if chat_id: # Verificar que chat_id existe antes de enviar
+                context.bot.send_message(chat_id=chat_id, text=mensaje)
+            else:
+                logger.error("chat_id no encontrado en job.data")
         else:
             logger.info("No hay cambios en el informe.")
 
     except Exception as e:
         context.job.data["reintentos"] = context.job.data.get("reintentos", 0) + 1
         logger.error(f"Error en la tarea de revisión: {e}")
-
 # Comando para iniciar la tarea de revisión periódica
+
 def iniciar_revision(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     context.job_queue.run_repeating(
         revisar_informe_15m,
         interval=INTERVALO_REINTENTO_15M,
         first=0,
-        chat_id=chat_id,
+        chat_id=chat_id, # Esto ya no es necesario aquí
         name=str(chat_id),
-        data={"reintentos": 0}
+        data={"reintentos": 0, "chat_id": chat_id} # Pasar chat_id en data
     )
     update.message.reply_text("La revisión periódica de informes ha comenzado.")
 
