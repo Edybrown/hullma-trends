@@ -81,21 +81,33 @@ async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
     for archivo in archivos_informes:
         await revisar_informe(context, archivo)
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("¡Hola! Bienvenido al bot de informes.")
+
+async def setup_bot():
+    application = Application.builder().token(TOKEN).build()
+    
+    # Agregar manejadores
+    application.add_handler(CommandHandler("start", start))
+    
+    # Configurar trabajos periódicos
+    job_queue = application.job_queue
+    job_queue.run_repeating(revisar_informes, interval=900, first=10, data={"reintentos": {}})
+
+    return application
+
 async def main():
     try:
-        application = Application.builder().token(TOKEN).build()
-
-        # Agregar un manejador de comandos (ejemplo)
-        async def start(update, context):
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Hola!")
-        start_handler = CommandHandler('start', start)
-        application.add_handler(start_handler)
-
-        # Iniciar el bot
-        await application.run_polling()
-
+        application = await setup_bot()
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()
+        await application.updater.idle()
     except Exception as e:
         logger.exception(f"Error inesperado en main: {e}")
+    finally:
+        await application.stop()
+        await application.shutdown()
 
 if __name__ == '__main__':
     asyncio.run(main())
