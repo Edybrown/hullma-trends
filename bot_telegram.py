@@ -94,8 +94,7 @@ async def revisar_otros_informes(context: ContextTypes.DEFAULT_TYPE):
 async def revisar_informes(context: ContextTypes.DEFAULT_TYPE):
     await revisar_informe_15m(context)
     await revisar_otros_informes(context)
-
-
+    
 # Función para crear la tabla de usuarios
 def crear_tabla_usuarios():
     conn = sqlite3.connect(DATABASE_FILE)
@@ -263,18 +262,15 @@ async def main():
     await application.initialize()
 
     # Job para revisar informe 15 minutos (se puede agregar más para otras temporalidades)
-    context_data = {"reintentos": 0}  # Contador de reintentos para report_15m.md
-    application.job_queue.run_repeating(
-        revisar_informe_15m,
+   application.job_queue.run_repeating(
+        revisar_informes,
         interval=INTERVALO_REINTENTO_15M,
         first=INTERVALO_REINTENTO_15M,
-        data=context_data,
-        name="revisar_informes",
+        name="revisar_informes", # Nombre para el job
     )
 
     await application.start_polling()
     await application.idle()
-
 
 if __name__ == '__main__':
     import asyncio
