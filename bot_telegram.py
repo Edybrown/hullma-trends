@@ -85,27 +85,17 @@ async def main():
     try:
         application = Application.builder().token(TOKEN).build()
 
-        # ... (Aquí se añaden los CommandHandlers y CallbackQueryHandlers)
+        # Agregar un manejador de comandos (ejemplo)
+        async def start(update, context):
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="Hola!")
+        start_handler = CommandHandler('start', start)
+        application.add_handler(start_handler)
 
-        await application.initialize()
+        # Iniciar el bot
+        await application.run_polling()
 
-        context_data = {"reintentos": {}}
-        application.job_queue.run_repeating(
-            revisar_informes,
-            interval=INTERVALO_REINTENTO_15M * 60,  # Cada 15 minutos (en segundos)
-            first=INTERVALO_REINTENTO_15M * 60,  # La primera vez también después de 15 minutos
-            data=context_data,
-            name="revisar_informes",
-        )
-
-        await application.start_polling()
-        await application.idle()
-
-    except telegram.error.InvalidToken:
-        logger.error("Token de Telegram inválido. Verifica la variable de entorno TELEGRAM_TOKEN.")
     except Exception as e:
         logger.exception(f"Error inesperado en main: {e}")
 
 if __name__ == '__main__':
-    import asyncio
     asyncio.run(main())
