@@ -247,31 +247,36 @@ def lista_suscripciones(update, context):
 
 # Función principal para configurar el bot
 async def main():
-    application = Application.builder().token(TOKEN).build()
+    """Función principal que inicia el bot."""
+    try:
+        application = Application.builder().token(TOKEN).build()
 
-    # Comandos
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("suscribir", suscribir))
-    application.add_handler(CommandHandler("desuscribir", desuscribir))
-    application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
+        # Manejadores de comandos
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("suscribir", suscribir))
+        application.add_handler(CommandHandler("desuscribir", desuscribir))
+        application.add_handler(CommandHandler("lista_suscripciones", lista_suscripciones))
 
-    # Botones interactivos
-    application.add_handler(CallbackQueryHandler(button))
+        # Programar el job (con manejo de excepciones para la creación del JobQueue)
+        try:
+            application.job_queue.run_repeating(
+                revisar_informes,
+                interval=INTERVALO_REINTENTO_15M,
+                first=INTERVALO_REINTENTO_15M,
+                name="revisar_informes",
+            )
+        except AttributeError as e:
+            logger.error(f"Error al programar el JobQueue (puede que no esté instalado): {e}")
 
-    # Inicialización de JobQueue después de application.initialize()
-    await application.initialize()
+        # Iniciar el bot
+        await application.start_polling()
+        await application.idle()
+    except telegram.error.InvalidToken as e:
+        logger.error(f"Error de token inválido: {e}")
+    except Exception as e:
+        logger.exception("Error general en la función main")
 
-    # Job para revisar informe 15 minutos (se puede agregar más para otras temporalidades)
-    application.job_queue.run_repeating(
-        revisar_informes,
-        interval=INTERVALO_REINTENTO_15M,
-        first=INTERVALO_REINTENTO_15M,
-        name="revisar_informes", # Nombre para el job
-         )
 
-    await application.start_polling()
-    await application.idle()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
