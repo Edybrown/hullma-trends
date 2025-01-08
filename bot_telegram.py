@@ -9,7 +9,7 @@ from datetime import datetime
 
 # Cargar variables de entorno
 load_dotenv()
-bot_token = os.getenv('BOT_TOKEN')
+bot_token = os.getenv('TELEGRAM_TOKEN')
 
 # Configuración del bot
 application = Application.builder().token(bot_token).build()
