@@ -19,16 +19,20 @@ application = Application.builder().token(bot_token).build()
 def create_db():
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
-                    id INTEGER PRIMARY KEY,
-                    chat_id INTEGER UNIQUE,
-                    nombre TEXT,
-                    suscripciones TEXT,  # Lista de suscripciones (temporalidades)
-                    suscripcion_tipo TEXT,  # Tipo de suscripción (ej. "gratis", "premium", etc.)
-                    suscripcion_fecha TIMESTAMP,
-                    fecha_ultima_actividad TIMESTAMP)''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY,
+            chat_id INTEGER UNIQUE,
+            nombre TEXT,
+            suscripciones TEXT,  -- Lista de suscripciones (temporalidades)
+            suscripcion_tipo TEXT,  -- Tipo de suscripción (ej. "gratis", "premium", etc.)
+            suscripcion_fecha TIMESTAMP,
+            fecha_ultima_actividad TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
+
 
 # Función para guardar un nuevo usuario
 def save_user(chat_id, nombre):
