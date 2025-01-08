@@ -73,7 +73,7 @@ async def show_subscription_button(update: Update):
 
 # Función para mostrar las temporalidades disponibles
 async def show_temporalidades(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
+    chat_id = update.callback_query.message.chat_id  # Cambiado de update.message a update.callback_query.message
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
     c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
@@ -100,7 +100,8 @@ async def show_temporalidades(update: Update, context: CallbackContext):
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
+    await update.callback_query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
+
 
 # Función para manejar las acciones de suscripción y desuscripción
 async def button(update: Update, context: CallbackContext):
