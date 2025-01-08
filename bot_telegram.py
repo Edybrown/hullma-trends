@@ -57,11 +57,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     save_user(update.message.chat_id, user.first_name)
     
+    # Mensaje de bienvenida mejorado
+    welcome_message = (
+        "¡Hola, {name}! 👋\n\n"
+        "¡Bienvenido a tu asistente de análisis de tendencias de trading! 🚀\n\n"
+        "Este bot te ayudará a recibir actualizaciones y análisis de trading basados en diferentes temporalidades.\n\n"
+        "Puedes suscribirte a cualquiera de las siguientes temporalidades:\n"
+        "🔹 15 minutos (15m)\n"
+        "🔸 1 hora (1h)\n"
+        "🔹 4 horas (4h)\n"
+        "🔸 1 día (1d)\n\n"
+        "Al suscribirte, recibirás análisis en tiempo real y podrás tomar decisiones más informadas. 🧠💡\n\n"
+        "Para comenzar, simplemente selecciona una temporalidad para suscribirte o desuscribirte utilizando los botones a continuación. ¡Empecemos! ⚡"
+    ).format(name=user.first_name)
+
     # Mostrar mensaje de bienvenida
-    await update.message.reply_text("¡Bienvenido! Usa el botón para suscribirte o desuscribirte.")
-    
+    await update.message.reply_text(welcome_message)
+
     # Llamar a la función para mostrar los botones fijos
     await show_subscription_button(update)
+
 
 # Función para mostrar botones de suscripción fijos
 async def show_subscription_button(update: Update):
