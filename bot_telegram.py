@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # Leer el token desde las variables de entorno
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -31,7 +31,7 @@ def add_user_to_db(user_id, username):
     conn.close()
 
 # Inicio del bot y mensaje de bienvenida
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     add_user_to_db(user.id, user.username)
 
@@ -48,15 +48,15 @@ def start(update: Update, context: CallbackContext):
         [InlineKeyboardButton("Detener Suscripciones", callback_data="detener_suscripciones")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
 # Callback para gestionar las suscripciones
-def handle_callbacks(update: Update, context: CallbackContext):
+async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     if query.data == "gestionar_suscripciones":
-        query.edit_message_text(
+        await query.edit_message_text(
             "Aquí puedes suscribirte o desuscribirte de las temporalidades.\n"
             "🔹 15m, 🔹 1h, 🔹 4h, 🔹 1d\n\n"
             "Selecciona una opción para continuar.",
@@ -67,24 +67,23 @@ def handle_callbacks(update: Update, context: CallbackContext):
             ])
         )
     elif query.data == "volver_inicio":
-        start(update, context)  # Volver al inicio
+        await start(update, context)  # Volver al inicio
 
 # Configuración del bot
-def main():
+async def main():
     # Configurar la base de datos
     setup_database()
 
-    # Configurar el bot
-    updater = Updater(TOKEN)
-    dispatcher = updater.dispatcher
+    # Crear la aplicación del bot
+    application = Application.builder().token(TOKEN).build()
 
-    # Comandos
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CallbackQueryHandler(handle_callbacks))
+    # Agregar comandos y manejadores de callbacks
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(handle_callbacks))
 
     # Iniciar el bot
-    updater.start_polling()
-    updater.idle()
+    await application.run_polling()
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
