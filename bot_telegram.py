@@ -55,10 +55,16 @@ def get_users():
     return users
 
 # Comando /start
+# Comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     save_user(update.message.chat_id, user.first_name)
+    
+    # Mostrar mensaje de bienvenida
     await update.message.reply_text("¡Bienvenido! Usa el botón para suscribirte o desuscribirte.")
+    
+    # Llamar a la función para mostrar los botones
+    await suscripcion_comando(update, context)
 
 # Función para suscribir/desuscribir usuarios
 async def button(update: Update, context: CallbackContext):
