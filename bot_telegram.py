@@ -1,89 +1,81 @@
 import os
+import logging
 import sqlite3
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    Application, CallbackQueryHandler, CommandHandler, ContextTypes
+)
 
-# Leer el token desde las variables de entorno
+# Configuración del token desde variable de entorno
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+# Configuración del logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 # Configuración de la base de datos SQLite
 DB_NAME = "usuarios_telegram.db"
 
-def setup_database():
+def init_db():
+    """Inicializa la base de datos SQLite."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY,
-            username TEXT,
-            temporalidades TEXT
+            chat_id INTEGER UNIQUE,
+            suscripcion_15m BOOLEAN DEFAULT 0,
+            suscripcion_1h BOOLEAN DEFAULT 0,
+            suscripcion_4h BOOLEAN DEFAULT 0,
+            suscripcion_1d BOOLEAN DEFAULT 0
         )
     """)
     conn.commit()
     conn.close()
 
-def add_user_to_db(user_id, username):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO usuarios (id, username, temporalidades) VALUES (?, ?, ?)", 
-                   (user_id, username, ""))
-    conn.commit()
-    conn.close()
-
-# Inicio del bot y mensaje de bienvenida
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    add_user_to_db(user.id, user.username)
-
-    welcome_message = (
-        f"¡Hola, {user.first_name}! 👋\n\n"
-        "Soy tu bot de análisis de mercado.\n\n"
-        "🕒 Temporalidades disponibles: 15 minutos, 1 hora, 4 horas, y 1 día.\n"
-        "🔔 Recibirás análisis cada cierre de vela según tus preferencias.\n"
-        "📝 Usa el botón 'Gestionar Suscripciones' para suscribirte o modificar tus opciones."
-    )
+# Función para manejar /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Envía un mensaje de bienvenida con opciones."""
     keyboard = [
-        [InlineKeyboardButton("Gestionar Suscripciones", callback_data="gestionar_suscripciones")],
-        [InlineKeyboardButton("Estado de Mis Suscripciones", callback_data="estado_suscripciones")],
-        [InlineKeyboardButton("Detener Suscripciones", callback_data="detener_suscripciones")],
+        [InlineKeyboardButton("Suscribirse", callback_data="suscribirse")],
+        [InlineKeyboardButton("Desuscribirse", callback_data="desuscribirse")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    await update.message.reply_text(
+        "Bienvenido al bot. Seleccione una opción:",
+        reply_markup=reply_markup
+    )
 
-# Callback para gestionar las suscripciones
-async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Función para manejar botones
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja los eventos de los botones."""
     query = update.callback_query
     await query.answer()
-    
-    if query.data == "gestionar_suscripciones":
-        await query.edit_message_text(
-            "Aquí puedes suscribirte o desuscribirte de las temporalidades.\n"
-            "🔹 15m, 🔹 1h, 🔹 4h, 🔹 1d\n\n"
-            "Selecciona una opción para continuar.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Suscribirse a 15m", callback_data="suscribir_15m")],
-                [InlineKeyboardButton("Desuscribirse de 15m", callback_data="desuscribir_15m")],
-                [InlineKeyboardButton("Volver", callback_data="volver_inicio")]
-            ])
-        )
-    elif query.data == "volver_inicio":
-        await start(update, context)  # Volver al inicio
+    if query.data == "suscribirse":
+        await query.edit_message_text("Te has suscrito exitosamente.")
+    elif query.data == "desuscribirse":
+        await query.edit_message_text("Te has desuscrito exitosamente.")
 
-# Configuración del bot
+# Configuración principal
 async def main():
-    # Configurar la base de datos
-    setup_database()
+    """Función principal para configurar y ejecutar el bot."""
+    # Inicializa la base de datos
+    init_db()
 
-    # Crear la aplicación del bot
+    # Configurar la aplicación de Telegram
     application = Application.builder().token(TOKEN).build()
 
-    # Agregar comandos y manejadores de callbacks
+    # Añadir handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(handle_callbacks))
+    application.add_handler(CallbackQueryHandler(handle_callback))
 
-    # Iniciar el bot
+    # Ejecutar polling
+    print("Bot iniciado y escuchando...")
     await application.run_polling()
 
+# Ejecutar el script
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
