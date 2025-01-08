@@ -3,8 +3,6 @@ import sqlite3
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 
 # Cargar variables de entorno
@@ -15,7 +13,6 @@ bot_token = os.getenv('TELEGRAM_TOKEN')
 application = Application.builder().token(bot_token).build()
 
 # Conexión a la base de datos SQLite
-# Actualizar la base de datos para agregar tipo de suscripción
 def create_db():
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
@@ -24,15 +21,14 @@ def create_db():
             id INTEGER PRIMARY KEY,
             chat_id INTEGER UNIQUE,
             nombre TEXT,
-            suscripciones TEXT,  -- Lista de suscripciones (temporalidades)
-            suscripcion_tipo TEXT,  -- Tipo de suscripción (ej. "gratis", "premium", etc.)
+            suscripciones TEXT,
+            suscripcion_tipo TEXT,
             suscripcion_fecha TIMESTAMP,
             fecha_ultima_actividad TIMESTAMP
         )
     ''')
     conn.commit()
     conn.close()
-
 
 # Función para guardar un nuevo usuario
 def save_user(chat_id, nombre):
@@ -67,7 +63,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Llamar a la función para mostrar los botones fijos
     await show_subscription_button(update)
 
-# Función para mostrar botones de suscripción
+# Función para mostrar botones de suscripción fijos
 async def show_subscription_button(update: Update):
     keyboard = [
         [InlineKeyboardButton("Suscripción", callback_data='suscripcion')]
@@ -106,7 +102,6 @@ async def show_temporalidades(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
 
-# Función para manejar las acciones de suscripción y desuscripción
 # Función para manejar las acciones de suscripción y desuscripción
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -147,7 +142,6 @@ async def button(update: Update, context: CallbackContext):
 
     # Actualizar los botones con las nuevas suscripciones
     await show_temporalidades(update, context)
-
 
 # Main
 def main():
