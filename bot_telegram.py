@@ -36,11 +36,38 @@ def init_db():
     conn.commit()
     conn.close()
 
+def suscribirse(chat_id, suscripcion):
+    """Función para suscribir al usuario a una temporalidad."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        UPDATE usuarios 
+        SET {suscripcion} = 1 
+        WHERE chat_id = ?
+    """, (chat_id,))
+    conn.commit()
+    conn.close()
+
+def desuscribirse(chat_id, suscripcion):
+    """Función para desuscribir al usuario de una temporalidad."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        UPDATE usuarios 
+        SET {suscripcion} = 0 
+        WHERE chat_id = ?
+    """, (chat_id,))
+    conn.commit()
+    conn.close()
+
 # Función para manejar /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envía un mensaje de bienvenida con opciones."""
     keyboard = [
-        [InlineKeyboardButton("Suscribirse", callback_data="suscribirse")],
+        [InlineKeyboardButton("Suscribirse a 15 minutos", callback_data="suscribirse_15m")],
+        [InlineKeyboardButton("Suscribirse a 1 hora", callback_data="suscribirse_1h")],
+        [InlineKeyboardButton("Suscribirse a 4 horas", callback_data="suscribirse_4h")],
+        [InlineKeyboardButton("Suscribirse a 1 día", callback_data="suscribirse_1d")],
         [InlineKeyboardButton("Desuscribirse", callback_data="desuscribirse")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -54,13 +81,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Maneja los eventos de los botones."""
     query = update.callback_query
     await query.answer()
-    if query.data == "suscribirse":
-        await query.edit_message_text("Te has suscrito exitosamente.")
+    chat_id = query.from_user.id
+    
+    if query.data.startswith("suscribirse"):
+        suscripcion = query.data.split("_")[1]
+        suscribirse(chat_id, f"suscripcion_{suscripcion}")
+        await query.edit_message_text(f"Te has suscrito a la temporalidad de {suscripcion}.")
+    
     elif query.data == "desuscribirse":
-        await query.edit_message_text("Te has desuscrito exitosamente.")
+        # Desuscribir de todas las temporalidades
+        for tiempo in ["15m", "1h", "4h", "1d"]:
+            desuscribirse(chat_id, f"suscripcion_{tiempo}")
+        await query.edit_message_text("Te has desuscrito de todas las temporalidades.")
 
 # Configuración principal
-async def main():
+async def run_bot():
     """Función principal para configurar y ejecutar el bot."""
     # Inicializa la base de datos
     init_db()
@@ -78,4 +113,4 @@ async def main():
 
 # Ejecutar el script
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_bot())
