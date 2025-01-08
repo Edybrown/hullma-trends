@@ -191,56 +191,56 @@ def is_report_updated(temporalidad):
     return False
 
 # Función para enviar el informe
-async def send_report(context: CallbackContext, chat_id, temporalidad): # Corregido: context como primer argumento
+async def send_report(update, temporalidad):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     if is_report_updated(temporalidad):
-        try:
-            with open(report_path, 'r', encoding='utf-8') as file: # Añadido encoding='utf-8'
-                analysis_message = file.read()
-            await context.bot.send_message(chat_id=chat_id, text=analysis_message)
-            logger.info(f"Reporte {temporalidad} enviado a {chat_id}")
-            return True
-        except FileNotFoundError:
-            logger.error(f"Archivo no encontrado: {report_path}")
-            return False
-        except Exception as e:
-            logger.error(f"Error al enviar reporte {temporalidad} a {chat_id}: {e}")
-            return False
+        with open(report_path, 'r') as file:
+            analysis_message = file.read()
+            await update.message.reply_text(analysis_message)
+        return True
     return False
 
-async def check_and_send_reports(context: CallbackContext, temporalidad):
-    while True:
-        time_to_close = get_time_to_close(temporalidad)
-        now = datetime.now()
-        sleep_time = (time_to_close - now).total_seconds()
-        if sleep_time > 0:
-            logger.info(f"Esperando {sleep_time} segundos para el cierre de {temporalidad}")
-            await asyncio.sleep(sleep_time)
-        with sqlite3.connect('usuarios_telegram.db') as conn:
-            c = conn.cursor()
-            c.execute("SELECT chat_id FROM usuarios WHERE suscripciones LIKE ?", ('%'+temporalidad+'%',))
-            user_ids = c.fetchall()
-
-        tasks = [send_report(context, user_id[0], temporalidad) for user_id in user_ids]
-        await asyncio.gather(*tasks)
-
-async def start_report_tasks(context: CallbackContext):
+# Función para revisar las temporalidades y enviar los informes actualizados
+async def check_and_send_reports(update):
+    # Revisamos las temporalidades en orden de mayor a menor
     temporalidades = ['15m', '1h', '4h', '1d']
-    tasks = [asyncio.create_task(check_and_send_reports(context, temporalidad)) for temporalidad in temporalidades]
-    await asyncio.gather(*tasks)
+    
+    for temporalidad in temporalidades:
+        # Verificar si la vela de la temporalidad ya ha cerrado
+        time_to_close = get_time_to_close(temporalidad)
+        while datetime.now() < time_to_close:
+            await asyncio.sleep(5)  # Revisión cada 5 segundos
+        # Cuando se cierre la vela, revisamos el archivo
+        attempts = 0
+        while not await send_report(update, temporalidad) and attempts < 12:  # Intentamos durante 1 minuto (12 intentos de 5 segundos)
+            attempts += 1
+            await asyncio.sleep(5)
 
-async def post_init(application: Application):
-    await application.bot.send_message(chat_id=1234, text="Bot iniciado")
-    asyncio.create_task(start_report_tasks(application))
+# Función principal que revisa y envía el informe de acuerdo a las suscripciones
+async def check_user_subscriptions(update):
+    chat_id = update.message.chat_id
+    # Obtener las suscripciones del usuario desde la base de datos
+    suscripciones = get_user_subscriptions(chat_id)  # Función que consulta las suscripciones de la base de datos
+    
+    # Enviar informes de las temporalidades suscritas
+    for temporalidad in suscripciones:
+        await check_and_send_reports(update)
+
+
+
 
 def main():
-    create_db()
-    application = Application.builder().token(bot_token).post_init(post_init).build()
+    create_db()  # Crear la base de datos si no existe
 
+    # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
 
+    # Configurar una función para comprobar y enviar informes a intervalos
+    application.add_handler(CommandHandler("check_reports", check_user_subscriptions))  # Ejecutar bajo demanda
+
+    # Iniciar el bot
     application.run_polling()
 
 if __name__ == '__main__':
