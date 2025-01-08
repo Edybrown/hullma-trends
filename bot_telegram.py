@@ -61,7 +61,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("¡Bienvenido! Usa el botón para suscribirte o desuscribirte.")
 
 # Función para suscribir/desuscribir usuarios
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button(update: Update, context: CallbackContext):
     query = update.callback_query
     chat_id = query.message.chat_id
     data = query.data
@@ -76,6 +76,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         suscripciones = []
 
+    # Gestionar las suscripciones
     if data.startswith('suscribir'):
         temporalidad = data.split('_')[1]
         if temporalidad not in suscripciones:
@@ -83,15 +84,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
                       (','.join(suscripciones), chat_id))
             conn.commit()
-            await query.answer(f"Te has suscrito a {temporalidad}.")
+            await query.answer(f"Te has suscrito a Temporalidad {temporalidad}.")
         else:
-            await query.answer(f"Ya estás suscrito a {temporalidad}.")
+            await query.answer(f"Ya estás suscrito a Temporalidad {temporalidad}.")
     elif data == 'desuscribir':
         suscripciones = []
         c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
                   ('', chat_id))
         conn.commit()
         await query.answer("Te has desuscrito de todas las temporalidades.")
+    
     conn.close()
 
 # Función para enviar informes periódicos
@@ -131,8 +133,18 @@ async def suscripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /suscripcion
 async def suscripcion_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await suscripcion(update, context)
-
+    # Crear el teclado de botones de suscripción
+    keyboard = [
+        [
+            InlineKeyboardButton("Suscribirse a Temporalidad 1", callback_data='suscribir_1'),
+            InlineKeyboardButton("Suscribirse a Temporalidad 2", callback_data='suscribir_2')
+        ],
+        [InlineKeyboardButton("Desuscribirse", callback_data='desuscribir')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Enviar el mensaje con los botones
+    await update.message.reply_text('Selecciona una opción:', reply_markup=reply_markup)
 # Main
 def main():
     create_db()  # Asegurarse de que la base de datos esté configurada
