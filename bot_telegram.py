@@ -31,15 +31,19 @@ def create_db():
 
 # Función para guardar un nuevo usuario
 def save_user(chat_id, nombre):
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,))
-    user = c.fetchone()
-    if not user:
-        c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)", 
-                  (chat_id, nombre, datetime.now(), 'Ninguna'))
-        conn.commit()
-    conn.close()
+    # Usar 'with' para manejar la conexión automáticamente
+    with sqlite3.connect('usuarios_telegram.db') as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,))
+        user = c.fetchone()
+        
+        if not user:
+            # Obtener la fecha actual como cadena ISO
+            current_time = datetime.now().isoformat()
+            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)", 
+                      (chat_id, nombre, current_time, 'Ninguna', current_time))
+            conn.commit()
+
 
 # Función para obtener la lista de usuarios
 def get_users():
