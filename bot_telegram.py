@@ -38,7 +38,7 @@ def save_user(chat_id, nombre):
         
         if not user:
             current_time = datetime.now().isoformat()
-            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)", 
+            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?, ?)", 
                       (chat_id, nombre, current_time, 'Ninguna', current_time))
             conn.commit()
 
@@ -65,6 +65,7 @@ async def button(update: Update, context: CallbackContext):
     chat_id = query.message.chat_id
     data = query.data
 
+    # Recuperamos las suscripciones del usuario
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
     c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
@@ -82,15 +83,19 @@ async def button(update: Update, context: CallbackContext):
             c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
                       (','.join(suscripciones), chat_id))
             conn.commit()
-            await query.answer(f"Te has suscrito a Temporalidad {temporalidad}.")
+            await query.answer(f"Te has suscrito a Temporalidad {temporalidad}. Ahora recibirás mensajes.")
         else:
             await query.answer(f"Ya estás suscrito a Temporalidad {temporalidad}.")
-    elif data == 'desuscribir':
-        suscripciones = []
-        c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
-                  ('', chat_id))
-        conn.commit()
-        await query.answer("Te has desuscrito de todas las temporalidades.")
+    elif data.startswith('desuscribir'):
+        temporalidad = data.split('_')[1]
+        if temporalidad in suscripciones:
+            suscripciones.remove(temporalidad)
+            c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
+                      (','.join(suscripciones), chat_id))
+            conn.commit()
+            await query.answer(f"Te has desuscrito de Temporalidad {temporalidad}.")
+        else:
+            await query.answer(f"No estás suscrito a Temporalidad {temporalidad}.")
     
     conn.close()
 
@@ -118,34 +123,33 @@ def iniciar_programador(application: Application):
     scheduler.start()
 
 # Configuración de botones de suscripción y desuscripción
-async def suscripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [
-            InlineKeyboardButton("Suscribirse a Temporalidad 1", callback_data='suscribir_1'),
-            InlineKeyboardButton("Suscribirse a Temporalidad 2", callback_data='suscribir_2'),
-            InlineKeyboardButton("Suscribirse a Temporalidad 3", callback_data='suscribir_3'),
-            InlineKeyboardButton("Suscribirse a Temporalidad 4", callback_data='suscribir_4')
-        ],
-        [InlineKeyboardButton("Desuscribirse", callback_data='desuscribir')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Selecciona una opción:', reply_markup=reply_markup)
-
-# Comando /suscripcion
 async def suscripcion_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Crear el teclado de botones de suscripción
+    # Crear los botones según las temporalidades y estado de suscripción
     keyboard = [
         [
-            InlineKeyboardButton("Suscribirse a Temporalidad 1", callback_data='suscribir_1'),
-            InlineKeyboardButton("Suscribirse a Temporalidad 2", callback_data='suscribir_2'),
-            InlineKeyboardButton("Suscribirse a Temporalidad 3", callback_data='suscribir_3'),
-            InlineKeyboardButton("Suscribirse a Temporalidad 4", callback_data='suscribir_4')
-        ],
-        [InlineKeyboardButton("Desuscribirse", callback_data='desuscribir')]
+            InlineKeyboardButton("Suscribirse a 15m", callback_data='suscribir_15m'),
+            InlineKeyboardButton("Suscribirse a 1h", callback_data='suscribir_1h'),
+            InlineKeyboardButton("Suscribirse a 4h", callback_data='suscribir_4h'),
+            InlineKeyboardButton("Suscribirse a 1d", callback_data='suscribir_1d')
+        ]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Enviar el mensaje con los botones
+    # Obtener las suscripciones actuales
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+    c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (update.message.chat_id,))
+    suscripciones = c.fetchone()
+    if suscripciones:
+        suscripciones = suscripciones[0].split(',')
+    else:
+        suscripciones = []
+
+    # Si ya está suscrito a alguna temporalidad, mostrar la opción de desuscribirse
+    for temporalidad in ['15m', '1h', '4h', '1d']:
+        if temporalidad in suscripciones:
+            keyboard[0].append(InlineKeyboardButton(f"Desuscribirse de {temporalidad}", callback_data=f'desuscribir_{temporalidad}'))
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text('Selecciona una opción:', reply_markup=reply_markup)
 
 # Main
