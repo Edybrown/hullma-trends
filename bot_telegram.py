@@ -14,6 +14,6 @@ async def main():
     await application.run_polling()
 
 if __name__ == "__main__":
-    # Simplemente ejecutamos la función principal sin asyncio.run()
+    # Deja que Application maneje el ciclo de eventos internamente
     import asyncio
-    asyncio.get_event_loop().run_until_complete(main())
+    asyncio.run(main())  # Solo usa asyncio.run() para llamar a main()
