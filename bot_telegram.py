@@ -230,7 +230,7 @@ async def start_report_tasks(context: CallbackContext):
     await asyncio.gather(*tasks)
 
 async def post_init(application: Application):
-    await application.bot.send_message(chat_id=YOUR_ADMIN_CHAT_ID, text="Bot iniciado")
+    await application.bot.send_message(chat_id=1234, text="Bot iniciado")
     asyncio.create_task(start_report_tasks(application))
 
 def main():
