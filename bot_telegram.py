@@ -18,16 +18,52 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Conectar a la base de datos SQLite
+import sqlite3
+
 def create_db():
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
+
+    # Crear la tabla de usuarios con las nuevas columnas
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
                     id INTEGER PRIMARY KEY,
                     chat_id INTEGER UNIQUE,
                     nombre TEXT,
-                    suscripciones TEXT)''')
+                    suscripciones TEXT,
+                    suscripcion_fecha TIMESTAMP,
+                    suscripcion_tipo TEXT,
+                    fecha_ultima_actividad TIMESTAMP)''')
+    
     conn.commit()
     conn.close()
+
+def modify_db():
+    """Esta función modificará la base de datos para agregar nuevas columnas si es necesario."""
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+
+    # Agregar nuevas columnas si no existen
+    try:
+        c.execute('ALTER TABLE usuarios ADD COLUMN suscripcion_fecha TIMESTAMP')
+    except sqlite3.OperationalError:
+        pass  # Si ya existe, ignorar el error.
+
+    try:
+        c.execute('ALTER TABLE usuarios ADD COLUMN suscripcion_tipo TEXT')
+    except sqlite3.OperationalError:
+        pass  # Si ya existe, ignorar el error.
+
+    try:
+        c.execute('ALTER TABLE usuarios ADD COLUMN fecha_ultima_actividad TIMESTAMP')
+    except sqlite3.OperationalError:
+        pass  # Si ya existe, ignorar el error.
+
+    conn.commit()
+    conn.close()
+
+# Llamar a las funciones para crear la base de datos y modificarla si es necesario
+create_db()
+modify_db()
 
 # Guardar o actualizar los datos de los usuarios
 def save_user(chat_id, nombre):
