@@ -95,19 +95,17 @@ def obtener_analisis():
 
 # Enviar los informes periódicos
 def enviar_informes(application):
+    logger.info("Enviando informes...")
     analisis = obtener_analisis()
-
-    # Obtener usuarios suscritos
     users = get_users()
     for user in users:
         chat_id, suscripciones = user
         suscripciones = suscripciones.split(',') if suscripciones else []
-
-        # Enviar análisis solo a los usuarios suscritos a la temporalidad
         for temporalidad in suscripciones:
             if temporalidad in analisis:
                 message = analisis[temporalidad]
                 application.bot.send_message(chat_id, message)
+
 
 # Comando de inicio para el bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -171,27 +169,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_reply_markup(reply_markup=reply_markup)
 
 # Configuración del programa principal
-def main():
-    # Token de Telegram
-    token = os.getenv('TELEGRAM_TOKEN')
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Comando /start recibido")
+    user = update.message.from_user
+    save_user(update.message.chat_id, user.first_name)
 
-    # Inicializar el bot de Telegram
-    application = Application.builder().token(token).build()
+    welcome_message = "¡Hola! Soy un bot que te envía análisis de mercado en diferentes temporalidades.\n\n" \
+                      "Para comenzar, usa los botones para suscribirte a las temporalidades que te interesen."
+    keyboard = [
+        [InlineKeyboardButton("Suscribirse a 15m", callback_data='suscribir_15m')],
+        [InlineKeyboardButton("Suscribirse a 1h", callback_data='suscribir_1h')],
+        [InlineKeyboardButton("Suscribirse a 4h", callback_data='suscribir_4h')],
+        [InlineKeyboardButton("Suscribirse a 1d", callback_data='suscribir_1d')],
+        [InlineKeyboardButton("Desuscribirse", callback_data='desuscribir')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
-    # Crear la base de datos
-    create_db()
-
-    # Comandos del bot
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))
-
-    # Programar el envío periódico de informes
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(lambda: enviar_informes(application), 'interval', minutes=15)
-    scheduler.start()
-
-    # Iniciar el bot
-    application.run_polling()
-
-if __name__ == "__main__":
-    main()
