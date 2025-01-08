@@ -1,30 +1,23 @@
 import os
-import logging
 import sqlite3
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from dotenv import load_dotenv
-import requests
-import json
-import time
+from telegram import Update, ParseMode
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from datetime import datetime
 
-# Cargar las variables de entorno desde .env
+# Cargar variables de entorno
 load_dotenv()
+bot_token = os.getenv('BOT_TOKEN')
 
-# Configurar el logging para ver los mensajes de error
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configuración del bot
+application = Application.builder().token(bot_token).build()
 
-# Conectar a la base de datos SQLite
-import sqlite3
-
+# Conexión a la base de datos SQLite
 def create_db():
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
-
-    # Crear la tabla de usuarios con las nuevas columnas
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
                     id INTEGER PRIMARY KEY,
                     chat_id INTEGER UNIQUE,
@@ -33,98 +26,37 @@ def create_db():
                     suscripcion_fecha TIMESTAMP,
                     suscripcion_tipo TEXT,
                     fecha_ultima_actividad TIMESTAMP)''')
-    
     conn.commit()
     conn.close()
 
-def modify_db():
-    """Esta función modificará la base de datos para agregar nuevas columnas si es necesario."""
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-
-    # Agregar nuevas columnas si no existen
-    try:
-        c.execute('ALTER TABLE usuarios ADD COLUMN suscripcion_fecha TIMESTAMP')
-    except sqlite3.OperationalError:
-        pass  # Si ya existe, ignorar el error.
-
-    try:
-        c.execute('ALTER TABLE usuarios ADD COLUMN suscripcion_tipo TEXT')
-    except sqlite3.OperationalError:
-        pass  # Si ya existe, ignorar el error.
-
-    try:
-        c.execute('ALTER TABLE usuarios ADD COLUMN fecha_ultima_actividad TIMESTAMP')
-    except sqlite3.OperationalError:
-        pass  # Si ya existe, ignorar el error.
-
-    conn.commit()
-    conn.close()
-
-# Llamar a las funciones para crear la base de datos y modificarla si es necesario
-create_db()
-modify_db()
-
-# Guardar o actualizar los datos de los usuarios
+# Función para guardar un nuevo usuario
 def save_user(chat_id, nombre):
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO usuarios (chat_id, nombre, suscripciones) VALUES (?, ?, ?)",
-              (chat_id, nombre, ''))
-    conn.commit()
+    c.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,))
+    user = c.fetchone()
+    if not user:
+        c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)", 
+                  (chat_id, nombre, datetime.now(), 'Ninguna'))
+        conn.commit()
     conn.close()
 
-# Obtener los usuarios y suscripciones
+# Función para obtener la lista de usuarios
 def get_users():
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
-    c.execute("SELECT chat_id, suscripciones FROM usuarios")
+    c.execute("SELECT * FROM usuarios")
     users = c.fetchall()
     conn.close()
     return users
 
-# Función para obtener el análisis de mercado (simulación)
-def obtener_analisis():
-    # Esto debería ser una consulta real de mercado, por ejemplo usando APIs como Phemex
-    return {
-        '15m': 'Análisis de 15m: El precio ha subido un 2%.',
-        '1h': 'Análisis de 1h: El precio ha bajado un 1.5%.',
-        '4h': 'Análisis de 4h: El precio se ha mantenido estable.',
-        '1d': 'Análisis de 1d: El precio ha aumentado un 5%.'
-    }
-
-# Enviar los informes periódicos
-def enviar_informes(application):
-    logger.info("Enviando informes...")
-    analisis = obtener_analisis()
-    users = get_users()
-    for user in users:
-        chat_id, suscripciones = user
-        suscripciones = suscripciones.split(',') if suscripciones else []
-        for temporalidad in suscripciones:
-            if temporalidad in analisis:
-                message = analisis[temporalidad]
-                application.bot.send_message(chat_id, message)
-
-
-# Comando de inicio para el bot
+# Comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     save_user(update.message.chat_id, user.first_name)
+    await update.message.reply_text("¡Bienvenido! Usa el botón para suscribirte o desuscribirte.")
 
-    welcome_message = "¡Hola! Soy un bot que te envía análisis de mercado en diferentes temporalidades.\n\n" \
-                      "Para comenzar, usa los botones para suscribirte a las temporalidades que te interesen."
-    keyboard = [
-        [InlineKeyboardButton("Suscribirse a 15m", callback_data='suscribir_15m')],
-        [InlineKeyboardButton("Suscribirse a 1h", callback_data='suscribir_1h')],
-        [InlineKeyboardButton("Suscribirse a 4h", callback_data='suscribir_4h')],
-        [InlineKeyboardButton("Suscribirse a 1d", callback_data='suscribir_1d')],
-        [InlineKeyboardButton("Desuscribirse", callback_data='desuscribir')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
-
-# Función para manejar la suscripción y desuscripción
+# Función para suscribir/desuscribir usuarios
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat_id = query.message.chat_id
@@ -148,41 +80,68 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       (','.join(suscripciones), chat_id))
             conn.commit()
             await query.answer(f"Te has suscrito a {temporalidad}.")
-
+        else:
+            await query.answer(f"Ya estás suscrito a {temporalidad}.")
     elif data == 'desuscribir':
         suscripciones = []
         c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
                   ('', chat_id))
         conn.commit()
         await query.answer("Te has desuscrito de todas las temporalidades.")
-
     conn.close()
-    # Actualizar botones
-    keyboard = [
-        [InlineKeyboardButton(f"Suscribirse a 15m", callback_data='suscribir_15m')],
-        [InlineKeyboardButton(f"Suscribirse a 1h", callback_data='suscribir_1h')],
-        [InlineKeyboardButton(f"Suscribirse a 4h", callback_data='suscribir_4h')],
-        [InlineKeyboardButton(f"Suscribirse a 1d", callback_data='suscribir_1d')],
-        [InlineKeyboardButton(f"Desuscribirse", callback_data='desuscribir')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_reply_markup(reply_markup=reply_markup)
 
-# Configuración del programa principal
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("Comando /start recibido")
-    user = update.message.from_user
-    save_user(update.message.chat_id, user.first_name)
+# Función para enviar informes periódicos
+async def enviar_informes(application: Application):
+    users = get_users()
+    for user in users:
+        chat_id = user[1]
+        suscripciones = user[3]
+        if suscripciones:
+            suscripciones_list = ', '.join(suscripciones)
+            mensaje = f"Tus suscripciones son: {suscripciones_list}. ¡Gracias por estar con nosotros!"
+        else:
+            mensaje = "No tienes suscripciones activas en este momento."
+        await application.bot.send_message(chat_id, mensaje)
 
-    welcome_message = "¡Hola! Soy un bot que te envía análisis de mercado en diferentes temporalidades.\n\n" \
-                      "Para comenzar, usa los botones para suscribirte a las temporalidades que te interesen."
+# Configuración del programador para enviar informes
+def iniciar_programador(application: Application):
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        enviar_informes,
+        IntervalTrigger(minutes=15),
+        args=[application]
+    )
+    scheduler.start()
+
+# Configuración de botones de suscripción y desuscripción
+async def suscripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("Suscribirse a 15m", callback_data='suscribir_15m')],
-        [InlineKeyboardButton("Suscribirse a 1h", callback_data='suscribir_1h')],
-        [InlineKeyboardButton("Suscribirse a 4h", callback_data='suscribir_4h')],
-        [InlineKeyboardButton("Suscribirse a 1d", callback_data='suscribir_1d')],
+        [
+            InlineKeyboardButton("Suscribirse a Temporalidad 1", callback_data='suscribir_1'),
+            InlineKeyboardButton("Suscribirse a Temporalidad 2", callback_data='suscribir_2')
+        ],
         [InlineKeyboardButton("Desuscribirse", callback_data='desuscribir')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    await update.message.reply_text('Selecciona una opción:', reply_markup=reply_markup)
 
+# Comando /suscripcion
+async def suscripcion_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await suscripcion(update, context)
+
+# Main
+def main():
+    create_db()  # Asegurarse de que la base de datos esté configurada
+
+    # Configurar el manejador de comandos
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("suscripcion", suscripcion_comando))
+    application.add_handler(CallbackQueryHandler(button))
+
+    iniciar_programador(application)  # Iniciar el envío de informes periódicos
+
+    # Iniciar el bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
