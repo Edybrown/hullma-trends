@@ -4,6 +4,14 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
 from datetime import datetime
+import os
+import time
+from datetime import datetime
+import asyncio
+
+
+reports_dir = 'Informe Final'
+
 
 # Cargar variables de entorno
 load_dotenv()
@@ -158,15 +166,79 @@ async def button(update: Update, context: CallbackContext):
 
     # Actualizar los botones con las nuevas suscripciones
     await show_temporalidades(update, context)
+# logica del bot ----------------------------------------------------------------------------------------------------
 
-# Main
+def get_time_to_close(temporalidad):
+    current_time = datetime.now()
+    if temporalidad == '15m':
+        next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15)
+    elif temporalidad == '1h':
+        next_close_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    elif temporalidad == '4h':
+        next_close_time = current_time.replace(hour=(current_time.hour // 4) * 4, minute=0, second=0, microsecond=0) + timedelta(hours=4)
+    elif temporalidad == '1d':
+        next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return next_close_time
+
+# Función para verificar si el archivo está actualizado
+def is_report_updated(temporalidad):
+    report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+    # Comprobamos si el archivo existe y si tiene una fecha de actualización reciente
+    if os.path.exists(report_path):
+        file_time = datetime.fromtimestamp(os.path.getmtime(report_path))
+        if datetime.now() - file_time < timedelta(minutes=15):  # Si el archivo fue modificado en los últimos 15 minutos
+            return True
+    return False
+
+# Función para enviar el informe
+async def send_report(update, temporalidad):
+    report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+    if is_report_updated(temporalidad):
+        with open(report_path, 'r') as file:
+            analysis_message = file.read()
+            await update.message.reply_text(analysis_message)
+        return True
+    return False
+
+# Función para revisar las temporalidades y enviar los informes actualizados
+async def check_and_send_reports(update):
+    # Revisamos las temporalidades en orden de mayor a menor
+    temporalidades = ['15m', '1h', '4h', '1d']
+    
+    for temporalidad in temporalidades:
+        # Verificar si la vela de la temporalidad ya ha cerrado
+        time_to_close = get_time_to_close(temporalidad)
+        while datetime.now() < time_to_close:
+            await asyncio.sleep(5)  # Revisión cada 5 segundos
+        # Cuando se cierre la vela, revisamos el archivo
+        attempts = 0
+        while not await send_report(update, temporalidad) and attempts < 12:  # Intentamos durante 1 minuto (12 intentos de 5 segundos)
+            attempts += 1
+            await asyncio.sleep(5)
+
+# Función principal que revisa y envía el informe de acuerdo a las suscripciones
+async def check_user_subscriptions(update):
+    chat_id = update.message.chat_id
+    # Obtener las suscripciones del usuario desde la base de datos
+    suscripciones = get_user_subscriptions(chat_id)  # Función que consulta las suscripciones de la base de datos
+    
+    # Enviar informes de las temporalidades suscritas
+    for temporalidad in suscripciones:
+        await check_and_send_reports(update)
+
+
+
+
 def main():
-    create_db()  # Asegurarse de que la base de datos esté configurada
+    create_db()  # Crear la base de datos si no existe
 
-    # Configurar el manejador de comandos
+    # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
+
+    # Configurar una función para comprobar y enviar informes a intervalos
+    application.add_handler(CommandHandler("check_reports", check_user_subscriptions))  # Ejecutar bajo demanda
 
     # Iniciar el bot
     application.run_polling()
