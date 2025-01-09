@@ -181,64 +181,74 @@ def get_time_to_close(temporalidad):
         next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     return next_close_time
 
-# Verificar si el reporte está actualizado
+# Función que verifica si el informe está actualizado
 def is_report_updated(temporalidad):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     if os.path.exists(report_path):
         file_time = datetime.fromtimestamp(os.path.getmtime(report_path))
-        if datetime.now() - file_time < timedelta(minutes=15):  # Ajusta según tu lógica
+        if datetime.now() - file_time < timedelta(minutes=15):  # Ajusta según el tiempo de retraso tolerado
             return True
     return False
 
-# Enviar el informe
-async def send_report(chat_id, temporalidad, bot):
+# Función para intentar enviar el informe, con reintentos en caso de retrasos
+async def send_report(chat_id, temporalidad, bot, max_retries=3, wait_time=10):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    if is_report_updated(temporalidad):
-        with open(report_path, 'r') as file:
-            analysis_message = file.read()
-            await bot.send_message(chat_id=chat_id, text=analysis_message)
-        return True
+    
+    retries = 0
+    while retries < max_retries:
+        if is_report_updated(temporalidad):
+            with open(report_path, 'r') as file:
+                analysis_message = file.read()
+                await bot.send_message(chat_id=chat_id, text=analysis_message)
+            return True
+        else:
+            await asyncio.sleep(wait_time)  # Esperar antes de reintentar
+            retries += 1
+
+    # Si no se actualiza después de los reintentos, calcula el siguiente cierre de la vela
+    time_to_close = get_time_to_close(temporalidad)
+    await bot.send_message(chat_id, f"Informe de {temporalidad} no actualizado. Calculando cierre de vela: {time_to_close}")
     return False
 
-# Revisar y enviar informes automáticos
+# Función para revisar y enviar los informes de todos los usuarios
 async def check_and_send_reports(chat_id, temporalidad, bot):
-    time_to_close = get_time_to_close(temporalidad)
-    await asyncio.sleep((time_to_close - datetime.now()).total_seconds())
-    if await send_report(chat_id, temporalidad, bot):
-        print(f"Informe enviado: {temporalidad} para {chat_id}")
-    else:
-        print(f"No hay nuevos informes para {temporalidad} y {chat_id}")
+    await send_report(chat_id, temporalidad, bot)
 
-# Revisar suscripciones de usuarios y programar envíos automáticos
+# Revisar las suscripciones y enviar informes automáticos
 async def check_user_subscriptions(bot):
-    # Supón que tenemos una función que devuelve las suscripciones de usuarios
-    all_subscriptions = get_all_user_subscriptions()  # {chat_id: ['15m', '1h']}
+    all_subscriptions = get_all_user_subscriptions()  # Diccionario: {chat_id: ['15m', '1h']}
     for chat_id, temporalidades in all_subscriptions.items():
-        for temporalidad in temporalidades:
-            asyncio.create_task(check_and_send_reports(chat_id, temporalidad, bot))
+        # Primero revisamos el informe de 15m, luego los demás
+        if '15m' in temporalidades:
+            await check_and_send_reports(chat_id, '15m', bot)
+        
+        # Luego revisar las demás temporalidades en orden descendente
+        for temporalidad in sorted(temporalidades, reverse=True):
+            if temporalidad != '15m':
+                await check_and_send_reports(chat_id, temporalidad, bot)
 
-# Configurar tareas recurrentes con APScheduler
+# Programar tareas recurrentes con APScheduler
 def schedule_tasks(bot):
     scheduler = AsyncIOScheduler()
     scheduler.add_job(lambda: asyncio.create_task(check_user_subscriptions(bot)), 'interval', minutes=15)
     scheduler.start()
 
-# Función principal
+# Función principal para ejecutar el bot
 async def send_reports_to_all_users(context: CallbackContext):
-    users = get_users()  # Obtener la lista de todos los usuarios registrados
+    users = get_users()  # Obtener lista de usuarios registrados
     for user in users:
-        chat_id = user[1]  # Obtener el chat_id del usuario
+        chat_id = user[1]  # Obtener chat_id
         suscripciones = user[3].split(',')  # Obtener sus suscripciones
         for temporalidad in suscripciones:
-            await check_and_send_reports(chat_id, temporalidad)
+            await check_and_send_reports(chat_id, temporalidad, bot)
 
-# Función que se encarga de la tarea periódica
+# Función periódica para enviar informes
 async def scheduled_report_job(context: CallbackContext):
     await send_reports_to_all_users(context)
 
 # Main function where the job is scheduled
 def main():
-    create_db()  # Crear la base de datos si no existe
+    create_db()  # Crear base de datos si no existe
 
     # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
