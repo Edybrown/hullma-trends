@@ -298,4 +298,4 @@ async def main():
     application.run_polling()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())  # Usar asyncio.run para ejecutar la corutina
