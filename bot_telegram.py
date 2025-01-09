@@ -273,9 +273,9 @@ async def scheduled_report_job(context: CallbackContext):
     await send_reports_to_all_users(context)
 
 # Main function where the job is scheduled
-async def main():
+def main():
     # Crear base de datos si no existe
-    create_db()  
+    create_db()
 
     # Guardar el informe al iniciar el bot
     save_initial_report()
@@ -298,5 +298,4 @@ async def main():
     application.run_polling()
 
 if __name__ == '__main__':
-     main() 
-  
+    main()
