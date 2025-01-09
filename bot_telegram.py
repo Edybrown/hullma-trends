@@ -224,13 +224,32 @@ def schedule_tasks(bot):
     scheduler.start()
 
 # Función principal
+async def send_reports_to_all_users(context: CallbackContext):
+    users = get_users()  # Obtener la lista de todos los usuarios registrados
+    for user in users:
+        chat_id = user[1]  # Obtener el chat_id del usuario
+        suscripciones = user[3].split(',')  # Obtener sus suscripciones
+        for temporalidad in suscripciones:
+            await check_and_send_reports(chat_id, temporalidad)
+
+# Función que se encarga de la tarea periódica
+async def scheduled_report_job(context: CallbackContext):
+    await send_reports_to_all_users(context)
+
+# Main function where the job is scheduled
 def main():
-    # Configurar comandos
+    create_db()  # Crear la base de datos si no existe
+
+    # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))
-    
-    # Iniciar tareas programadas
-    schedule_tasks(application.bot)
-    
-    # Ejecutar el bot
+    application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
+    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
+
+    # Programar la tarea periódica para enviar informes cada 15 minutos
+    application.job_queue.run_repeating(scheduled_report_job, interval=timedelta(minutes=15), first=0)
+
+    # Iniciar el bot
     application.run_polling()
+
+if __name__ == '__main__':
+    main()
