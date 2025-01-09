@@ -11,8 +11,8 @@ import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
-reports_dir = 'Informe Final'
-
+reports_dir = " 'Informe Final' "
+last_report_file = 'last_report.txt'
 
 # Cargar variables de entorno
 load_dotenv()
@@ -169,6 +169,21 @@ async def button(update: Update, context: CallbackContext):
     await show_temporalidades(update, context)
 # logica del bot ----------------------------------------------------------------------------------------------------
 
+# Función para guardar el informe inicial al iniciar el bot
+def save_initial_report():
+    temporalidades = ['15m', '1h', '4h', '1d']
+    for temporalidad in temporalidades:
+        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+        if os.path.exists(report_path):
+            with open(report_path, 'r') as file:
+                report_content = file.read()
+            
+            # Guardar el contenido del último informe
+            with open(last_report_file, 'w') as last_report:
+                last_report.write(report_content)
+                last_report.write(f"\nÚltima actualización: {datetime.now().isoformat()}\n")
+                last_report.write(f"Temporalidad: {temporalidad}")
+
 def get_time_to_close(temporalidad):
     current_time = datetime.now()
     if temporalidad == '15m':
@@ -182,12 +197,23 @@ def get_time_to_close(temporalidad):
     return next_close_time
 
 # Función que verifica si el informe está actualizado
-def is_report_updated(temporalidad):
-    report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    if os.path.exists(report_path):
-        file_time = datetime.fromtimestamp(os.path.getmtime(report_path))
-        if datetime.now() - file_time < timedelta(minutes=15):  # Ajusta según el tiempo de retraso tolerado
-            return True
+def is_report_updated():
+    temporalidades = ['15m', '1h', '4h', '1d']
+    for temporalidad in temporalidades:
+        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+        
+        if os.path.exists(report_path):
+            with open(report_path, 'r') as file:
+                current_content = file.read()
+            
+            # Cargar el último informe guardado
+            with open(last_report_file, 'r') as last_report:
+                last_report_content = last_report.read().split('Última actualización')[0]
+            
+            if current_content != last_report_content:
+                # El contenido ha cambiado, actualizar el archivo
+                save_initial_report()
+                return True
     return False
 
 # Función para intentar enviar el informe, con reintentos en caso de retrasos
@@ -247,8 +273,18 @@ async def scheduled_report_job(context: CallbackContext):
     await send_reports_to_all_users(context)
 
 # Main function where the job is scheduled
-def main():
-    create_db()  # Crear base de datos si no existe
+async def main():
+    # Crear base de datos si no existe
+    create_db()  
+
+    # Guardar el informe al iniciar el bot
+    save_initial_report()
+
+    # Comprobar si el informe ha cambiado después de un tiempo
+    if is_report_updated():
+        print("El informe ha sido actualizado.")
+    else:
+        print("El informe no ha cambiado.")
 
     # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
