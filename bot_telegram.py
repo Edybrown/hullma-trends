@@ -8,6 +8,7 @@ import os
 import time
 from datetime import datetime
 import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 reports_dir = 'Informe Final'
@@ -168,69 +169,70 @@ async def button(update: Update, context: CallbackContext):
     await show_temporalidades(update, context)
 # logica del bot ----------------------------------------------------------------------------------------------------
 
-# Revisión y envío automático de informes por temporalidad
-async def check_and_send_reports(application):
-    temporalidades = ['1d', '4h', '1h', '15m']  # Orden de mayor a menor prioridad
+def get_time_to_close(temporalidad):
+    current_time = datetime.now()
+    if temporalidad == '15m':
+        next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
+    elif temporalidad == '1h':
+        next_close_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    elif temporalidad == '4h':
+        next_close_time = current_time.replace(hour=(current_time.hour // 4) * 4, minute=0, second=0, microsecond=0) + timedelta(hours=4)
+    elif temporalidad == '1d':
+        next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return next_close_time
 
-    while True:
-        for temporalidad in temporalidades:
-            # Calcular el tiempo para el cierre de la vela
-            next_close_time = get_time_to_close(temporalidad)
-            time_to_wait = (next_close_time - datetime.now()).total_seconds()
-
-            if temporalidad == '15m':  # Lógica especial para 15m
-                # Esperar hasta el cierre de la vela
-                while time_to_wait > 0:
-                    await asyncio.sleep(min(5, time_to_wait))
-                    time_to_wait = (next_close_time - datetime.now()).total_seconds()
-                
-                # Intentar verificar y enviar informe hasta 1-2 minutos después del cierre de la vela
-                attempts = 0
-                while attempts < 12:  # 12 intentos (5 segundos entre cada intento)
-                    if is_report_updated(temporalidad):  # Si está actualizado, enviar a los usuarios
-                        suscripciones = get_user_subscriptions_by_temporalidad(temporalidad)
-                        for chat_id in suscripciones:
-                            await send_report_to_user(application, temporalidad, chat_id)
-                        break
-                    attempts += 1
-                    await asyncio.sleep(5)  # Esperar antes de reintentar
-
-            else:  # Para temporalidades mayores (1h, 4h, 1d)
-                # Esperar hasta el cierre de la vela
-                await asyncio.sleep(time_to_wait)
-                if is_report_updated(temporalidad):  # Si está actualizado, enviar a los usuarios
-                    suscripciones = get_user_subscriptions_by_temporalidad(temporalidad)
-                    for chat_id in suscripciones:
-                        await send_report_to_user(application, temporalidad, chat_id)
-
-# Enviar el informe a un usuario específico
-async def send_report_to_user(application, temporalidad, chat_id):
+# Verificar si el reporte está actualizado
+def is_report_updated(temporalidad):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     if os.path.exists(report_path):
+        file_time = datetime.fromtimestamp(os.path.getmtime(report_path))
+        if datetime.now() - file_time < timedelta(minutes=15):  # Ajusta según tu lógica
+            return True
+    return False
+
+# Enviar el informe
+async def send_report(chat_id, temporalidad, bot):
+    report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+    if is_report_updated(temporalidad):
         with open(report_path, 'r') as file:
-            report_content = file.read()
-        await application.bot.send_message(chat_id=chat_id, text=report_content)
+            analysis_message = file.read()
+            await bot.send_message(chat_id=chat_id, text=analysis_message)
+        return True
+    return False
 
-# Función principal que configura el bot y activa la revisión automática
-async def start_bot(application):
-    """Función para iniciar el bot y tareas adicionales."""
-    # Crear la tarea de revisión automática de informes
-    asyncio.create_task(check_and_send_reports(application))
-    
-    # Iniciar la ejecución del bot
-    await application.run_polling()
+# Revisar y enviar informes automáticos
+async def check_and_send_reports(chat_id, temporalidad, bot):
+    time_to_close = get_time_to_close(temporalidad)
+    await asyncio.sleep((time_to_close - datetime.now()).total_seconds())
+    if await send_report(chat_id, temporalidad, bot):
+        print(f"Informe enviado: {temporalidad} para {chat_id}")
+    else:
+        print(f"No hay nuevos informes para {temporalidad} y {chat_id}")
 
+# Revisar suscripciones de usuarios y programar envíos automáticos
+async def check_user_subscriptions(bot):
+    # Supón que tenemos una función que devuelve las suscripciones de usuarios
+    all_subscriptions = get_all_user_subscriptions()  # {chat_id: ['15m', '1h']}
+    for chat_id, temporalidades in all_subscriptions.items():
+        for temporalidad in temporalidades:
+            asyncio.create_task(check_and_send_reports(chat_id, temporalidad, bot))
+
+# Configurar tareas recurrentes con APScheduler
+def schedule_tasks(bot):
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(lambda: asyncio.create_task(check_user_subscriptions(bot)), 'interval', minutes=15)
+    scheduler.start()
+
+# Función principal
 def main():
-    # Crear la aplicación del bot
-    application = Application.builder().token("TU_TOKEN_AQUI").build()
+    # Configurar el bot
+    bot = ...  # Inicializa tu bot aquí
+    
+    # Configurar tareas programadas
+    schedule_tasks(bot)
 
-    # Configuración de comandos
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
-    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
-
-    # Ejecutar el bot con el bucle de asyncio
-    asyncio.run(start_bot(application))
+    # Iniciar el bot
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
