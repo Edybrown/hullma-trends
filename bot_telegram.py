@@ -168,67 +168,50 @@ async def button(update: Update, context: CallbackContext):
     await show_temporalidades(update, context)
 # logica del bot ----------------------------------------------------------------------------------------------------
 
-def get_time_to_close(temporalidad):
-    current_time = datetime.now()
-    if temporalidad == '15m':
-        next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15)
-    elif temporalidad == '1h':
-        next_close_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    elif temporalidad == '4h':
-        next_close_time = current_time.replace(hour=(current_time.hour // 4) * 4, minute=0, second=0, microsecond=0) + timedelta(hours=4)
-    elif temporalidad == '1d':
-        next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    return next_close_time
+# Revisión y envío automático de informes por temporalidad
+async def check_and_send_reports(application):
+    temporalidades = ['1d', '4h', '1h', '15m']  # Orden de mayor a menor prioridad
 
-# Función para verificar si el archivo está actualizado
-def is_report_updated(temporalidad):
+    while True:
+        for temporalidad in temporalidades:
+            # Calcular el tiempo para el cierre de la vela
+            next_close_time = get_time_to_close(temporalidad)
+            time_to_wait = (next_close_time - datetime.now()).total_seconds()
+
+            if temporalidad == '15m':  # Lógica especial para 15m
+                # Esperar hasta el cierre de la vela
+                while time_to_wait > 0:
+                    await asyncio.sleep(min(5, time_to_wait))
+                    time_to_wait = (next_close_time - datetime.now()).total_seconds()
+                
+                # Intentar verificar y enviar informe hasta 1-2 minutos después del cierre de la vela
+                attempts = 0
+                while attempts < 12:  # 12 intentos (5 segundos entre cada intento)
+                    if is_report_updated(temporalidad):  # Si está actualizado, enviar a los usuarios
+                        suscripciones = get_user_subscriptions_by_temporalidad(temporalidad)
+                        for chat_id in suscripciones:
+                            await send_report_to_user(application, temporalidad, chat_id)
+                        break
+                    attempts += 1
+                    await asyncio.sleep(5)  # Esperar antes de reintentar
+
+            else:  # Para temporalidades mayores (1h, 4h, 1d)
+                # Esperar hasta el cierre de la vela
+                await asyncio.sleep(time_to_wait)
+                if is_report_updated(temporalidad):  # Si está actualizado, enviar a los usuarios
+                    suscripciones = get_user_subscriptions_by_temporalidad(temporalidad)
+                    for chat_id in suscripciones:
+                        await send_report_to_user(application, temporalidad, chat_id)
+
+# Enviar el informe a un usuario específico
+async def send_report_to_user(application, temporalidad, chat_id):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    # Comprobamos si el archivo existe y si tiene una fecha de actualización reciente
     if os.path.exists(report_path):
-        file_time = datetime.fromtimestamp(os.path.getmtime(report_path))
-        if datetime.now() - file_time < timedelta(minutes=15):  # Si el archivo fue modificado en los últimos 15 minutos
-            return True
-    return False
-
-# Función para enviar el informe
-async def send_report(update, temporalidad):
-    report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    if is_report_updated(temporalidad):
         with open(report_path, 'r') as file:
-            analysis_message = file.read()
-            await update.message.reply_text(analysis_message)
-        return True
-    return False
+            report_content = file.read()
+        await application.bot.send_message(chat_id=chat_id, text=report_content)
 
-# Función para revisar las temporalidades y enviar los informes actualizados
-async def check_and_send_reports(update):
-    # Revisamos las temporalidades en orden de mayor a menor
-    temporalidades = ['15m', '1h', '4h', '1d']
-    
-    for temporalidad in temporalidades:
-        # Verificar si la vela de la temporalidad ya ha cerrado
-        time_to_close = get_time_to_close(temporalidad)
-        while datetime.now() < time_to_close:
-            await asyncio.sleep(5)  # Revisión cada 5 segundos
-        # Cuando se cierre la vela, revisamos el archivo
-        attempts = 0
-        while not await send_report(update, temporalidad) and attempts < 12:  # Intentamos durante 1 minuto (12 intentos de 5 segundos)
-            attempts += 1
-            await asyncio.sleep(5)
-
-# Función principal que revisa y envía el informe de acuerdo a las suscripciones
-async def check_user_subscriptions(update):
-    chat_id = update.message.chat_id
-    # Obtener las suscripciones del usuario desde la base de datos
-    suscripciones = get_user_subscriptions(chat_id)  # Función que consulta las suscripciones de la base de datos
-    
-    # Enviar informes de las temporalidades suscritas
-    for temporalidad in suscripciones:
-        await check_and_send_reports(update)
-
-
-
-
+# Función principal que configura el bot y activa la revisión automática
 def main():
     create_db()  # Crear la base de datos si no existe
 
@@ -237,11 +220,10 @@ def main():
     application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
 
-    # Configurar una función para comprobar y enviar informes a intervalos
-    application.add_handler(CommandHandler("check_reports", check_user_subscriptions))  # Ejecutar bajo demanda
-
-    # Iniciar el bot
-    application.run_polling()
+    # Configurar la lógica de revisión automática
+    application.run_polling(
+        on_startup=lambda app: app.create_task(check_and_send_reports(app))
+    )
 
 if __name__ == '__main__':
     main()
