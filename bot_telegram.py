@@ -169,16 +169,20 @@ async def button(update: Update, context: CallbackContext):
 # logica del bot ----------------------------------------------------------------------------------------------------
 
 def get_time_to_close(temporalidad):
-  current_time = datetime.now()
-  if temporalidad == '15m':
-    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15)
-  elif temporalidad == '1h':
-    next_close_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-  elif temporalidad == '4h':
-    next_close_time = current_time.replace(hour=(current_time.hour // 4) * 4, minute=0, second=0, microsecond=0) + timedelta(hours=4)
-  elif temporalidad == '1d':
-    next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-  return next_close_time
+    print(f"Entrando en get_time_to_close con temporalidad: {temporalidad}")  # NUEVO
+    current_time = datetime.now()
+    if temporalidad == '15m':
+        next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15)
+        print(f"Calculado next_close_time para 15m: {next_close_time}") # NUEVO
+    elif temporalidad == '1h':
+        # ... (añade prints similares en los otros elif)
+    elif temporalidad == '1d':
+        # ...
+    else:
+        print(f"Temporalidad no válida: {temporalidad}")
+        return None
+    print(f"Saliendo de get_time_to_close con next_close_time: {next_close_time}") # NUEVO
+    return next_close_time
 
 # Función para verificar si el archivo está actualizado
 def is_report_updated(temporalidad):
