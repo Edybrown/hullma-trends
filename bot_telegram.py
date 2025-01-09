@@ -225,14 +225,12 @@ def schedule_tasks(bot):
 
 # Función principal
 def main():
-    # Configurar el bot
-    bot = ...  # Inicializa tu bot aquí
+    # Configurar comandos
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
     
-    # Configurar tareas programadas
-    schedule_tasks(bot)
-
-    # Iniciar el bot
+    # Iniciar tareas programadas
+    schedule_tasks(application.bot)
+    
+    # Ejecutar el bot
     application.run_polling()
-
-if __name__ == '__main__':
-    main()
