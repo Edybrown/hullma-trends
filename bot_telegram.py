@@ -212,18 +212,25 @@ async def send_report_to_user(application, temporalidad, chat_id):
         await application.bot.send_message(chat_id=chat_id, text=report_content)
 
 # Función principal que configura el bot y activa la revisión automática
+async def start_bot(application):
+    """Función para iniciar el bot y tareas adicionales."""
+    # Crear la tarea de revisión automática de informes
+    asyncio.create_task(check_and_send_reports(application))
+    
+    # Iniciar la ejecución del bot
+    await application.run_polling()
+
 def main():
-    create_db()  # Crear la base de datos si no existe
+    # Crear la aplicación del bot
+    application = Application.builder().token("TU_TOKEN_AQUI").build()
 
     # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
 
-    # Configurar la lógica de revisión automática
-    application.run_polling(
-        on_startup=lambda app: app.create_task(check_and_send_reports(app))
-    )
+    # Ejecutar el bot con el bucle de asyncio
+    asyncio.run(start_bot(application))
 
 if __name__ == '__main__':
     main()
