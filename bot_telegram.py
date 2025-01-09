@@ -172,6 +172,22 @@ async def button(update: Update, context: CallbackContext):
 # Función para guardar el informe inicial al iniciar el bot
 def save_initial_report():
     temporalidades = ['15m', '1h', '4h', '1d']
+    
+    # Asegurarse de que el directorio para los informes exista
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    # Verificar si el archivo last_report.txt existe
+    if not os.path.exists(last_report_file):
+        # Si el archivo no existe, se crea con contenido inicial
+        print("El archivo no existe, creándolo con el contenido inicial...")
+        with open(last_report_file, 'w') as last_report:
+            last_report.write("Este es el informe inicial.\n")
+            last_report.write(f"Última actualización: {datetime.now().isoformat()}\n")
+            last_report.write("Temporalidad: Ninguna\n")
+    else:
+        print(f"El archivo {last_report_file} ya existe.")
+    
+    # Ahora, manejar los informes de las diferentes temporalidades
     for temporalidad in temporalidades:
         report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
         if os.path.exists(report_path):
@@ -183,7 +199,6 @@ def save_initial_report():
                 last_report.write(report_content)
                 last_report.write(f"\nÚltima actualización: {datetime.now().isoformat()}\n")
                 last_report.write(f"Temporalidad: {temporalidad}")
-
 def get_time_to_close(temporalidad):
     current_time = datetime.now()
     if temporalidad == '15m':
