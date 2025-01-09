@@ -169,19 +169,15 @@ async def button(update: Update, context: CallbackContext):
 # logica del bot ----------------------------------------------------------------------------------------------------
 
 def get_time_to_close(temporalidad):
-    print(f"Entrando en get_time_to_close con temporalidad: {temporalidad}")  # NUEVO
     current_time = datetime.now()
     if temporalidad == '15m':
         next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15)
-        print(f"Calculado next_close_time para 15m: {next_close_time}") # NUEVO
     elif temporalidad == '1h':
-        # ... (añade prints similares en los otros elif)
+        next_close_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    elif temporalidad == '4h':
+        next_close_time = current_time.replace(hour=(current_time.hour // 4) * 4, minute=0, second=0, microsecond=0) + timedelta(hours=4)
     elif temporalidad == '1d':
-        # ...
-    else:
-        print(f"Temporalidad no válida: {temporalidad}")
-        return None
-    print(f"Saliendo de get_time_to_close con next_close_time: {next_close_time}") # NUEVO
+        next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     return next_close_time
 
 # Función para verificar si el archivo está actualizado
@@ -195,64 +191,56 @@ def is_report_updated(temporalidad):
     return False
 
 # Función para enviar el informe
-async def send_report(context: CallbackContext, chat_id, temporalidad): # Modificado para usar context y chat_id
+async def send_report(update, temporalidad):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     if is_report_updated(temporalidad):
-        try:
-            with open(report_path, 'r', encoding='utf-8') as file: # Añadido encoding para evitar errores de codificación
-                analysis_message = file.read()
-                await context.bot.send_message(chat_id=chat_id, text=analysis_message) # Usar context.bot.send_message
-                return True
-        except FileNotFoundError:
-            print(f"Error: Archivo no encontrado: {report_path}")
-            return False
-        except Exception as e:
-            print(f"Error al enviar el reporte: {e}")
-            return False
+        with open(report_path, 'r') as file:
+            analysis_message = file.read()
+            await update.message.reply_text(analysis_message)
+        return True
     return False
 
-def get_user_subscriptions(chat_id): # Función para obtener las suscripciones de un usuario
-    with sqlite3.connect('usuarios_telegram.db') as conn:
-        c = conn.cursor()
-        c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
-        result = c.fetchone()
-        if result and result[0]:
-            return result[0].split(',')
-        return []
+# Función para revisar las temporalidades y enviar los informes actualizados
+async def check_and_send_reports(update):
+    # Revisamos las temporalidades en orden de mayor a menor
+    temporalidades = ['15m', '1h', '4h', '1d']
+    
+    for temporalidad in temporalidades:
+        # Verificar si la vela de la temporalidad ya ha cerrado
+        time_to_close = get_time_to_close(temporalidad)
+        while datetime.now() < time_to_close:
+            await asyncio.sleep(5)  # Revisión cada 5 segundos
+        # Cuando se cierre la vela, revisamos el archivo
+        attempts = 0
+        while not await send_report(update, temporalidad) and attempts < 12:  # Intentamos durante 1 minuto (12 intentos de 5 segundos)
+            attempts += 1
+            await asyncio.sleep(5)
 
-async def check_and_send_reports(context: CallbackContext): # Modificado para usar context
-    while True: # Bucle infinito para la comprobación continua
-        users = get_users()
-        for user in users:
-            chat_id = user[1]
-            suscripciones = get_user_subscriptions(chat_id)
-            for temporalidad in suscripciones:
-                time_to_close = get_time_to_close(temporalidad)
-                while datetime.now() < time_to_close:
-                    await asyncio.sleep(10) # Revisión cada 10 segundos para no saturar
-                attempts = 0
-                while not await send_report(context, chat_id, temporalidad) and attempts < 12:
-                    attempts += 1
-                    await asyncio.sleep(5)
-                if attempts == 12:
-                    print(f"No se pudo enviar el reporte {temporalidad} a {chat_id} después de varios intentos.")
-        await asyncio.sleep(60) # Esperar 1 minuto antes de la siguiente revisión de usuarios
+# Función principal que revisa y envía el informe de acuerdo a las suscripciones
+async def check_user_subscriptions(update):
+    chat_id = update.message.chat_id
+    # Obtener las suscripciones del usuario desde la base de datos
+    suscripciones = get_user_subscriptions(chat_id)  # Función que consulta las suscripciones de la base de datos
+    
+    # Enviar informes de las temporalidades suscritas
+    for temporalidad in suscripciones:
+        await check_and_send_reports(update)
 
-async def start_checking(context: ContextTypes.DEFAULT_TYPE):
-    await check_and_send_reports(context) # Iniciar la tarea en segundo plano
+
+
 
 def main():
-    create_db()
+    create_db()  # Crear la base de datos si no existe
 
-    application = Application.builder().token(bot_token).build()
-
+    # Configuración de comandos
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
 
-    # Iniciar la tarea de comprobación en un bucle asíncrono separado
-    application.job_queue.run_once(start_checking, 0) # Se ejecuta una vez al iniciar el bot
+    # Configurar una función para comprobar y enviar informes a intervalos
+    application.add_handler(CommandHandler("check_reports", check_user_subscriptions))  # Ejecutar bajo demanda
 
+    # Iniciar el bot
     application.run_polling()
 
 if __name__ == '__main__':
