@@ -289,7 +289,7 @@ def main():
     
     # Verificar los informes iniciales
     check_initial_reports()
-
+    application.run_polling()
     # Utilizar directamente la configuración del bot existente
     print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
     asyncio.run(handle_candle_closure(application.bot))  # Us
