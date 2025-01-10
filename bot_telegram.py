@@ -281,7 +281,7 @@ async def send_reports_to_all_users(context: CallbackContext):
         chat_id = user[1]  # Obtener chat_id
         suscripciones = user[3].split(',')  # Obtener sus suscripciones
         for temporalidad in suscripciones:
-            await check_and_send_reports(chat_id, temporalidad, bot)
+            await check_and_send_reports(chat_id, temporalidad, context.bot)
 
 # Función periódica para enviar informes
 async def scheduled_report_job(context: CallbackContext):
