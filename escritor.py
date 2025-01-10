@@ -5,7 +5,7 @@ import json # Solo se usa para decodificar el informe simulado en este ejemplo
 from datetime import datetime, timedelta
 
 
-OUTPUT_DIR = "Inform"  # Debe coincidir con tu configuración
+OUTPUT_DIR = "Analisis_trading"  # Debe coincidir con tu configuración
 TIME_BETWEEN_CHECKS = 900  # 15 minutos en segundos
 DATA_DIR = "Informes" 
 REINTENTOS_MAXIMOS = 6
