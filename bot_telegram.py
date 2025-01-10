@@ -134,18 +134,6 @@ def get_time_to_close():
     return remaining_time
 
 
-async def get_all_user_subscriptions():
-    try:
-        async with aiosqlite.connect('usuarios_telegram.db') as conn:
-            async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
-                subscriptions = await cursor.fetchall()
-        subscriptions_dict = {}
-        for chat_id, suscripciones in subscriptions:
-            subscriptions_dict[chat_id] = suscripciones.split(',') if suscripciones else []
-        return subscriptions_dict
-    except aiosqlite.Error as e:
-        print(f"[ERROR] Error al obtener las suscripciones: {e}")
-        return {}
 
 async def send_report(chat_id, temporalidad, bot):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
@@ -195,20 +183,32 @@ def get_time_to_close():
     print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
     return remaining_time
 
+async def get_all_user_subscriptions():
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
+                subscriptions = await cursor.fetchall()
+        subscriptions_dict = {}
+        for chat_id, suscripciones in subscriptions:
+            subscriptions_dict[chat_id] = suscripciones.split(',') if suscripciones else []
+        return subscriptions_dict
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al obtener las suscripciones: {e}")
+        return {}
+
 async def main():
     await create_db()
-    check_initial_reports()
-    print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
+    print("[INFO] Bot configurado. Iniciando el bot.")
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    await application.initialize()
-    await application.start_polling()
-    await handle_candle_closure(application.bot)
-    await application.stop()
-    await application.shutdown()
+    async with application:
+        await application.initialize()
+        await application.start()
+        await application.run_polling()
+        await application.stop()
 
 if __name__ == '__main__':
     asyncio.run(main())
