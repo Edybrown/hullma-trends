@@ -21,8 +21,6 @@ last_report_file = 'last_report.txt'
 # Cargar variables de entorno
 
 # Configuración del bot
-application = Application.builder().token(bot_token).build()
-
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
