@@ -20,7 +20,7 @@ DB_NAME = 'usuarios_telegram.db'
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-
+# Función para crear la base de datos de usuarios
 async def create_db():
     try:
         async with aiosqlite.connect(DB_NAME) as db:
@@ -41,6 +41,7 @@ async def create_db():
         logger.error(f"Error al crear la base de datos: {e}")
         raise
 
+# Función para guardar a un usuario en la base de datos
 async def save_user(chat_id, nombre):
     try:
         async with aiosqlite.connect(DB_NAME) as db:
@@ -56,7 +57,8 @@ async def save_user(chat_id, nombre):
     except Exception as e:
         logger.error(f"Error al guardar usuario: {e}")
 
-async def get_user_subscriptions(chat_id): #Obtiene las suscripciones de UN usuario
+# Función para obtener las suscripciones de un usuario
+async def get_user_subscriptions(chat_id):
     try:
         async with aiosqlite.connect(DB_NAME) as db:
             cursor = await db.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
@@ -66,6 +68,7 @@ async def get_user_subscriptions(chat_id): #Obtiene las suscripciones de UN usua
         logger.error(f"Error al obtener suscripciones del usuario: {e}")
         return []
 
+# Función para obtener las suscripciones de todos los usuarios
 async def get_all_user_subscriptions():
     try:
         async with aiosqlite.connect(DB_NAME) as db:
@@ -79,9 +82,8 @@ async def get_all_user_subscriptions():
 # Comando /start
 async def start(update: Update, context: CallbackContext):
     user = update.message.from_user
-    await save_user(update.message.chat_id, user.first_name) #AQUI TAMBIEN
-    
-    # Mensaje de bienvenida mejorado
+    await save_user(update.message.chat_id, user.first_name)
+
     welcome_message = (
         "¡Hola, {name}! 👋\n\n"
         "¡Bienvenido a tu asistente de análisis de tendencias de trading! 🚀\n\n"
@@ -101,8 +103,7 @@ async def start(update: Update, context: CallbackContext):
     # Llamar a la función para mostrar los botones fijos
     await show_subscription_button(update)
 
-
-# Función para mostrar botones de suscripción fijos
+# Función para mostrar los botones de suscripción fijos
 async def show_subscription_button(update: Update):
     keyboard = [
         [InlineKeyboardButton("Suscripción", callback_data='suscripcion')]
@@ -115,8 +116,7 @@ async def show_temporalidades(update: Update, context: CallbackContext):
     chat_id = update.callback_query.message.chat_id
     suscripciones = await get_user_subscriptions(chat_id)
 
-    # Manejo de suscripciones vacías (IMPORTANTE)
-    if suscripciones is None or suscripciones == ['']:  #Comprobacion de lista vacia o con un valor vacio
+    if suscripciones is None or suscripciones == ['']:
         suscripciones = []
 
     keyboard = []
@@ -128,7 +128,6 @@ async def show_temporalidades(update: Update, context: CallbackContext):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
-
 
 # Función para manejar las acciones de suscripción y desuscripción
 async def button(update: Update, context: CallbackContext):
@@ -164,37 +163,9 @@ async def button(update: Update, context: CallbackContext):
         await query.answer("Ocurrió un error.")
         return
 
-    await show_temporalidades(update, context) #Mostrar las temporalidades actualizadas
+    await show_temporalidades(update, context)
 
-async def check_initial_reports():
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    for temporalidad in TEMPORALIDADES:
-        report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
-        if not os.path.exists(report_path):
-            logger.error(f"Falta el archivo: {report_path}")
-            raise FileNotFoundError(f"Falta el informe para la temporalidad '{temporalidad}'.")
-        else:
-            logger.info(f"Archivo encontrado: {report_path}")
-
-async def is_report_updated(report_file, last_mod_times):
-    try:
-        if os.path.exists(report_file):
-            last_mod_time = os.path.getmtime(report_file)
-            if last_mod_times.get(report_file) != last_mod_time:
-                last_mod_times[report_file] = last_mod_time
-                logger.info(f"Informe actualizado detectado: {report_file}")
-                return True
-    except Exception as e:
-        logger.error(f"Error al comprobar la actualización del informe {report_file}: {e}")
-    return False
-
-async def get_time_to_close():
-    current_time = datetime.now()
-    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
-    remaining_time = (next_close_time - current_time).total_seconds()
-    logger.info(f"Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
-    return remaining_time
-
+# Función para enviar el informe de la temporalidad
 async def send_report(chat_id, temporalidad, bot):
     report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
     try:
@@ -211,42 +182,11 @@ async def send_report(chat_id, temporalidad, bot):
     except Exception as e:
         logger.error(f"Error al enviar el informe {temporalidad} a {chat_id}: {e}")
 
-async def check_and_send_reports(chat_id, suscripciones, bot, last_mod_times):
-    for temporalidad in TEMPORALIDADES:  # No es necesario reverse, el orden se maneja al enviar
-        if temporalidad in suscripciones:
-            report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
-            if await is_report_updated(report_path, last_mod_times):
-                await send_report(chat_id, temporalidad, bot)
-
-async def send_reports_to_all_users(bot, last_mod_times):
-    all_subscriptions = await get_all_user_subscriptions()
-    for chat_id, suscripciones in all_subscriptions.items():
-        logger.info(f"Comprobando y enviando informes para chat_id: {chat_id}.")
-        await check_and_send_reports(chat_id, suscripciones, bot, last_mod_times)
-
-async def handle_candle_closure(bot):
-    last_mod_times = {}
-    while True:
-        try:
-            logger.info("Iniciando ciclo de cierre de vela.")
-            await send_reports_to_all_users(bot, last_mod_times)
-
-            time_to_close = await get_time_to_close()
-            logger.info(f"Esperando {time_to_close} segundos hasta el próximo ciclo.")
-            await asyncio.sleep(time_to_close)
-
-        except asyncio.CancelledError:
-            logger.info("Manejo de cierre de vela interrumpido.")
-            break # Importante salir del bucle while True si se cancela la tarea
-        except Exception as e:
-            logger.error(f"Error en el ciclo de cierre de vela: {e}")
-            await asyncio.sleep(60)
+# Función principal para ejecutar el bot
 async def main():
     application = None
-    candle_closure_task = None
     try:
         await create_db()
-        await check_initial_reports()
 
         bot_token = os.getenv('TELEGRAM_TOKEN')
         if not bot_token:
@@ -262,7 +202,6 @@ async def main():
         await application.run_polling(allowed_updates=Update.ALL_TYPES) # Con paréntesis
         await application.idle()
 
-      
     except Exception as e:
         logger.critical(f"Error crítico en la función principal: {e}")
     finally:
@@ -272,23 +211,11 @@ async def main():
                 await application.shutdown()
             except Exception as e:
                 logger.error(f"Error al detener la aplicación: {e}")
-
-        if candle_closure_task:
-            candle_closure_task.cancel()
-            try:
-                await candle_closure_task  # Esperar a que la tarea se cancele
-            except asyncio.CancelledError:
-                pass  # Ignorar la excepción CancelledError
-            except Exception as e:
-                logger.error(f"Error al cancelar la tarea de cierre de vela: {e}")
-
-        # Limpieza final (opcional, pero recomendada)
-        await asyncio.gather(*asyncio.all_tasks(), return_exceptions=True)
-
+    
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Bot detenido por el usuario.")
     except Exception as e:
-        print(f"Ocurrió un error inesperado: {e}")            
+        print(f"Ocurrió un error inesperado: {e}")
