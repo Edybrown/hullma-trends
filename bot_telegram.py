@@ -169,148 +169,114 @@ async def button(update: Update, context: CallbackContext):
     await show_temporalidades(update, context)
 # logica del bot ----------------------------------------------------------------------------------------------------
 
-# Función para guardar el informe inicial al iniciar el bot
-def save_initial_report():
+def check_initial_reports():
+    """Asegura que los informes de las temporalidades están creados."""
     temporalidades = ['15m', '1h', '4h', '1d']
-    
-    # Asegurarse de que el directorio para los informes exista
     os.makedirs(reports_dir, exist_ok=True)
     
-    # Verificar si el archivo last_report.txt existe
-    if not os.path.exists(last_report_file):
-        # Si el archivo no existe, se crea con contenido inicial
-        print("El archivo no existe, creándolo con el contenido inicial...")
-        with open(last_report_file, 'w') as last_report:
-            last_report.write("Este es el informe inicial.\n")
-            last_report.write(f"Última actualización: {datetime.now().isoformat()}\n")
-            last_report.write("Temporalidad: Ninguna\n")
-    else:
-        print(f"El archivo {last_report_file} ya existe.")
-    
-    # Ahora, manejar los informes de las diferentes temporalidades
     for temporalidad in temporalidades:
         report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-        if os.path.exists(report_path):
-            with open(report_path, 'r') as file:
-                report_content = file.read()
-            
-            # Guardar el contenido del último informe
-            with open(last_report_file, 'w') as last_report:
-                last_report.write(report_content)
-                last_report.write(f"\nÚltima actualización: {datetime.now().isoformat()}\n")
-                last_report.write(f"Temporalidad: {temporalidad}")
-def get_time_to_close(temporalidad):
-    current_time = datetime.now()
-    if temporalidad == '15m':
-        next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
-    elif temporalidad == '1h':
-        next_close_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    elif temporalidad == '4h':
-        next_close_time = current_time.replace(hour=(current_time.hour // 4) * 4, minute=0, second=0, microsecond=0) + timedelta(hours=4)
-    elif temporalidad == '1d':
-        next_close_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    return next_close_time
+        if not os.path.exists(report_path):
+            # Crear un archivo vacío si no existe
+            with open(report_path, 'w') as file:
+                file.write(f"Informe de {temporalidad} - Inicial.\n")
+            print(f"[INFO] Informe inicial creado para temporalidad: {temporalidad}")
+        else:
+            print(f"[INFO] Informe existente verificado para temporalidad: {temporalidad}")
 
-# Función que verifica si el informe está actualizado
-def is_report_updated():
-    temporalidades = ['15m', '1h', '4h', '1d']
-    for temporalidad in temporalidades:
-        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-        
-        if os.path.exists(report_path):
-            with open(report_path, 'r') as file:
-                current_content = file.read()
-            
-            # Cargar el último informe guardado
-            with open(last_report_file, 'r') as last_report:
-                last_report_content = last_report.read().split('Última actualización')[0]
-            
-            if current_content != last_report_content:
-                # El contenido ha cambiado, actualizar el archivo
-                save_initial_report()
-                return True
+# Verifica si un archivo ha sido modificado
+def is_report_updated(report_file, last_mod_times):
+    """Verifica si un informe ha sido actualizado desde la última vez."""
+    if os.path.exists(report_file):
+        last_mod_time = os.path.getmtime(report_file)
+        if last_mod_times.get(report_file) != last_mod_time:
+            last_mod_times[report_file] = last_mod_time
+            print(f"[INFO] Informe actualizado detectado: {report_file}")
+            return True
     return False
 
-# Función para intentar enviar el informe, con reintentos en caso de retrasos
-async def send_report(chat_id, temporalidad, bot, max_retries=3, wait_time=10):
+# Calcula el tiempo hasta el cierre de la vela
+def get_time_to_close():
+    """Calcula el tiempo restante para el próximo cierre de vela."""
+    current_time = datetime.now()
+    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
+    remaining_time = (next_close_time - current_time).total_seconds()
+    print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
+    return remaining_time
+
+# Envía un informe a un usuario
+async def send_report(chat_id, temporalidad, bot):
+    """Envía el informe correspondiente a la temporalidad."""
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     
-    retries = 0
-    while retries < max_retries:
-        if is_report_updated(temporalidad):
-            with open(report_path, 'r') as file:
-                analysis_message = file.read()
-                await bot.send_message(chat_id=chat_id, text=analysis_message)
-            return True
-        else:
-            await asyncio.sleep(wait_time)  # Esperar antes de reintentar
+    if os.path.exists(report_path):
+        with open(report_path, 'r') as file:
+            report_content = file.read()
+        await bot.send_message(chat_id=chat_id, text=report_content)
+        print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
+    else:
+        await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
+        print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
+
+# Revisa y envía los informes según las suscripciones
+async def check_and_send_reports(chat_id, suscripciones, bot, last_mod_times):
+    """Envía los informes a un usuario en base a sus suscripciones."""
+    temporalidades = ['1d', '4h', '1h', '15m']  # Orden de mayor a menor temporalidad
+    
+    for temporalidad in temporalidades:
+        if temporalidad in suscripciones:
+            report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+            if is_report_updated(report_path, last_mod_times):
+                await send_report(chat_id, temporalidad, bot)
+
+# Enviar informes a todos los usuarios
+async def send_reports_to_all_users(bot, last_mod_times):
+    """Revisa las suscripciones y envía informes actualizados a todos los usuarios."""
+    all_subscriptions = get_all_user_subscriptions()  # Diccionario: {chat_id: ['15m', '1h']}
+    
+    for chat_id, suscripciones in all_subscriptions.items():
+        print(f"[INFO] Revisando y enviando informes para chat_id: {chat_id}.")
+        await check_and_send_reports(chat_id, suscripciones, bot, last_mod_times)
+
+# Manejo del ciclo de cierre de vela
+async def handle_candle_closure(bot):
+    """Maneja el ciclo de cierres de vela."""
+    last_mod_times = {}
+    while True:
+        print("[INFO] Iniciando ciclo de cierre de vela.")
+        
+        # Verificar y enviar informes a todos los usuarios
+        await send_reports_to_all_users(bot, last_mod_times)
+        
+        # Esperar el tiempo para el próximo cierre de vela
+        time_to_close = get_time_to_close()
+        retries = 0
+        max_retries = 8  # Retrasos por un total de 2 minutos
+        retry_interval = 15  # Intervalo de 15 segundos entre reintentos
+        
+        while retries < max_retries:
+            print(f"[INFO] Intento {retries + 1} de {max_retries}.")
+            await asyncio.sleep(retry_interval)
+            await send_reports_to_all_users(bot, last_mod_times)
             retries += 1
 
-    # Si no se actualiza después de los reintentos, calcula el siguiente cierre de la vela
-    time_to_close = get_time_to_close(temporalidad)
-    await bot.send_message(chat_id, f"Informe de {temporalidad} no actualizado. Calculando cierre de vela: {time_to_close}")
-    return False
+        # Si no hay actualizaciones, calcular el tiempo para el próximo cierre
+        print("[INFO] No se detectaron actualizaciones. Calculando próximo cierre de vela.")
+        time_to_close = get_time_to_close()
+        await asyncio.sleep(time_to_close)
 
-# Función para revisar y enviar los informes de todos los usuarios
-async def check_and_send_reports(chat_id, temporalidad, bot):
-    await send_report(chat_id, temporalidad, bot)
-
-# Revisar las suscripciones y enviar informes automáticos
-async def check_user_subscriptions(bot):
-    all_subscriptions = get_all_user_subscriptions()  # Diccionario: {chat_id: ['15m', '1h']}
-    for chat_id, temporalidades in all_subscriptions.items():
-        # Primero revisamos el informe de 15m, luego los demás
-        if '15m' in temporalidades:
-            await check_and_send_reports(chat_id, '15m', bot)
-        
-        # Luego revisar las demás temporalidades en orden descendente
-        for temporalidad in sorted(temporalidades, reverse=True):
-            if temporalidad != '15m':
-                await check_and_send_reports(chat_id, temporalidad, bot)
-
-# Programar tareas recurrentes con APScheduler
-def schedule_tasks(bot):
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(lambda: asyncio.create_task(check_user_subscriptions(bot)), 'interval', minutes=15)
-    scheduler.start()
-
-# Función principal para ejecutar el bot
-async def send_reports_to_all_users(context: CallbackContext):
-    users = get_users()  # Obtener lista de usuarios registrados
-    for user in users:
-        chat_id = user[1]  # Obtener chat_id
-        suscripciones = user[3].split(',')  # Obtener sus suscripciones
-        for temporalidad in suscripciones:
-            await check_and_send_reports(chat_id, temporalidad, context.bot)
-
-# Función periódica para enviar informes
-async def scheduled_report_job(context: CallbackContext):
-    await send_reports_to_all_users(context)
-
-# Main function where the job is scheduled
+# Configuración inicial del bot
 def main():
     # Crear base de datos si no existe
     create_db()
+    
+    # Verificar los informes iniciales
+    check_initial_reports()
 
-    # Guardar el informe al iniciar el bot
-    save_initial_report()
+    # Configurar el bot y programar el manejo del cierre de vela
+    bot = setup_bot()
+    print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
+    asyncio.run(handle_candle_closure(bot))
 
-    # Comprobar si el informe ha cambiado después de un tiempo
-    if is_report_updated():
-        print("El informe ha sido actualizado.")
-    else:
-        print("El informe no ha cambiado.")
-
-    # Configuración de comandos
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button, pattern='^(suscribir|desuscribir)'))
-    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion'))
-
-    # Programar la tarea periódica para enviar informes cada 15 minutos
-    application.job_queue.run_repeating(scheduled_report_job, interval=timedelta(minutes=15), first=0)
-
-    # Iniciar el bot
-    application.run_polling()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
