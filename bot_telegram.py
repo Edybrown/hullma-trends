@@ -151,7 +151,7 @@ async def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
 
     await application.initialize() # Inicializar la app
-    asyncio.create_task(handle_candle_closure(application)) # Lanzar tarea en segundo plano
+   
     await application.run_polling(allowed_updates=Update.ALL_TYPES) # Iniciar el polling
 
 if __name__ == "__main__":
