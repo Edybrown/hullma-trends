@@ -289,19 +289,20 @@ async def main():
   create_db()
   check_initial_reports()
 
-  global application  # Make application accessible globally
+  global application
 
   application = Application.builder().token(bot_token).build()
 
+  # Registra los handlers del bot
   application.add_handler(CommandHandler("start", start))
   application.add_handler(CallbackQueryHandler(button))
   application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
 
-  # Run the background task for sending reports
+  # Crea la tarea para enviar informes en segundo plano
   asyncio.create_task(handle_candle_closure(application.bot))
 
-  # Start the polling loop to listen for Telegram events
-  await application.run_polling()  # This line is crucial!
+  # INICIA EL BUCLE DE EVENTOS (SOLO UNA VEZ)
+  await application.run_polling()
 
 if __name__ == "__main__":
   asyncio.run(main())
