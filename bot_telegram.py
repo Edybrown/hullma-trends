@@ -217,8 +217,6 @@ def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    asyncio.create_task(handle_candle_closure(bot))  # Ejecuta el manejo de cierre de velas en paralelo
-    await dp.start_polling()  
 
     # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
