@@ -259,8 +259,8 @@ async def main():
         application.add_handler(CallbackQueryHandler(button))
         application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))  # Patrón para el botón principal
 
-        await application.initialize()
-        candle_closure_task = asyncio.create_task(handle_candle_closure(application.bot))
+        await application.start_polling(allowed_updates=Update.ALL_TYPES) # Con paréntesis
+        await application.idle()
 
         await application.start_polling(allowed_updates=Update.ALL_TYPES)
         await application.idle()  # Mantener el bot en ejecución
