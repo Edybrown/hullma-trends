@@ -259,7 +259,7 @@ async def main():
         application.add_handler(CallbackQueryHandler(button))
         application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))  # Patrón para el botón principal
 
-        await application.start_polling(allowed_updates=Update.ALL_TYPES) # Con paréntesis
+        await application.run_polling(allowed_updates=Update.ALL_TYPES) # Con paréntesis
         await application.idle()
 
       
