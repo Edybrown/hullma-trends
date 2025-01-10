@@ -199,9 +199,11 @@ async def get_all_user_subscriptions():
 def main():
     # Configuración inicial
     print("[INFO] Configurando el bot...")
+    
+    # Sincronización de la base de datos y creación de informes iniciales
     asyncio.run(create_db())  # Sincronización de la base de datos
     check_initial_reports()  # Verificar informes iniciales
-    handle_candle_closure()
+    
     # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
@@ -215,6 +217,11 @@ def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
+    # Obtener el bucle de eventos actual
+    loop = asyncio.get_event_loop()
+
+    # Crear una tarea asíncrona para manejar el cierre de velas sin bloquear el flujo principal
+    loop.create_task(handle_candle_closure(application.bot))
 
     # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
