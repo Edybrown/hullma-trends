@@ -269,14 +269,15 @@ async def main():
     create_db()
     check_initial_reports()
 
+    global application  # Make application accessible globally
+
     application = Application.builder().token(bot_token).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
 
-    asyncio.create_task(handle_candle_closure(application.bot)) #Ejecuta handle_candle_closure en segundo plano
-    await application.run_polling() #Ejecuta el bot en el bucle principal.
+    asyncio.create_task(handle_candle_closure(application.bot))  # Run in background
 
 if __name__ == "__main__":
     asyncio.run(main())
