@@ -1,241 +1,177 @@
 import os
+import asyncio
 import aiosqlite
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
-from datetime import datetime
-import os
-import time
 from datetime import datetime, timedelta
-import asyncio
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 
 reports_dir = "Analisis_trading"
-last_report_file = 'last_report.txt'
 
-# Cargar variables de entorno
 load_dotenv()
 bot_token = os.getenv('TELEGRAM_TOKEN')
 
-# Configuración del bot
 application = Application.builder().token(bot_token).build()
 
-# Conexión a la base de datos SQLite
 async def create_db():
-    async with aiosqlite.connect('usuarios_telegram.db') as conn:
-        await conn.execute('''
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY,
-                chat_id INTEGER UNIQUE,
-                nombre TEXT,
-                suscripciones TEXT,
-                suscripcion_tipo TEXT,
-                suscripcion_fecha TIMESTAMP,
-                fecha_ultima_actividad TIMESTAMP
-            )
-        ''')
-        await conn.commit()
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id INTEGER PRIMARY KEY,
+                    chat_id INTEGER UNIQUE,
+                    nombre TEXT,
+                    suscripciones TEXT,
+                    suscripcion_tipo TEXT,
+                    suscripcion_fecha TIMESTAMP,
+                    fecha_ultima_actividad TIMESTAMP
+                )
+            """)
+            await conn.commit()
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al crear la base de datos: {e}")
 
-# Función para guardar un nuevo usuario
 async def save_user(chat_id, nombre):
-    async with aiosqlite.connect('usuarios_telegram.db') as conn:
-        async with conn.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
-            user = await cursor.fetchone()
-            if not user:
-                current_time = datetime.now().isoformat()
-                await conn.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)",
-                                 (chat_id, nombre, current_time, 'Ninguna', current_time))
-                await conn.commit()
-                
-# Función para obtener la lista de usuarios
-def get_users():
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM usuarios")
-    users = c.fetchall()
-    conn.close()
-    return users
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
+                user = await cursor.fetchone()
+                if not user:
+                    current_time = datetime.now().isoformat()
+                    await conn.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)", (chat_id, nombre, current_time, 'Ninguna', current_time))
+                    await conn.commit()
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al guardar el usuario: {e}")
 
-# Comando /start
+async def get_users():
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT * FROM usuarios") as cursor:
+                return await cursor.fetchall()
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al obtener los usuarios: {e}")
+        return []
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
-    save_user(update.message.chat_id, user.first_name)
-    
-    # Mensaje de bienvenida mejorado
-    welcome_message = (
-        "¡Hola, {name}! 👋\n\n"
-        "¡Bienvenido a tu asistente de análisis de tendencias de trading! 🚀\n\n"
-        "Este bot te ayudará a recibir actualizaciones y análisis de trading basados en diferentes temporalidades.\n\n"
-        "Puedes suscribirte a cualquiera de las siguientes temporalidades:\n"
-        "🔹 15 minutos (15m)\n"
-        "🔸 1 hora (1h)\n"
-        "🔹 4 horas (4h)\n"
-        "🔸 1 día (1d)\n\n"
-        "Al suscribirte, recibirás análisis en tiempo real y podrás tomar decisiones más informadas. 🧠💡\n\n"
-        "Para comenzar, simplemente selecciona una temporalidad para suscribirte o desuscribirte utilizando los botones a continuación. ¡Empecemos! ⚡"
-    ).format(name=user.first_name)
-
-    # Mostrar mensaje de bienvenida
+    await save_user(update.message.chat_id, user.first_name)
+    welcome_message = f"¡Hola, {user.first_name}! \n\nBienvenido a tu asistente de análisis de tendencias de trading! \n\nEste bot te ayudará a recibir actualizaciones y análisis de trading basados en diferentes temporalidades.\n\nPuedes suscribirte a cualquiera de las siguientes temporalidades:\n 15 minutos (15m)\n 1 hora (1h)\n 4 horas (4h)\n 1 día (1d)\n\nAl suscribirte, recibirás análisis en tiempo real y podrás tomar decisiones más informadas. \n\nPara comenzar, simplemente selecciona una temporalidad para suscribirte o desuscribirte utilizando los botones a continuación. ¡Empecemos! ⚡"
     await update.message.reply_text(welcome_message)
-
-    # Llamar a la función para mostrar los botones fijos
     await show_subscription_button(update)
 
-
-# Función para mostrar botones de suscripción fijos
 async def show_subscription_button(update: Update):
-    keyboard = [
-        [InlineKeyboardButton("Suscripción", callback_data='suscripcion')]
-    ]
+    keyboard = [[InlineKeyboardButton("Suscripción", callback_data='suscripcion')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Selecciona una opción:", reply_markup=reply_markup)
 
-# Función para mostrar las temporalidades disponibles
 async def show_temporalidades(update: Update, context: CallbackContext):
-    chat_id = update.callback_query.message.chat_id  # Cambiado de update.message a update.callback_query.message
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-    c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
-    suscripciones = c.fetchone()
-    
-    if suscripciones:
-        suscripciones = suscripciones[0].split(',')
-    else:
-        suscripciones = []
+    chat_id = update.callback_query.message.chat_id
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
+                suscripciones_db = await cursor.fetchone()
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al obtener las suscripciones del usuario: {e}")
+        return
 
-    # Crear el teclado según las suscripciones actuales
+    suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
+
     keyboard = []
-    
-    # Agregar botones para las temporalidades disponibles
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
-        if temporalidad in suscripciones:
-            button_text = f"Desuscribirse {temporalidad}"
-            callback_data = f"desuscribir_{temporalidad}"
-        else:
-            button_text = f"Suscribirse {temporalidad}"
-            callback_data = f"suscribir_{temporalidad}"
-        
+        button_text = f"{'Desuscribirse' if temporalidad in suscripciones else 'Suscribirse'} {temporalidad}"
+        callback_data = f"{'desuscribir' if temporalidad in suscripciones else 'suscribir'}_{temporalidad}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
+    await update.callback_query.message.reply_text('Selecciona una temporalidad:', reply_markup=reply_markup)
 
-
-# Función para manejar las acciones de suscripción y desuscripción
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
     chat_id = query.message.chat_id
     data = query.data
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
+                suscripciones_db = await cursor.fetchone()
+            suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
 
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-    c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
-    suscripciones = c.fetchone()
+            temporalidad = data.split('_')[1]
+            accion = data.split('_')[0]
 
-    if suscripciones:
-        suscripciones = suscripciones[0].split(',')
-    else:
-        suscripciones = []
+            if accion == 'suscribir' and temporalidad not in suscripciones:
+                suscripciones.append(temporalidad)
+                await query.answer(f"Te has suscrito a {temporalidad}.")
+            elif accion == 'desuscribir' and temporalidad in suscripciones:
+                suscripciones.remove(temporalidad)
+                await query.answer(f"Te has desuscrito de {temporalidad}.")
+            else:
+                await query.answer(f"Ya estás {'suscrito' if temporalidad in suscripciones else 'desuscrito'} a {temporalidad}.")
 
-    # Gestionar las suscripciones
-    if data.startswith('suscribir'):
-        temporalidad = data.split('_')[1]
-        if temporalidad not in suscripciones:
-            suscripciones.append(temporalidad)
-            c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
-                      (','.join(suscripciones), chat_id))
-            conn.commit()
-            await query.answer(f"Te has suscrito a la temporalidad {temporalidad}.")
-        else:
-            await query.answer(f"Ya estás suscrito a la temporalidad {temporalidad}.")
-    elif data.startswith('desuscribir'):
-        temporalidad = data.split('_')[1]
-        if temporalidad in suscripciones:
-            suscripciones.remove(temporalidad)
-            c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
-                      (','.join(suscripciones), chat_id))
-            conn.commit()
-            await query.answer(f"Te has desuscrito de la temporalidad {temporalidad}.")
-        else:
-            await query.answer(f"No estás suscrito a la temporalidad {temporalidad}.")
+            await conn.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?", (','.join(suscripciones), chat_id))
+            await conn.commit()
 
-    # Actualizar los botones con las nuevas suscripciones
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al actualizar las suscripciones: {e}")
+        await query.answer("Ocurrió un error al procesar tu solicitud.")
+        return
+
     await show_temporalidades(update, context)
-# logica del bot ----------------------------------------------------------------------------------------------------
 
 def check_initial_reports():
-    """Verifica que los informes de las temporalidades existen."""
     temporalidades = ['15m', '1h', '4h', '1d']
-    os.makedirs(reports_dir, exist_ok=True)  # Asegurar que el directorio existe
-    
+    os.makedirs(reports_dir, exist_ok=True)
     for temporalidad in temporalidades:
         report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-        if os.path.exists(report_path):
-            print(f"[INFO] Archivo encontrado: {report_path}")
-        else:
-            print(f"[ERROR] Archivo faltante: {report_path}")
+        if not os.path.exists(report_path):
             raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
-
-# Verifica si un archivo ha sido modificado
-def is_report_updated(report_file, last_mod_times):
-    """Verifica si un informe ha sido actualizado desde la última vez."""
-    if os.path.exists(report_file):
-        last_mod_time = os.path.getmtime(report_file)
-        if last_mod_times.get(report_file) != last_mod_time:
-            last_mod_times[report_file] = last_mod_time
-            print(f"[INFO] Informe actualizado detectado: {report_file}")
-            return True
-    return False
-
-# Calcula el tiempo hasta el cierre de la vela
 def get_time_to_close():
-    """Calcula el tiempo restante para el próximo cierre de vela."""
     current_time = datetime.now()
     next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
     remaining_time = (next_close_time - current_time).total_seconds()
     print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
     return remaining_time
 
-# Envía un informe a un usuario
+
+sync def get_all_user_subscriptions():
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
+                subscriptions = await cursor.fetchall()
+        subscriptions_dict = {}
+        for chat_id, suscripciones in subscriptions:
+            subscriptions_dict[chat_id] = suscripciones.split(',') if suscripciones else []
+        return subscriptions_dict
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al obtener las suscripciones: {e}")
+        return {}
+
 async def send_report(chat_id, temporalidad, bot):
-    """Envía el informe correspondiente a la temporalidad."""
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    
     if os.path.exists(report_path):
         with open(report_path, 'r') as file:
             report_content = file.read()
-        await bot.send_message(chat_id=chat_id, text=report_content)
-        print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
+        try:
+            await bot.send_message(chat_id=chat_id, text=report_content)
+            print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
+        except Exception as e: # Captura excepciones de Telegram
+            print(f"[ERROR] Error al enviar mensaje a {chat_id}: {e}")
     else:
-        await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
         print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
 
-# Revisa y envía los informes según las suscripciones
+
 async def check_and_send_reports(chat_id, suscripciones, bot):
-    # ... (esta función se mantiene similar, pero sin el manejo de last_mod_times)
     temporalidades = ['1d', '4h', '1h', '15m']
     for temporalidad in temporalidades:
         if temporalidad in suscripciones:
-            report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-            if os.path.exists(report_path): # Simplificado, se envía si existe
-                await send_report(chat_id, temporalidad, bot)
-
+            await send_report(chat_id, temporalidad, bot)
 
 async def send_reports_to_all_users(bot):
-    async with aiosqlite.connect('usuarios_telegram.db') as conn:
-        async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
-            subscriptions = await cursor.fetchall()
-    subscriptions_dict = {}
-    for chat_id, suscripciones in subscriptions:
-        subscriptions_dict[chat_id] = suscripciones.split(',') if suscripciones else []
-    for chat_id, suscripciones in subscriptions_dict.items():
+    all_subscriptions = await get_all_user_subscriptions()
+    for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-
-# Manejo del ciclo de cierre de vela
 async def handle_candle_closure(bot):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
@@ -244,32 +180,35 @@ async def handle_candle_closure(bot):
         print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
         await asyncio.sleep(time_to_close)
 
+def check_initial_reports():
+    temporalidades = ['15m', '1h', '4h', '1d']
+    os.makedirs(reports_dir, exist_ok=True)
+    for temporalidad in temporalidades:
+        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+        if not os.path.exists(report_path):
+            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
-# Configuración inicial del bot
-def get_all_user_subscriptions():
-    """Obtiene un diccionario con todas las suscripciones de los usuarios."""
-    with sqlite3.connect('usuarios_telegram.db') as conn:
-        c = conn.cursor()
-        c.execute("SELECT chat_id, suscripciones FROM usuarios")
-        subscriptions = c.fetchall()
+def get_time_to_close():
+    current_time = datetime.now()
+    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
+    remaining_time = (next_close_time - current_time).total_seconds()
+    print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
+    return remaining_time
 
-    # Convertir a formato {chat_id: [temporalidades]}
-    subscriptions_dict = {}
-    for chat_id, suscripciones in subscriptions:
-        if suscripciones:
-            subscriptions_dict[chat_id] = suscripciones.split(',')
-        else:
-            subscriptions_dict[chat_id] = []
-    
-    return subscriptions_dict
-
-# Modificar la función main
 async def main():
-    await create_db() # Ahora es asíncrona
+    await create_db()
     check_initial_reports()
     print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
+    application.add_handler(CallbackQueryHandler(button))
+
+    await application.initialize()
+    await application.start_polling()
     await handle_candle_closure(application.bot)
+    await application.stop()
+    await application.shutdown()
 
 if __name__ == '__main__':
-    application.run_polling()
     asyncio.run(main())
