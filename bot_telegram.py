@@ -3,7 +3,7 @@ import asyncio
 import aiosqlite
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes, ApplicationBuilder
 from datetime import datetime, timedelta
 
 reports_dir = "Analisis_trading"
