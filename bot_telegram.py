@@ -11,7 +11,7 @@ import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
-reports_dir = " 'Informe Final' "
+reports_dir = "Analisis_trading"
 last_report_file = 'last_report.txt'
 
 # Cargar variables de entorno
@@ -170,19 +170,18 @@ async def button(update: Update, context: CallbackContext):
 # logica del bot ----------------------------------------------------------------------------------------------------
 
 def check_initial_reports():
-    """Asegura que los informes de las temporalidades están creados."""
+    """Verifica que los informes de las temporalidades existen."""
     temporalidades = ['15m', '1h', '4h', '1d']
-    os.makedirs(reports_dir, exist_ok=True)
+    os.makedirs(reports_dir, exist_ok=True)  # Asegurar que el directorio existe
     
     for temporalidad in temporalidades:
         report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-        if not os.path.exists(report_path):
-            # Crear un archivo vacío si no existe
-            with open(report_path, 'w') as file:
-                file.write(f"Informe de {temporalidad} - Inicial.\n")
-            print(f"[INFO] Informe inicial creado para temporalidad: {temporalidad}")
+        if os.path.exists(report_path):
+            print(f"[INFO] Archivo encontrado: {report_path}")
         else:
-            print(f"[INFO] Informe existente verificado para temporalidad: {temporalidad}")
+            print(f"[ERROR] Archivo faltante: {report_path}")
+            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
+
 
 # Verifica si un archivo ha sido modificado
 def is_report_updated(report_file, last_mod_times):
@@ -266,6 +265,24 @@ async def handle_candle_closure(bot):
         await asyncio.sleep(time_to_close)
 
 # Configuración inicial del bot
+def get_all_user_subscriptions():
+    """Obtiene un diccionario con todas las suscripciones de los usuarios."""
+    with sqlite3.connect('usuarios_telegram.db') as conn:
+        c = conn.cursor()
+        c.execute("SELECT chat_id, suscripciones FROM usuarios")
+        subscriptions = c.fetchall()
+
+    # Convertir a formato {chat_id: [temporalidades]}
+    subscriptions_dict = {}
+    for chat_id, suscripciones in subscriptions:
+        if suscripciones:
+            subscriptions_dict[chat_id] = suscripciones.split(',')
+        else:
+            subscriptions_dict[chat_id] = []
+    
+    return subscriptions_dict
+
+# Modificar la función main
 def main():
     # Crear base de datos si no existe
     create_db()
@@ -273,10 +290,6 @@ def main():
     # Verificar los informes iniciales
     check_initial_reports()
 
-    # Configurar el bot y programar el manejo del cierre de vela
-    bot = setup_bot()
+    # Utilizar directamente la configuración del bot existente
     print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
-    asyncio.run(handle_candle_closure(bot))
-
-if __name__ == "__main__":
-    main()
+    asyncio.run(handle_candle_closure(application.bot))  # Us
