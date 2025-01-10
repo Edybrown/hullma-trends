@@ -202,6 +202,11 @@ def get_time_to_close():
     print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
     return remaining_time
 
+
+def split_string(text, max_length=4096): #limite de telegram
+    """Divide un string en partes más pequeñas."""
+    return [text[i:i + max_length] for i in range(0, len(text), max_length)]
+
 async def send_report(chat_id, temporalidad, bot):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     try:
