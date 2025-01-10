@@ -197,21 +197,27 @@ async def get_all_user_subscriptions():
         return {}
 
 async def main():
-    await create_db()
-    check_initial_reports()
+    await create_db()  # Creación de base de datos
+    check_initial_reports()  # Verificación de informes iniciales
     print("[INFO] Bot configurado. Iniciando el bot.")
 
-    application = Application.builder().token(bot_token).build()
+    # Crea la aplicación del bot
+    application = ApplicationBuilder().token("YOUR_BOT_TOKEN").build()
 
-    # Agregar handlers DENTRO del bloque async with y DESPUÉS de application.initialize()
-    async with application:
-        await application.initialize() # Inicializar primero
+    # Agrega los handlers (manejadores) de los comandos
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
+    application.add_handler(CallbackQueryHandler(button))
 
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
-        application.add_handler(CallbackQueryHandler(button))
+    # Inicializa la aplicación y comienza el polling
+    await application.initialize()
 
-        await application.start() # Iniciar el bot (ahora sí necesario)
-        await application.updater.start_polling()
+    # Inicia el polling
+    await application.start_polling()
+
+    # Cuando sea necesario detener el bot, lo harás así:
+    await application.stop()  # Detiene el bot
+    await application.shutdown()  # Cierra la aplicación correctamente
+
 if __name__ == '__main__':
-     asyncio.run(main())
+    asyncio.run(main())  # Ejecuta el programa pr
