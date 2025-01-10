@@ -1,47 +1,45 @@
 import os
-import asyncio
-import logging
-from datetime import datetime, timedelta
-import aiosqlite
-from telegram.ext import Application
-from telegram.error import TelegramError
+import sqlite3
+from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextType
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
+from datetime import datetime
+import os
+import time
+from datetime import datetime, timedelta
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
+reports_dir = "Analisis_trading"
+last_report_file = 'last_report.txt'
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Cargar variables de entorno
+load_dotenv()
+bot_token = os.getenv('TELEGRAM_TOKEN')
 
-# Constants
-REPORTS_DIR = "Analisis_trading"
-TEMPORALIDADES = ['15m', '1h', '4h', '1d']
-MAX_RETRIES = 8
-RETRY_INTERVAL = 15
-DB_NAME = 'usuarios_telegram.db'
+# Configuración del bot
+application = Application.builder().token(bot_token).build()
 
-async def create_db():
-    """Creates the database if it doesn't exist."""
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            await db.execute('''
-                CREATE TABLE IF NOT EXISTS usuarios (
-                    id INTEGER PRIMARY KEY,
-                    chat_id INTEGER UNIQUE,
-                    nombre TEXT,
-                    suscripciones TEXT,
-                    suscripcion_tipo TEXT,
-                    suscripcion_fecha TIMESTAMP,
-                    fecha_ultima_actividad TIMESTAMP
-                )
-            ''')
-            await db.commit()
-        logger.info("Database created or already exists.")
-    except Exception as e:
-        logger.error(f"Error creating database: {e}")
-        raise
+# Conexión a la base de datos SQLite
+def create_db():
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY,
+            chat_id INTEGER UNIQUE,
+            nombre TEXT,
+            suscripciones TEXT,
+            suscripcion_tipo TEXT,
+            suscripcion_fecha TIMESTAMP,
+            fecha_ultima_actividad TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
+# Función para guardar un nuevo usuario
 def save_user(chat_id, nombre):
     with sqlite3.connect('usuarios_telegram.db') as conn:
         c = conn.cursor()
@@ -96,47 +94,6 @@ async def show_subscription_button(update: Update):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Selecciona una opción:", reply_markup=reply_markup)
-
-async def check_initial_reports():
-    """Verifies that the reports for all timeframes exist."""
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    
-    for temporalidad in TEMPORALIDADES:
-        report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
-        if os.path.exists(report_path):
-            logger.info(f"File found: {report_path}")
-        else:
-            logger.error(f"Missing file: {report_path}")
-            raise FileNotFoundError(f"The report file for timeframe '{temporalidad}' does not exist.")
-
-
-async def handle_candle_closure(bot, last_mod_times):
-    """Maneja el cierre de las velas y envía los informes a los usuarios suscritos."""
-    # Verificar el cierre de la vela y el tiempo de cierre
-    remaining_time = await get_time_to_close()
-
-    # Esperar hasta el cierre de la vela
-    await asyncio.sleep(remaining_time)
-
-    # Verificar los informes de todas las temporalidades
-    for temporalidad in TEMPORALIDADES:
-        report_file = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
-        if await is_report_updated(report_file, last_mod_times):
-            # Obtener todos los usuarios suscritos a esta temporalidad
-            users = await get_users()
-
-            # Recorrer cada usuario y enviar el informe si está suscrito
-            for user in users:
-                chat_id = user[1]
-                suscripciones = user[3].split(',') if user[3] else []
-
-                if temporalidad in suscripciones:
-                    try:
-                        await send_report(chat_id, temporalidad, bot)
-                    except TelegramError as e:
-                        logger.error(f"Error sending message to user {chat_id}: {e}")
-
-
 
 # Función para mostrar las temporalidades disponibles
 async def show_temporalidades(update: Update, context: CallbackContext):
@@ -210,165 +167,129 @@ async def button(update: Update, context: CallbackContext):
 
     # Actualizar los botones con las nuevas suscripciones
     await show_temporalidades(update, context)
+# logica del bot ----------------------------------------------------------------------------------------------------
 
-
-async def check_initial_reports():
-    """Verifies that the reports for all timeframes exist."""
-    os.makedirs(REPORTS_DIR, exist_ok=True)
+def check_initial_reports():
+    """Verifica que los informes de las temporalidades existen."""
+    temporalidades = ['15m', '1h', '4h', '1d']
+    os.makedirs(reports_dir, exist_ok=True)  # Asegurar que el directorio existe
     
-    for temporalidad in TEMPORALIDADES:
-        report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
+    for temporalidad in temporalidades:
+        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
         if os.path.exists(report_path):
-            logger.info(f"File found: {report_path}")
+            print(f"[INFO] Archivo encontrado: {report_path}")
         else:
-            logger.error(f"Missing file: {report_path}")
-            raise FileNotFoundError(f"The report file for timeframe '{temporalidad}' does not exist.")
+            print(f"[ERROR] Archivo faltante: {report_path}")
+            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
-async def is_report_updated(report_file, last_mod_times):
-    """Checks if a report has been updated since the last check."""
-    try:
-        if os.path.exists(report_file):
-            last_mod_time = os.path.getmtime(report_file)
-            if last_mod_times.get(report_file) != last_mod_time:
-                last_mod_times[report_file] = last_mod_time
-                logger.info(f"Updated report detected: {report_file}")
-                return True
-    except Exception as e:
-        logger.error(f"Error checking report update for {report_file}: {e}")
+
+# Verifica si un archivo ha sido modificado
+def is_report_updated(report_file, last_mod_times):
+    """Verifica si un informe ha sido actualizado desde la última vez."""
+    if os.path.exists(report_file):
+        last_mod_time = os.path.getmtime(report_file)
+        if last_mod_times.get(report_file) != last_mod_time:
+            last_mod_times[report_file] = last_mod_time
+            print(f"[INFO] Informe actualizado detectado: {report_file}")
+            return True
     return False
 
-async def get_time_to_close():
-    """Calculates the time remaining until the next candle closure."""
+# Calcula el tiempo hasta el cierre de la vela
+def get_time_to_close():
+    """Calcula el tiempo restante para el próximo cierre de vela."""
     current_time = datetime.now()
     next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
     remaining_time = (next_close_time - current_time).total_seconds()
-    logger.info(f"Time until next candle closure: {remaining_time} seconds.")
+    print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
     return remaining_time
 
+# Envía un informe a un usuario
 async def send_report(chat_id, temporalidad, bot):
-    """Envía el informe correspondiente para la temporalidad."""
-    report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
+    """Envía el informe correspondiente a la temporalidad."""
+    report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     
-    try:
-        if os.path.exists(report_path):
-            with open(report_path, 'r', encoding='utf-8') as file:
-                report_content = file.read()
-            await bot.send_message(chat_id=chat_id, text=report_content)
-            logger.info(f"Informe de {temporalidad} enviado al chat_id: {chat_id}.")
-        else:
-            await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
-            logger.warning(f"Informe de {temporalidad} no encontrado para el chat_id: {chat_id}.")
-    except TelegramError as e:
-        if "HTTPXRequest is not initialized" in str(e):
-            logger.warning(f"El bot se está cerrando. Se omite el envío del informe de {temporalidad} al {chat_id}.")
-        else:
-            logger.error(f"Error de Telegram al enviar el informe {temporalidad} al {chat_id}: {e}")
-    except Exception as e:
-        logger.error(f"Error al enviar el informe {temporalidad} al {chat_id}: {e}")
+    if os.path.exists(report_path):
+        with open(report_path, 'r') as file:
+            report_content = file.read()
+        await bot.send_message(chat_id=chat_id, text=report_content)
+        print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
+    else:
+        await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
+        print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
+
+# Revisa y envía los informes según las suscripciones
 async def check_and_send_reports(chat_id, suscripciones, bot, last_mod_times):
-    """Sends reports to a user based on their subscriptions."""
-    for temporalidad in reversed(TEMPORALIDADES):
+    """Envía los informes a un usuario en base a sus suscripciones."""
+    temporalidades = ['1d', '4h', '1h', '15m']  # Orden de mayor a menor temporalidad
+    
+    for temporalidad in temporalidades:
         if temporalidad in suscripciones:
-            report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
-            if await is_report_updated(report_path, last_mod_times):
+            report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+            if is_report_updated(report_path, last_mod_times):
                 await send_report(chat_id, temporalidad, bot)
 
+# Enviar informes a todos los usuarios
 async def send_reports_to_all_users(bot, last_mod_times):
-    """Checks subscriptions and sends updated reports to all users."""
-    all_subscriptions = await get_all_user_subscriptions()
+    """Revisa las suscripciones y envía informes actualizados a todos los usuarios."""
+    all_subscriptions = get_all_user_subscriptions()  # Diccionario: {chat_id: ['15m', '1h']}
     
     for chat_id, suscripciones in all_subscriptions.items():
-        logger.info(f"Checking and sending reports for chat_id: {chat_id}.")
+        print(f"[INFO] Revisando y enviando informes para chat_id: {chat_id}.")
         await check_and_send_reports(chat_id, suscripciones, bot, last_mod_times)
 
+# Manejo del ciclo de cierre de vela
 async def handle_candle_closure(bot):
-    """Maneja el ciclo de cierre de velas."""
+    """Maneja el ciclo de cierres de vela."""
     last_mod_times = {}
     while True:
-        try:
-            logger.info("Iniciando ciclo de cierre de vela.")
-            
+        print("[INFO] Iniciando ciclo de cierre de vela.")
+        
+        # Verificar y enviar informes a todos los usuarios
+        await send_reports_to_all_users(bot, last_mod_times)
+        
+        # Esperar el tiempo para el próximo cierre de vela
+        time_to_close = get_time_to_close()
+        retries = 0
+        max_retries = 8  # Retrasos por un total de 2 minutos
+        retry_interval = 15  # Intervalo de 15 segundos entre reintentos
+        
+        while retries < max_retries:
+            print(f"[INFO] Intento {retries + 1} de {max_retries}.")
+            await asyncio.sleep(retry_interval)
             await send_reports_to_all_users(bot, last_mod_times)
-            
-            time_to_close = await get_time_to_close()
-            
-            for retry in range(MAX_RETRIES):
-                logger.info(f"Intento {retry + 1} de {MAX_RETRIES}.")
-                try:
-                    await asyncio.sleep(RETRY_INTERVAL)
-                except asyncio.CancelledError:
-                    logger.info("Manejo de cierre de vela interrumpido.")
-                    return
-                await send_reports_to_all_users(bot, last_mod_times)
+            retries += 1
 
-            logger.info("No se detectaron actualizaciones. Calculando próximo cierre de vela.")
-            time_to_close = await get_time_to_close()
-            try:
-                await asyncio.sleep(time_to_close)
-            except asyncio.CancelledError:
-                logger.info("Manejo de cierre de vela interrumpido.")
-                return
-        except Exception as e:
-            logger.error(f"Error en el ciclo de cierre de vela: {e}")
-            await asyncio.sleep(60)  # Esperar un minuto antes de reintentar
+        # Si no hay actualizaciones, calcular el tiempo para el próximo cierre
+        print("[INFO] No se detectaron actualizaciones. Calculando próximo cierre de vela.")
+        time_to_close = get_time_to_close()
+        await asyncio.sleep(time_to_close)
 
-async def get_all_user_subscriptions():
-    """Gets a dictionary with all user subscriptions."""
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            async with db.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
-                subscriptions = await cursor.fetchall()
+# Configuración inicial del bot
+def get_all_user_subscriptions():
+    """Obtiene un diccionario con todas las suscripciones de los usuarios."""
+    with sqlite3.connect('usuarios_telegram.db') as conn:
+        c = conn.cursor()
+        c.execute("SELECT chat_id, suscripciones FROM usuarios")
+        subscriptions = c.fetchall()
 
-        return {chat_id: suscripciones.split(',') if suscripciones else [] for chat_id, suscripciones in subscriptions}
-    except Exception as e:
-        logger.error(f"Error getting user subscriptions: {e}")
-        return {}
+    # Convertir a formato {chat_id: [temporalidades]}
+    subscriptions_dict = {}
+    for chat_id, suscripciones in subscriptions:
+        if suscripciones:
+            subscriptions_dict[chat_id] = suscripciones.split(',')
+        else:
+            subscriptions_dict[chat_id] = []
+    
+    return subscriptions_dict
 
-async def main():
-    try:
-        # Crear la base de datos si no existe
-        await create_db()
-        
-        # Verificar los informes iniciales
-        await check_initial_reports()
+# Modificar la función main
+def main():
+    # Crear base de datos si no existe
+    create_db()
+    
+    # Verificar los informes iniciales
+    check_initial_reports()
 
-        # Configurar el bot
-        bot_token = os.getenv('TELEGRAM_TOKEN')
-        if not bot_token:
-            raise ValueError("La variable de entorno TELEGRAM_TOKEN no está configurada")
-        
-        application = Application.builder().token(bot_token).build()
-        
-        # Inicializar la aplicación
-        await application.initialize()
-        
-        # Iniciar el manejo del cierre de velas
-        candle_closure_task = asyncio.create_task(handle_candle_closure(application.bot))
-        
-        # Iniciar la aplicación
-        await application.start()
-        
-        # Ejecutar el bot hasta que se presione Ctrl-C
-        await application.run_polling(allowed_updates=Update.ALL_TYPES)
-    except Exception as e:
-        logger.critical(f"Error crítico en la función principal: {e}")
-    finally:
-        # Asegurar el cierre adecuado
-        if 'application' in locals():
-            await application.stop()
-            await application.shutdown()
-        
-        # Cancelar todas las tareas en ejecución
-        for task in asyncio.all_tasks():
-            if task is not asyncio.current_task():
-                task.cancel()
-        
-        # Esperar a que todas las tareas se completen
-        await asyncio.gather(*asyncio.all_tasks(), return_exceptions=True)
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Bot detenido por el usuario.")
-    except Exception as e:
-        print(f"Ocurrió un error inesperado: {e}")        
+    # Utilizar directamente la configuración del bot existente
+    print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
+    asyncio.run(handle_candle_closure(application.bot))  # Us
