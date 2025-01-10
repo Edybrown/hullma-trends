@@ -202,7 +202,7 @@ async def main():
     print("[INFO] Bot configurado. Iniciando el bot.")
 
     # Obtener el token desde la variable de entorno
-    bot_token = os.getenv("TELEGRAM_TOKEN")
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     
     if not bot_token:
         print("[ERROR] El token del bot no está configurado en las variables de entorno.")
@@ -216,16 +216,17 @@ async def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Inicializa la aplicación
-    await application.initialize()
-
-    # Inicia el polling (cambia a run_polling en lugar de start_polling)
+    # Ejecuta el bot sin intentar cerrar el bucle de eventos
     await application.run_polling()
 
-    # Cuando sea necesario detener el bot, lo harás así:
-    await application.stop()  # Detiene el bot
-    await application.shutdown()  # Cierra la aplicación correctamente
-
 if __name__ == '__main__':
-    asyncio.get_event_loop().create_task(main())
-    asyncio.get_event_loop().run_forever()()  # Ejecuta el programa principal directamente
+    # Usa el bucle de eventos actual para ejecutar `main`
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        if str(e) == "This event loop is already running":
+            # Si el bucle ya está corriendo, ejecuta `main` como una tarea
+            print("[INFO] Bucle de eventos ya está corriendo. Ejecutando como tarea.")
+            asyncio.get_event_loop().create_task(main())
+        else:
+            raise
