@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 import aiosqlite
 from telegram.ext import Application
 from telegram.error import TelegramError
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
