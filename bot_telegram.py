@@ -196,37 +196,29 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-async def main():
-    await create_db()  # Creación de base de datos
-    check_initial_reports()  # Verificación de informes iniciales
-    print("[INFO] Bot configurado. Iniciando el bot.")
+def main():
+    # Configuración inicial
+    print("[INFO] Configurando el bot...")
+    create_db()  # Sincronización de la base de datos
+    check_initial_reports()  # Verificar informes iniciales
 
     # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
-    
     if not bot_token:
-        print("[ERROR] El token del bot no está configurado en las variables de entorno.")
-        return
+        raise ValueError("El token del bot no está configurado en las variables de entorno.")
 
-    # Crea la aplicación del bot usando el token de la variable de entorno
+    # Crear la aplicación del bot
     application = ApplicationBuilder().token(bot_token).build()
 
-    # Agrega los handlers (manejadores) de los comandos
+    # Agregar manejadores (handlers)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Ejecuta el bot sin intentar cerrar el bucle de eventos
-    await application.run_polling()
+    # Iniciar el bot (la librería maneja el bucle de eventos)
+    print("[INFO] Iniciando el bot...")
+    application.run_polling()
 
-if __name__ == '__main__':
-    # Usa el bucle de eventos actual para ejecutar `main`
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if str(e) == "This event loop is already running":
-            # Si el bucle ya está corriendo, ejecuta `main` como una tarea
-            print("[INFO] Bucle de eventos ya está corriendo. Ejecutando como tarea.")
-            asyncio.get_event_loop().create_task(main())
-        else:
-            raise
+if __name__ == "__main__":
+    main()
+
