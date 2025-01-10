@@ -2,10 +2,9 @@ import os
 import sqlite3
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from datetime import datetime
 import asyncio
-import telegram 
 
 # Cargar variables de entorno
 load_dotenv()
@@ -48,7 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.message.chat_id, user.first_name)
     
     welcome_message = (
-        "¡Hola, {name}! 👋\n\n"
+        f"¡Hola, {user.first_name}! 👋\n\n"
         "¡Bienvenido a tu asistente de análisis de tendencias de trading! 🚀\n\n"
         "Este bot te ayudará a recibir actualizaciones y análisis de trading basados en diferentes temporalidades.\n\n"
         "Puedes suscribirte a cualquiera de las siguientes temporalidades:\n"
@@ -58,19 +57,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔸 1 día (1d)\n\n"
         "Al suscribirte, recibirás análisis en tiempo real y podrás tomar decisiones más informadas. 🧠💡\n\n"
         "Para comenzar, simplemente selecciona una temporalidad para suscribirte o desuscribirte utilizando los botones a continuación. ¡Empecemos! ⚡"
-    ).format(name=user.first_name)
+    )
 
-    await update.message.reply_text(welcome_message)
-    await show_subscription_button(update)
-
-async def show_subscription_button(update: Update):
-    keyboard = [
-        [InlineKeyboardButton("Suscripción", callback_data='suscripcion')]
-    ]
+    keyboard = [[InlineKeyboardButton("Suscripción", callback_data='suscripcion')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(welcome_message)
     await update.message.reply_text("Selecciona una opción:", reply_markup=reply_markup)
 
-async def show_temporalidades(update: Update, context: CallbackContext):
+async def show_temporalidades(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat_id = query.message.chat_id
     
@@ -99,7 +94,7 @@ async def show_temporalidades(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
 
-async def button(update: Update, context: CallbackContext):
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat_id = query.message.chat_id
     data = query.data
@@ -142,7 +137,7 @@ async def button(update: Update, context: CallbackContext):
     conn.close()
     await show_temporalidades(update, context)
 
-async def handle_candle_closure(bot: telegram.Bot):
+async def handle_candle_closure(context: ContextTypes.DEFAULT_TYPE):
     while True:
         now = datetime.now()
         if now.minute == 0:
@@ -161,8 +156,8 @@ async def handle_candle_closure(bot: telegram.Bot):
                             message += "Análisis de 4 horas disponible.\n"
                         
                         try:
-                            await bot.send_message(chat_id=chat_id, text=message)
-                        except telegram.error.TelegramError as e:
+                            await context.bot.send_message(chat_id=chat_id, text=message)
+                        except Exception as e:
                             print(f"Error al enviar mensaje a {chat_id}: {e}")
 
         await asyncio.sleep(60)
@@ -175,10 +170,8 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
     
-    await application.initialize()
-    
-    # Iniciar el bucle de manejo de cierre de velas en segundo plano
-    asyncio.create_task(handle_candle_closure(application.bot))
+    # Iniciar el bucle de manejo de cierre de velas como una tarea de fondo
+    application.job_queue.run_repeating(handle_candle_closure, interval=60)
     
     # Iniciar el bot
     await application.run_polling(allowed_updates=Update.ALL_TYPES)
