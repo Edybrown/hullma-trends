@@ -201,7 +201,7 @@ async def main():
     check_initial_reports()
     print("[INFO] Bot configurado. Iniciando el bot.")
 
-    application = Application.builder().token(telegram_token).build()
+    application = Application.builder().token(bot_token).build()
 
     # Agregar handlers DENTRO del bloque async with y DESPUÉS de application.initialize()
     async with application:
