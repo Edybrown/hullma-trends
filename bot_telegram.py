@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
+import telegram 
 
 reports_dir = "Analisis_trading"
 last_report_file = 'last_report.txt'
@@ -211,32 +211,31 @@ async def send_report(chat_id, temporalidad, bot):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     try:
         if os.path.exists(report_path):
-            with open(report_path, 'r', encoding='utf-8') as file: #Especificar encoding
+            with open(report_path, 'r', encoding='utf-8') as file:
                 report_content = file.read()
-            
-            messages = split_string(report_content) #divide el mensaje si es muy largo
+            messages = split_string(report_content)
             for message in messages:
-                await bot.send_message(chat_id=chat_id, text=message, parse_mode=telegram.constants.ParseMode.MARKDOWN) #parseo markdown
+                await bot.send_message(chat_id=chat_id, text=message, parse_mode=telegram.constants.ParseMode.MARKDOWN)
             print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
         else:
             await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
             print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
-    except telegram.error.TelegramError as e: #captura errores especificos de telegram
+    except telegram.error.TelegramError as e:
         print(f"[ERROR Telegram] Error al enviar informe {temporalidad} a {chat_id}: {e}")
-        if e.message == "Too Many Requests":  # Manejo de rate limits
-            await asyncio.sleep(60) # Espera 1 minuto
-            await send_report(chat_id, temporalidad, bot) # reintenta el envio
+        if e.message == "Too Many Requests":
+            await asyncio.sleep(60)
+            await send_report(chat_id, temporalidad, bot)
         else:
-             try:
+            try:
                 await bot.send_message(chat_id, text=f"Hubo un error al procesar el informe de {temporalidad}. {e.message}")
-             except Exception as e2:
+            except Exception as e2:
                 print(f"[CRITICAL] Fallo al enviar mensaje de error a {chat_id}: {e2}")
-    except Exception as e:  # Captura cualquier otra excepción
+    except Exception as e:
         print(f"[ERROR General] Error al enviar informe {temporalidad} a {chat_id}: {e}")
         try:
-                await bot.send_message(chat_id, text=f"Hubo un error al procesar el informe de {temporalidad}.")
+            await bot.send_message(chat_id, text=f"Hubo un error al procesar el informe de {temporalidad}.")
         except Exception as e2:
-                print(f"[CRITICAL] Fallo al enviar mensaje de error a {chat_id}: {e2}")
+            print(f"[CRITICAL] Fallo al enviar mensaje de error a {chat_id}: {e2}")
 
 
 # Revisa y envía los informes según las suscripciones
