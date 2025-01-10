@@ -217,15 +217,12 @@ def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Usar el bucle de eventos manejado por `asyncio.run`
-    async def run():
-        # Crear una tarea para manejar el cierre de velas
-        asyncio.create_task(handle_candle_closure(application.bot))
-        # Ejecutar el bot con `run_polling` (esto bloquea el bucle principal)
-        await application.run_polling()
+   
 
+    # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
-    asyncio.run(run())
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
+    get_all_user_subscriptions():
