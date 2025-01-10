@@ -72,7 +72,7 @@ async def get_time_to_close():
     return remaining_time
 
 async def send_report(chat_id, temporalidad, bot):
-    """Sends the corresponding report for the timeframe."""
+    """Envía el informe correspondiente para la temporalidad."""
     report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
     
     try:
@@ -80,15 +80,18 @@ async def send_report(chat_id, temporalidad, bot):
             with open(report_path, 'r', encoding='utf-8') as file:
                 report_content = file.read()
             await bot.send_message(chat_id=chat_id, text=report_content)
-            logger.info(f"Report for {temporalidad} sent to chat_id: {chat_id}.")
+            logger.info(f"Informe de {temporalidad} enviado al chat_id: {chat_id}.")
         else:
-            await bot.send_message(chat_id, text=f"The report for {temporalidad} is not available.")
-            logger.warning(f"Report for {temporalidad} not found for chat_id: {chat_id}.")
+            await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
+            logger.warning(f"Informe de {temporalidad} no encontrado para el chat_id: {chat_id}.")
     except TelegramError as e:
-        logger.error(f"Telegram error sending report {temporalidad} to {chat_id}: {e}")
+        if "HTTPXRequest is not initialized" in str(e):
+            logger.warning(f"El bot se está cerrando. Se omite el envío del informe de {temporalidad} al {chat_id}.")
+        else:
+            logger.error(f"Error de Telegram al enviar el informe {temporalidad} al {chat_id}: {e}")
     except Exception as e:
-        logger.error(f"Error sending report {temporalidad} to {chat_id}: {e}")
-
+        logger.error(f"Error al enviar el informe {temporalidad} al {chat_id}: {e}")
+        
 async def check_and_send_reports(chat_id, suscripciones, bot, last_mod_times):
     """Sends reports to a user based on their subscriptions."""
     for temporalidad in reversed(TEMPORALIDADES):
@@ -106,27 +109,35 @@ async def send_reports_to_all_users(bot, last_mod_times):
         await check_and_send_reports(chat_id, suscripciones, bot, last_mod_times)
 
 async def handle_candle_closure(bot):
-    """Handles the candle closure cycle."""
+    """Maneja el ciclo de cierre de velas."""
     last_mod_times = {}
     while True:
         try:
-            logger.info("Starting candle closure cycle.")
+            logger.info("Iniciando ciclo de cierre de vela.")
             
             await send_reports_to_all_users(bot, last_mod_times)
             
             time_to_close = await get_time_to_close()
             
             for retry in range(MAX_RETRIES):
-                logger.info(f"Attempt {retry + 1} of {MAX_RETRIES}.")
-                await asyncio.sleep(RETRY_INTERVAL)
+                logger.info(f"Intento {retry + 1} de {MAX_RETRIES}.")
+                try:
+                    await asyncio.sleep(RETRY_INTERVAL)
+                except asyncio.CancelledError:
+                    logger.info("Manejo de cierre de vela interrumpido.")
+                    return
                 await send_reports_to_all_users(bot, last_mod_times)
 
-            logger.info("No updates detected. Calculating next candle closure.")
+            logger.info("No se detectaron actualizaciones. Calculando próximo cierre de vela.")
             time_to_close = await get_time_to_close()
-            await asyncio.sleep(time_to_close)
+            try:
+                await asyncio.sleep(time_to_close)
+            except asyncio.CancelledError:
+                logger.info("Manejo de cierre de vela interrumpido.")
+                return
         except Exception as e:
-            logger.error(f"Error in candle closure cycle: {e}")
-            await asyncio.sleep(60)  # Wait a minute before retrying
+            logger.error(f"Error en el ciclo de cierre de vela: {e}")
+            await asyncio.sleep(60)  # Esperar un minuto antes de reintentar
 
 async def get_all_user_subscriptions():
     """Gets a dictionary with all user subscriptions."""
@@ -142,55 +153,49 @@ async def get_all_user_subscriptions():
 
 async def main():
     try:
-        # Create database if it doesn't exist
+        # Crear la base de datos si no existe
         await create_db()
         
-        # Verify initial reports
+        # Verificar los informes iniciales
         await check_initial_reports()
 
-        # Configure the bot
+        # Configurar el bot
         bot_token = os.getenv('TELEGRAM_TOKEN')
         if not bot_token:
-            raise ValueError("TELEGRAM_TOKEN environment variable is not set")
+            raise ValueError("La variable de entorno TELEGRAM_TOKEN no está configurada")
         
         application = Application.builder().token(bot_token).build()
         
-        # Initialize the application
+        # Inicializar la aplicación
         await application.initialize()
         
-        # Start the candle closure handling
+        # Iniciar el manejo del cierre de velas
         candle_closure_task = asyncio.create_task(handle_candle_closure(application.bot))
         
-        # Start polling
+        # Iniciar la aplicación
         await application.start()
-        await application.updater.start_polling()
         
-        # Run the bot until you press Ctrl-C
-        await application.run_polling(stop_signals=None)
+        # Ejecutar el bot hasta que se presione Ctrl-C
+        await application.run_polling(allowed_updates=Update.ALL_TYPES)
     except Exception as e:
-        logger.critical(f"Critical error in main function: {e}")
+        logger.critical(f"Error crítico en la función principal: {e}")
     finally:
-        # Ensure proper shutdown
+        # Asegurar el cierre adecuado
         if 'application' in locals():
             await application.stop()
             await application.shutdown()
         
-        # Cancel any running tasks
+        # Cancelar todas las tareas en ejecución
         for task in asyncio.all_tasks():
-            task.cancel()
+            if task is not asyncio.current_task():
+                task.cancel()
         
-        # Wait for all tasks to complete
+        # Esperar a que todas las tareas se completen
         await asyncio.gather(*asyncio.all_tasks(), return_exceptions=True)
-
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Bot stopped by user.")
+        print("Bot detenido por el usuario.")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    finally:
-        # Ensure the event loop is closed
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
+        print(f"Ocurrió un error inesperado: {e}")        
