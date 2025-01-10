@@ -1,10 +1,12 @@
+import asyncio
 import os
 import sqlite3
+from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from datetime import datetime
-import asyncio
+import aiosqlite
+
 
 # Cargar variables de entorno
 load_dotenv()
@@ -136,46 +138,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     conn.close()
     await show_temporalidades(update, context)
-async def handle_candle_closure(application: Application):
-    """Maneja el cierre de velas y envía notificaciones."""
-    while True:
-        now = datetime.now()
-        if now.minute == 0:
-            print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Iniciando proceso de cierre de vela...")
-            try:
-                with sqlite3.connect('usuarios_telegram.db') as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT chat_id, suscripciones FROM usuarios")
-                    users = cursor.fetchall()
-                    for chat_id, suscripciones_str in users:
-                        if suscripciones_str:
-                            suscripciones = suscripciones_str.split(',')
-                            message = f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Análisis de cierre de vela:\n"
-                            if "1h" in suscripciones:
-                                message += "Análisis de 1 hora disponible.\n"
-                                # Aquí: Lógica para obtener el análisis de 1h
-                                # message += obtener_analisis_1h()
-                            if "4h" in suscripciones:
-                                message += "Análisis de 4 horas disponible.\n"
-                                # Aquí: Lógica para obtener el análisis de 4h
-                                # message += obtener_analisis_4h()
-                            if "15m" in suscripciones:
-                                message += "Análisis de 15 minutos disponible.\n"
-                            if "1d" in suscripciones:
-                                message += "Análisis diario disponible.\n"
-                            try:
-                                await application.bot.send_message(chat_id=chat_id, text=message)
-                                print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Mensaje enviado a {chat_id}")
-                            except Exception as e:
-                                print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Error al enviar mensaje a {chat_id}: {e}")
-                        else:
-                            print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Usuario {chat_id} sin suscripciones.")
-            except sqlite3.Error as e:
-                print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Error al acceder a la base de datos: {e}")
-            print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Proceso de cierre de vela completado.")
-            await asyncio.sleep(60 * 60) # Espera una hora
-        else:
-            await asyncio.sleep(60) # Espera un minuto
+
 
 async def main():
     create_db()
