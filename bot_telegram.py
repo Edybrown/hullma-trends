@@ -93,6 +93,47 @@ async def show_subscription_button(update: Update):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Selecciona una opción:", reply_markup=reply_markup)
 
+async def check_initial_reports():
+    """Verifies that the reports for all timeframes exist."""
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    
+    for temporalidad in TEMPORALIDADES:
+        report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
+        if os.path.exists(report_path):
+            logger.info(f"File found: {report_path}")
+        else:
+            logger.error(f"Missing file: {report_path}")
+            raise FileNotFoundError(f"The report file for timeframe '{temporalidad}' does not exist.")
+
+
+async def handle_candle_closure(bot, last_mod_times):
+    """Maneja el cierre de las velas y envía los informes a los usuarios suscritos."""
+    # Verificar el cierre de la vela y el tiempo de cierre
+    remaining_time = await get_time_to_close()
+
+    # Esperar hasta el cierre de la vela
+    await asyncio.sleep(remaining_time)
+
+    # Verificar los informes de todas las temporalidades
+    for temporalidad in TEMPORALIDADES:
+        report_file = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
+        if await is_report_updated(report_file, last_mod_times):
+            # Obtener todos los usuarios suscritos a esta temporalidad
+            users = await get_users()
+
+            # Recorrer cada usuario y enviar el informe si está suscrito
+            for user in users:
+                chat_id = user[1]
+                suscripciones = user[3].split(',') if user[3] else []
+
+                if temporalidad in suscripciones:
+                    try:
+                        await send_report(chat_id, temporalidad, bot)
+                    except TelegramError as e:
+                        logger.error(f"Error sending message to user {chat_id}: {e}")
+
+
+
 # Función para mostrar las temporalidades disponibles
 async def show_temporalidades(update: Update, context: CallbackContext):
     chat_id = update.callback_query.message.chat_id  # Cambiado de update.message a update.callback_query.message
