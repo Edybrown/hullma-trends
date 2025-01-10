@@ -1,89 +1,72 @@
 import os
-import asyncio
-import logging
-from datetime import datetime, timedelta
-import aiosqlite
+import sqlite3
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
-from telegram.error import TelegramError
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
+from datetime import datetime
+import os
+import time
+from datetime import datetime, timedelta
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import telegram 
 
-# Configuración
+reports_dir = "Analisis_trading"
+last_report_file = 'last_report.txt'
+
+# Cargar variables de entorno
 load_dotenv()
-REPORTS_DIR = "Analisis_trading"
-TEMPORALIDADES = ['15m', '1h', '4h', '1d']
-MAX_RETRIES = 3
-RETRY_INTERVAL = 5
-DB_NAME = 'usuarios_telegram.db'
+bot_token = os.getenv('TELEGRAM_TOKEN')
 
-# Configuración del logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Configuración del bot
+application = Application.builder().token(bot_token).build()
 
-# Función para crear la base de datos de usuarios
-async def create_db():
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            await db.execute('''
-                CREATE TABLE IF NOT EXISTS usuarios (
-                    id INTEGER PRIMARY KEY,
-                    chat_id INTEGER UNIQUE,
-                    nombre TEXT,
-                    suscripciones TEXT,
-                    suscripcion_tipo TEXT,
-                    suscripcion_fecha TIMESTAMP,
-                    fecha_ultima_actividad TIMESTAMP
-                )
-            ''')
-            await db.commit()
-        logger.info("Base de datos creada o ya existente.")
-    except Exception as e:
-        logger.error(f"Error al crear la base de datos: {e}")
-        raise
+# Conexión a la base de datos SQLite
+def create_db():
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY,
+            chat_id INTEGER UNIQUE,
+            nombre TEXT,
+            suscripciones TEXT,
+            suscripcion_tipo TEXT,
+            suscripcion_fecha TIMESTAMP,
+            fecha_ultima_actividad TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# Función para guardar a un usuario en la base de datos
-async def save_user(chat_id, nombre):
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            cursor = await db.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,))
-            user = await cursor.fetchone()
-            if not user:
-                current_time = datetime.now().isoformat()
-                await db.execute(
-                    "INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, ?, ?, ?, ?)",
-                    (chat_id, nombre, '', current_time, 'Ninguna', current_time)
-                )
-                await db.commit()
-    except Exception as e:
-        logger.error(f"Error al guardar usuario: {e}")
+# Función para guardar un nuevo usuario
+def save_user(chat_id, nombre):
+    with sqlite3.connect('usuarios_telegram.db') as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,))
+        user = c.fetchone()
+        
+        if not user:
+            current_time = datetime.now().isoformat()
+            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?, ?)", 
+                      (chat_id, nombre, current_time, 'Ninguna', current_time))
+            conn.commit()
 
-# Función para obtener las suscripciones de un usuario
-async def get_user_subscriptions(chat_id):
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            cursor = await db.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
-            suscripciones_data = await cursor.fetchone()
-            return suscripciones_data[0].split(',') if suscripciones_data and suscripciones_data[0] else []
-    except Exception as e:
-        logger.error(f"Error al obtener suscripciones del usuario: {e}")
-        return []
-
-# Función para obtener las suscripciones de todos los usuarios
-async def get_all_user_subscriptions():
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            cursor = await db.execute("SELECT chat_id, suscripciones FROM usuarios")
-            subscriptions_data = await cursor.fetchall()
-        return {chat_id: suscripciones.split(',') if suscripciones else [] for chat_id, suscripciones in subscriptions_data}
-    except Exception as e:
-        logger.error(f"Error al obtener suscripciones de usuarios: {e}")
-        return {}
+# Función para obtener la lista de usuarios
+def get_users():
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM usuarios")
+    users = c.fetchall()
+    conn.close()
+    return users
 
 # Comando /start
-async def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
-    await save_user(update.message.chat_id, user.first_name)
-
+    save_user(update.message.chat_id, user.first_name)
+    
+    # Mensaje de bienvenida mejorado
     welcome_message = (
         "¡Hola, {name}! 👋\n\n"
         "¡Bienvenido a tu asistente de análisis de tendencias de trading! 🚀\n\n"
@@ -103,7 +86,8 @@ async def start(update: Update, context: CallbackContext):
     # Llamar a la función para mostrar los botones fijos
     await show_subscription_button(update)
 
-# Función para mostrar los botones de suscripción fijos
+
+# Función para mostrar botones de suscripción fijos
 async def show_subscription_button(update: Update):
     keyboard = [
         [InlineKeyboardButton("Suscripción", callback_data='suscripcion')]
@@ -113,21 +97,35 @@ async def show_subscription_button(update: Update):
 
 # Función para mostrar las temporalidades disponibles
 async def show_temporalidades(update: Update, context: CallbackContext):
-    chat_id = update.callback_query.message.chat_id
-    suscripciones = await get_user_subscriptions(chat_id)
-
-    if suscripciones is None or suscripciones == ['']:
+    chat_id = update.callback_query.message.chat_id  # Cambiado de update.message a update.callback_query.message
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+    c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
+    suscripciones = c.fetchone()
+    
+    if suscripciones:
+        suscripciones = suscripciones[0].split(',')
+    else:
         suscripciones = []
 
+    # Crear el teclado según las suscripciones actuales
     keyboard = []
+    
+    # Agregar botones para las temporalidades disponibles
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
-        button_text = f"{'Desuscribirse' if temporalidad in suscripciones else 'Suscribirse'} {temporalidad}"
-        callback_data = f"{'desuscribir' if temporalidad in suscripciones else 'suscribir'}_{temporalidad}"
+        if temporalidad in suscripciones:
+            button_text = f"Desuscribirse {temporalidad}"
+            callback_data = f"desuscribir_{temporalidad}"
+        else:
+            button_text = f"Suscribirse {temporalidad}"
+            callback_data = f"suscribir_{temporalidad}"
+        
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
+
 
 # Función para manejar las acciones de suscripción y desuscripción
 async def button(update: Update, context: CallbackContext):
@@ -135,87 +133,57 @@ async def button(update: Update, context: CallbackContext):
     chat_id = query.message.chat_id
     data = query.data
 
-    try:
-        async with aiosqlite.connect(DB_NAME) as db:
-            suscripciones = await get_user_subscriptions(chat_id)
-            if suscripciones is None or suscripciones == ['']:
-                suscripciones = []
+    conn = sqlite3.connect('usuarios_telegram.db')
+    c = conn.cursor()
+    c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
+    suscripciones = c.fetchone()
 
-            accion, temporalidad = data.split('_', 1)
+    if suscripciones:
+        suscripciones = suscripciones[0].split(',')
+    else:
+        suscripciones = []
 
-            if accion == 'suscribir':
-                if temporalidad not in suscripciones:
-                    suscripciones.append(temporalidad)
-                    await query.answer(f"Te has suscrito a {temporalidad}.")
-                else:
-                    await query.answer(f"Ya estás suscrito a {temporalidad}.")
-            elif accion == 'desuscribir':
-                if temporalidad in suscripciones:
-                    suscripciones.remove(temporalidad)
-                    await query.answer(f"Te has desuscrito de {temporalidad}.")
-                else:
-                    await query.answer(f"No estás suscrito a {temporalidad}.")
-
-            await db.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?", (','.join(suscripciones), chat_id))
-            await db.commit()
-    except Exception as e:
-        logger.error(f"Error al manejar el botón: {e}")
-        await query.answer("Ocurrió un error.")
-        return
-
-    await show_temporalidades(update, context)
-
-# Función para enviar el informe de la temporalidad
-async def send_report(chat_id, temporalidad, bot):
-    report_path = os.path.join(REPORTS_DIR, f"report_{temporalidad}.md")
-    try:
-        if os.path.exists(report_path):
-            with open(report_path, 'r', encoding='utf-8') as file:
-                report_content = file.read()
-            await bot.send_message(chat_id=chat_id, text=report_content)
-            logger.info(f"Informe de {temporalidad} enviado al chat_id: {chat_id}.")
+    # Gestionar las suscripciones
+    if data.startswith('suscribir'):
+        temporalidad = data.split('_')[1]
+        if temporalidad not in suscripciones:
+            suscripciones.append(temporalidad)
+            c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
+                      (','.join(suscripciones), chat_id))
+            conn.commit()
+            await query.answer(f"Te has suscrito a la temporalidad {temporalidad}.")
         else:
-            logger.warning(f"Informe de {temporalidad} no encontrado para el chat_id: {chat_id}.")
-            await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
-    except TelegramError as e:
-        logger.error(f"Error de Telegram al enviar el informe {temporalidad} a {chat_id}: {e}")
-    except Exception as e:
-        logger.error(f"Error al enviar el informe {temporalidad} a {chat_id}: {e}")
+            await query.answer(f"Ya estás suscrito a la temporalidad {temporalidad}.")
+    elif data.startswith('desuscribir'):
+        temporalidad = data.split('_')[1]
+        if temporalidad in suscripciones:
+            suscripciones.remove(temporalidad)
+            c.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?",
+                      (','.join(suscripciones), chat_id))
+            conn.commit()
+            await query.answer(f"Te has desuscrito de la temporalidad {temporalidad}.")
+        else:
+            await query.answer(f"No estás suscrito a la temporalidad {temporalidad}.")
 
-# Función principal para ejecutar el bot
+    # Actualizar los botones con las nuevas suscripciones
+    await show_temporalidades(update, context)
+# logica del bot ----------------------------------------------------------------------------------------------------
+
+
+# Modificar la función main
 async def main():
-    application = None
-    try:
-        await create_db()
+    create_db()
+    check_initial_reports()
 
-        bot_token = os.getenv('TELEGRAM_TOKEN')
-        if not bot_token:
-            raise ValueError("La variable de entorno TELEGRAM_TOKEN no está configurada")
+    global application  # Make application accessible globally
 
-        application = Application.builder().token(bot_token).build()
+    application = Application.builder().token(bot_token).build()
 
-        # Añadir handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CallbackQueryHandler(button))
-        application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))  # Patrón para el botón principal
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
 
-        await application.run_polling(allowed_updates=Update.ALL_TYPES) # Con paréntesis
-        await application.idle()
+    asyncio.create_task(handle_candle_closure(application.bot))  # Run in background
 
-    except Exception as e:
-        logger.critical(f"Error crítico en la función principal: {e}")
-    finally:
-        if application:
-            try:
-                await application.stop()
-                await application.shutdown()
-            except Exception as e:
-                logger.error(f"Error al detener la aplicación: {e}")
-    
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Bot detenido por el usuario.")
-    except Exception as e:
-        print(f"Ocurrió un error inesperado: {e}")
+    asyncio.run(main())
