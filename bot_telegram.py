@@ -203,7 +203,7 @@ def main():
     print("[INFO] Configurando el bot...")
     asyncio.run(create_db())  # Sincronización de la base de datos
     check_initial_reports()  # Verificar informes iniciales
-    await get_all_user_subscriptions()
+    await handle_candle_closure()
     # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
