@@ -160,7 +160,7 @@ async def send_reports_to_all_users(bot):
     for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-def handle_candle_closure(bot):
+def handle_candle_closure():
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
         check_and_send_reports(bot)  # Llama a la función de forma síncrona
