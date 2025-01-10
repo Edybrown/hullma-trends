@@ -201,7 +201,14 @@ async def main():
     check_initial_reports()  # Verificación de informes iniciales
     print("[INFO] Bot configurado. Iniciando el bot.")
 
-    # Crea la aplicación del bot
+    # Obtener el token desde la variable de entorno
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    
+    if not bot_token:
+        print("[ERROR] El token del bot no está configurado en las variables de entorno.")
+        return
+
+    # Crea la aplicación del bot usando el token de la variable de entorno
     application = ApplicationBuilder().token(bot_token).build()
 
     # Agrega los handlers (manejadores) de los comandos
@@ -209,10 +216,10 @@ async def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Inicializa la aplicación y comienza el polling
+    # Inicializa la aplicación
     await application.initialize()
 
-    # Inicia el polling
+    # Inicia el polling (cambia a run_polling en lugar de start_polling)
     await application.run_polling()
 
     # Cuando sea necesario detener el bot, lo harás así:
@@ -220,4 +227,5 @@ async def main():
     await application.shutdown()  # Cierra la aplicación correctamente
 
 if __name__ == '__main__':
-    asyncio.run(main())  # Ejecuta el programa pr
+    # Aquí eliminamos asyncio.run y solo ejecutamos el ciclo de eventos directamente
+    main()  # Ejecuta el programa principal directamente
