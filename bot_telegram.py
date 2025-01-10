@@ -168,14 +168,47 @@ async def button(update: Update, context: CallbackContext):
     # Actualizar los botones con las nuevas suscripciones
     await show_temporalidades(update, context)
 # logica del bot ----------------------------------------------------------------------------------------------------
+def check_initial_reports():
+    """Verifica y procesa los reportes iniciales al iniciar el bot."""
+    # Implementa la lógica para manejar los reportes iniciales aquí.
+    pass # Este 'pass' es solo un marcador de posición. Debes quitarlo.
 
 
-# Modificar la función main
+async def handle_candle_closure(bot: telegram.Bot):
+    """Maneja el cierre de velas y envía notificaciones (Ejemplo)."""
+    while True:
+        now = datetime.now()
+        # Ejemplo: Enviar un mensaje cada hora (ajusta según necesidad)
+        if now.minute == 0:  # Al inicio de cada hora
+            with sqlite3.connect('usuarios_telegram.db') as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT chat_id, suscripciones FROM usuarios")
+                users = cursor.fetchall()
+
+                for chat_id, suscripciones_str in users:
+                    suscripciones = suscripciones_str.split(',') if suscripciones_str else []
+
+                    # Ejemplo de mensaje (debes generar tu propio mensaje de análisis)
+                    message = f"Análisis de cierre de vela ({now.strftime('%H:%M')})\n"
+                    if "1h" in suscripciones:
+                        message += "Análisis de 1 hora disponible.\n"
+                    if "4h" in suscripciones:
+                        message += "Análisis de 4 horas disponible.\n"
+                    # ... otros análisis según suscripciones
+                    try:
+                        await bot.send_message(chat_id=chat_id, text=message)
+                        print(f"Mensaje enviado a {chat_id}")
+                    except telegram.error.TelegramError as e:
+                        print(f"Error al enviar mensaje a {chat_id}: {e}")
+
+            await asyncio.sleep(60 * 60)  # Espera una hora (3600 segundos)
+        else:
+            await asyncio.sleep(60) # espera 1 minuto
+
+
 async def main():
     create_db()
-    check_initial_reports()
-
-    global application  # Make application accessible globally
+    check_initial_reports() # Llamar a la función para verificar reportes iniciales
 
     application = Application.builder().token(bot_token).build()
 
@@ -183,7 +216,15 @@ async def main():
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
 
-    asyncio.create_task(handle_candle_closure(application.bot))  # Run in background
+    # Iniciar el bucle de manejo de cierre de velas en segundo plano.
+    asyncio.create_task(handle_candle_closure(application.bot))
+
+    # Iniciar el bot.
+    await application.initialize() # Inicializar el bot
+    await application.start_polling()
+    await application.idle()
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
