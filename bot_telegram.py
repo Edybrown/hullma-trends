@@ -201,7 +201,7 @@ async def main():
     check_initial_reports()
     print("[INFO] Bot configurado. Iniciando el bot.")
 
-    application = Application.builder().token(bot_token).build()
+    application = Application.builder().token(telegram_token).build()
 
     # Agregar handlers DENTRO del bloque async with y DESPUÉS de application.initialize()
     async with application:
@@ -211,9 +211,7 @@ async def main():
         application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
         application.add_handler(CallbackQueryHandler(button))
 
-        await application.start()
-        await application.run_polling()
-        await application.stop()
+     await application.start() # Iniciar el bot (ahora sí necesario)
+        await application.updater.idle() # Mantener el bot en ejecución
 
 if __name__ == '__main__':
-    asyncio.run(main())
