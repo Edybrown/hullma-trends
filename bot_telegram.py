@@ -202,7 +202,7 @@ async def main():
     print("[INFO] Bot configurado. Iniciando el bot.")
 
     # Crea la aplicación del bot
-    application = ApplicationBuilder().token("YOUR_BOT_TOKEN").build()
+    application = ApplicationBuilder().token(bot_token).build()
 
     # Agrega los handlers (manejadores) de los comandos
     application.add_handler(CommandHandler("start", start))
