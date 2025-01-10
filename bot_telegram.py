@@ -202,7 +202,7 @@ async def main():
     print("[INFO] Bot configurado. Iniciando el bot.")
 
     # Obtener el token desde la variable de entorno
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    bot_token = os.getenv("TELEGRAM_TOKEN")
     
     if not bot_token:
         print("[ERROR] El token del bot no está configurado en las variables de entorno.")
