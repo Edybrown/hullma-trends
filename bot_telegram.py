@@ -262,9 +262,7 @@ async def main():
         await application.start_polling(allowed_updates=Update.ALL_TYPES) # Con paréntesis
         await application.idle()
 
-        await application.start_polling(allowed_updates=Update.ALL_TYPES)
-        await application.idle()  # Mantener el bot en ejecución
-
+      
     except Exception as e:
         logger.critical(f"Error crítico en la función principal: {e}")
     finally:
