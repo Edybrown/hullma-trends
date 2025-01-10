@@ -4,9 +4,6 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
 from datetime import datetime
-import os
-import time
-from datetime import datetime, timedelta
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import telegram 
@@ -17,9 +14,6 @@ last_report_file = 'last_report.txt'
 # Cargar variables de entorno
 load_dotenv()
 bot_token = os.getenv('TELEGRAM_TOKEN')
-
-# Configuración del bot
-application = Application.builder().token(bot_token).build()
 
 # Conexión a la base de datos SQLite
 def create_db():
@@ -48,25 +42,15 @@ def save_user(chat_id, nombre):
         
         if not user:
             current_time = datetime.now().isoformat()
-            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?, ?)", 
-                      (chat_id, nombre, current_time, 'Ninguna', current_time))
+            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, ?, ?, ?, ?)", 
+                      (chat_id, nombre, '', current_time, 'Ninguna', current_time))
             conn.commit()
-
-# Función para obtener la lista de usuarios
-def get_users():
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM usuarios")
-    users = c.fetchall()
-    conn.close()
-    return users
 
 # Comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     save_user(update.message.chat_id, user.first_name)
     
-    # Mensaje de bienvenida mejorado
     welcome_message = (
         "¡Hola, {name}! 👋\n\n"
         "¡Bienvenido a tu asistente de análisis de tendencias de trading! 🚀\n\n"
@@ -80,14 +64,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Para comenzar, simplemente selecciona una temporalidad para suscribirte o desuscribirte utilizando los botones a continuación. ¡Empecemos! ⚡"
     ).format(name=user.first_name)
 
-    # Mostrar mensaje de bienvenida
     await update.message.reply_text(welcome_message)
-
-    # Llamar a la función para mostrar los botones fijos
     await show_subscription_button(update)
 
-
-# Función para mostrar botones de suscripción fijos
 async def show_subscription_button(update: Update):
     keyboard = [
         [InlineKeyboardButton("Suscripción", callback_data='suscripcion')]
@@ -95,23 +74,21 @@ async def show_subscription_button(update: Update):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Selecciona una opción:", reply_markup=reply_markup)
 
-# Función para mostrar las temporalidades disponibles
 async def show_temporalidades(update: Update, context: CallbackContext):
-    chat_id = update.callback_query.message.chat_id  # Cambiado de update.message a update.callback_query.message
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
     c.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,))
     suscripciones = c.fetchone()
     
     if suscripciones:
-        suscripciones = suscripciones[0].split(',')
+        suscripciones = suscripciones[0].split(',') if suscripciones[0] else []
     else:
         suscripciones = []
 
-    # Crear el teclado según las suscripciones actuales
     keyboard = []
-    
-    # Agregar botones para las temporalidades disponibles
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
         if temporalidad in suscripciones:
@@ -124,14 +101,16 @@ async def show_temporalidades(update: Update, context: CallbackContext):
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
+    await query.message.reply_text('Selecciona una temporalidad para suscribirte o desuscribirte:', reply_markup=reply_markup)
 
-
-# Función para manejar las acciones de suscripción y desuscripción
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
     chat_id = query.message.chat_id
     data = query.data
+
+    if data == 'suscripcion':
+        await show_temporalidades(update, context)
+        return
 
     conn = sqlite3.connect('usuarios_telegram.db')
     c = conn.cursor()
@@ -139,11 +118,10 @@ async def button(update: Update, context: CallbackContext):
     suscripciones = c.fetchone()
 
     if suscripciones:
-        suscripciones = suscripciones[0].split(',')
+        suscripciones = suscripciones[0].split(',') if suscripciones[0] else []
     else:
         suscripciones = []
 
-    # Gestionar las suscripciones
     if data.startswith('suscribir'):
         temporalidad = data.split('_')[1]
         if temporalidad not in suscripciones:
@@ -165,66 +143,49 @@ async def button(update: Update, context: CallbackContext):
         else:
             await query.answer(f"No estás suscrito a la temporalidad {temporalidad}.")
 
-    # Actualizar los botones con las nuevas suscripciones
+    conn.close()
     await show_temporalidades(update, context)
-# logica del bot ----------------------------------------------------------------------------------------------------
-def check_initial_reports():
-    """Verifica y procesa los reportes iniciales al iniciar el bot."""
-    # Implementa la lógica para manejar los reportes iniciales aquí.
-    pass # Este 'pass' es solo un marcador de posición. Debes quitarlo.
-
 
 async def handle_candle_closure(bot: telegram.Bot):
-    """Maneja el cierre de velas y envía notificaciones (Ejemplo)."""
     while True:
         now = datetime.now()
-        # Ejemplo: Enviar un mensaje cada hora (ajusta según necesidad)
-        if now.minute == 0:  # Al inicio de cada hora
+        if now.minute == 0:
             with sqlite3.connect('usuarios_telegram.db') as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT chat_id, suscripciones FROM usuarios")
                 users = cursor.fetchall()
 
                 for chat_id, suscripciones_str in users:
-                    suscripciones = suscripciones_str.split(',') if suscripciones_str else []
+                    if suscripciones_str:
+                        suscripciones = suscripciones_str.split(',')
+                        message = f"Análisis de cierre de vela ({now.strftime('%H:%M')})\n"
+                        if "1h" in suscripciones:
+                            message += "Análisis de 1 hora disponible.\n"
+                        if "4h" in suscripciones:
+                            message += "Análisis de 4 horas disponible.\n"
+                        
+                        try:
+                            await bot.send_message(chat_id=chat_id, text=message)
+                        except telegram.error.TelegramError as e:
+                            print(f"Error al enviar mensaje a {chat_id}: {e}")
 
-                    # Ejemplo de mensaje (debes generar tu propio mensaje de análisis)
-                    message = f"Análisis de cierre de vela ({now.strftime('%H:%M')})\n"
-                    if "1h" in suscripciones:
-                        message += "Análisis de 1 hora disponible.\n"
-                    if "4h" in suscripciones:
-                        message += "Análisis de 4 horas disponible.\n"
-                    # ... otros análisis según suscripciones
-                    try:
-                        await bot.send_message(chat_id=chat_id, text=message)
-                        print(f"Mensaje enviado a {chat_id}")
-                    except telegram.error.TelegramError as e:
-                        print(f"Error al enviar mensaje a {chat_id}: {e}")
-
-            await asyncio.sleep(60 * 60)  # Espera una hora (3600 segundos)
-        else:
-            await asyncio.sleep(60) # espera 1 minuto
-
+        await asyncio.sleep(60)
 
 async def main():
     create_db()
-    check_initial_reports() # Llamar a la función para verificar reportes iniciales
-
+    
     application = Application.builder().token(bot_token).build()
-
+    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
-    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
-
-    # Iniciar el bucle de manejo de cierre de velas en segundo plano.
+    
+    await application.initialize()
+    
+    # Iniciar el bucle de manejo de cierre de velas en segundo plano
     asyncio.create_task(handle_candle_closure(application.bot))
-
-    # Iniciar el bot.
-    await application.initialize() # Inicializar el bot
-    await application.start_polling()
-    await application.idle()
+    
+    # Iniciar el bot
+    await application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
