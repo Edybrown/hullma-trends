@@ -134,7 +134,7 @@ def get_time_to_close():
     return remaining_time
 
 
-sync def get_all_user_subscriptions():
+async def get_all_user_subscriptions():
     try:
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
             async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
