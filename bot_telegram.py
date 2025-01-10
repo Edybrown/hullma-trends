@@ -213,7 +213,7 @@ async def main():
     await application.initialize()
 
     # Inicia el polling
-    await application.start_polling()
+    await application.run_polling()
 
     # Cuando sea necesario detener el bot, lo harás así:
     await application.stop()  # Detiene el bot
