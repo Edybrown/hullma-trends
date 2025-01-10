@@ -77,9 +77,9 @@ async def get_all_user_subscriptions():
         return {}
 
 # Comando /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: CallbackContext):
     user = update.message.from_user
-    save_user(update.message.chat_id, user.first_name)
+    await save_user(update.message.chat_id, user.first_name) #AQUI TAMBIEN
     
     # Mensaje de bienvenida mejorado
     welcome_message = (
@@ -114,25 +114,16 @@ async def show_subscription_button(update: Update):
 async def show_temporalidades(update: Update, context: CallbackContext):
     chat_id = update.callback_query.message.chat_id
     suscripciones = await get_user_subscriptions(chat_id)
-    
-    if suscripciones:
-        suscripciones = suscripciones[0].split(',')
-    else:
+
+    # Manejo de suscripciones vacías (IMPORTANTE)
+    if suscripciones is None or suscripciones == ['']:  #Comprobacion de lista vacia o con un valor vacio
         suscripciones = []
 
-    # Crear el teclado según las suscripciones actuales
     keyboard = []
-    
-    # Agregar botones para las temporalidades disponibles
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
-        if temporalidad in suscripciones:
-            button_text = f"Desuscribirse {temporalidad}"
-            callback_data = f"desuscribir_{temporalidad}"
-        else:
-            button_text = f"Suscribirse {temporalidad}"
-            callback_data = f"suscribir_{temporalidad}"
-        
+        button_text = f"{'Desuscribirse' if temporalidad in suscripciones else 'Suscribirse'} {temporalidad}"
+        callback_data = f"{'desuscribir' if temporalidad in suscripciones else 'suscribir'}_{temporalidad}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -148,6 +139,9 @@ async def button(update: Update, context: CallbackContext):
     try:
         async with aiosqlite.connect(DB_NAME) as db:
             suscripciones = await get_user_subscriptions(chat_id)
+            if suscripciones is None or suscripciones == ['']:
+                suscripciones = []
+
             accion, temporalidad = data.split('_', 1)
 
             if accion == 'suscribir':
@@ -170,7 +164,8 @@ async def button(update: Update, context: CallbackContext):
         await query.answer("Ocurrió un error.")
         return
 
-    await show_temporalidades(update, context)
+    await show_temporalidades(update, context) #Mostrar las temporalidades actualizadas
+
 async def check_initial_reports():
     os.makedirs(REPORTS_DIR, exist_ok=True)
     for temporalidad in TEMPORALIDADES:
