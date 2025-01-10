@@ -286,18 +286,22 @@ def get_all_user_subscriptions():
 
 # Modificar la función main
 async def main():
-    create_db()
-    check_initial_reports()
+  create_db()
+  check_initial_reports()
 
-    global application  # Make application accessible globally
+  global application  # Make application accessible globally
 
-    application = Application.builder().token(bot_token).build()
+  application = Application.builder().token(bot_token).build()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))
-    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
+  application.add_handler(CommandHandler("start", start))
+  application.add_handler(CallbackQueryHandler(button))
+  application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
 
-    asyncio.create_task(handle_candle_closure(application.bot))  # Run in background
+  # Run the background task for sending reports
+  asyncio.create_task(handle_candle_closure(application.bot))
+
+  # Start the polling loop to listen for Telegram events
+  await application.run_polling()  # This line is crucial!
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
