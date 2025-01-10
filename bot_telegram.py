@@ -149,19 +149,48 @@ async def main():
         await check_initial_reports()
 
         # Configure the bot
-        bot_token = os.getenv('TELEGRAM_TOKEN')
+        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         if not bot_token:
-            raise ValueError("TELEGRAM_TOKEN environment variable is not set")
+            raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set")
         
         application = Application.builder().token(bot_token).build()
         
+        # Initialize the application
+        await application.initialize()
+        
         # Start the candle closure handling
-        asyncio.create_task(handle_candle_closure(application.bot))
+        candle_closure_task = asyncio.create_task(handle_candle_closure(application.bot))
         
         # Start polling
-        await application.run_polling()
+        await application.start()
+        await application.updater.start_polling()
+        
+        # Run the bot until you press Ctrl-C
+        await application.run_polling(stop_signals=None)
     except Exception as e:
         logger.critical(f"Critical error in main function: {e}")
+    finally:
+        # Ensure proper shutdown
+        if 'application' in locals():
+            await application.stop()
+            await application.shutdown()
+        
+        # Cancel any running tasks
+        for task in asyncio.all_tasks():
+            task.cancel()
+        
+        # Wait for all tasks to complete
+        await asyncio.gather(*asyncio.all_tasks(), return_exceptions=True)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bot stopped by user.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+    finally:
+        # Ensure the event loop is closed
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
