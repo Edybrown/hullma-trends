@@ -198,7 +198,7 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-def main():
+async def main():
     # Configuración inicial
     print("[INFO] Configurando el bot...")
     asyncio.run(create_db())  # Sincronización de la base de datos
