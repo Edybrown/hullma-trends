@@ -212,7 +212,6 @@ async def main():
         application.add_handler(CallbackQueryHandler(button))
 
         await application.start() # Iniciar el bot (ahora sí necesario)
-        await application.updater.idle() # Mantener el bot en ejecución
-
+        await application.updater.start_polling()
 if __name__ == '__main__':
      asyncio.run(main())
