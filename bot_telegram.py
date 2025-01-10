@@ -149,9 +149,9 @@ async def main():
         await check_initial_reports()
 
         # Configure the bot
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        bot_token = os.getenv('TELEGRAM_TOKEN')
         if not bot_token:
-            raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set")
+            raise ValueError("TELEGRAM_TOKEN environment variable is not set")
         
         application = Application.builder().token(bot_token).build()
         
