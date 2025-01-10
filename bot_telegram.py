@@ -2,7 +2,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta
-import sqlite3
+import aiosqlite
 from telegram.ext import Application
 from telegram.error import TelegramError
 
@@ -15,6 +15,28 @@ REPORTS_DIR = "Analisis_trading"
 TEMPORALIDADES = ['15m', '1h', '4h', '1d']
 MAX_RETRIES = 8
 RETRY_INTERVAL = 15
+DB_NAME = 'usuarios_telegram.db'
+
+async def create_db():
+    """Creates the database if it doesn't exist."""
+    try:
+        async with aiosqlite.connect(DB_NAME) as db:
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id INTEGER PRIMARY KEY,
+                    chat_id INTEGER UNIQUE,
+                    nombre TEXT,
+                    suscripciones TEXT,
+                    suscripcion_tipo TEXT,
+                    suscripcion_fecha TIMESTAMP,
+                    fecha_ultima_actividad TIMESTAMP
+                )
+            ''')
+            await db.commit()
+        logger.info("Database created or already exists.")
+    except Exception as e:
+        logger.error(f"Error creating database: {e}")
+        raise
 
 async def check_initial_reports():
     """Verifies that the reports for all timeframes exist."""
@@ -109,7 +131,7 @@ async def handle_candle_closure(bot):
 async def get_all_user_subscriptions():
     """Gets a dictionary with all user subscriptions."""
     try:
-        async with aiosqlite.connect('usuarios_telegram.db') as db:
+        async with aiosqlite.connect(DB_NAME) as db:
             async with db.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
                 subscriptions = await cursor.fetchall()
 
@@ -127,13 +149,17 @@ async def main():
         await check_initial_reports()
 
         # Configure the bot
-        bot = Application.builder().token(os.getenv('TELEGRAM_BOT_TOKEN')).build()
+        bot_token = os.getenv('TELEGRAM_TOKEN')
+        if not bot_token:
+            raise ValueError("TELEGRAM_TOKEN environment variable is not set")
+        
+        application = Application.builder().token(bot_token).build()
         
         # Start the candle closure handling
-        asyncio.create_task(handle_candle_closure(bot))
+        asyncio.create_task(handle_candle_closure(application.bot))
         
         # Start polling
-        await bot.run_polling()
+        await application.run_polling()
     except Exception as e:
         logger.critical(f"Critical error in main function: {e}")
 
