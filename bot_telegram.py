@@ -163,10 +163,12 @@ async def send_reports_to_all_users(bot):
 async def handle_candle_closure(bot):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
-        await send_reports_to_all_users(bot)
+        await check_and_send_reports(bot)
         time_to_close = get_time_to_close()
         print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
         await asyncio.sleep(time_to_close)
+
+
 
 def check_initial_reports():
     temporalidades = ['15m', '1h', '4h', '1d']
@@ -199,7 +201,7 @@ async def get_all_user_subscriptions():
 def main():
     # Configuración inicial
     print("[INFO] Configurando el bot...")
-    create_db()  # Sincronización de la base de datos
+    asyncio.run(create_db())  # Sincronización de la base de datos
     check_initial_reports()  # Verificar informes iniciales
 
     # Obtener el token desde la variable de entorno
@@ -215,10 +217,13 @@ def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
+    # Crear una tarea para manejar el cierre de velas
+    loop = asyncio.get_event_loop()
+    loop.create_task(handle_candle_closure(application.bot))
+
     # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-
