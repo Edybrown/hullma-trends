@@ -160,7 +160,7 @@ async def send_reports_to_all_users(bot):
     for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-async def handle_candle_closure(bot):
+def handle_candle_closure(bot):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
         await check_and_send_reports(bot)
@@ -198,12 +198,12 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-async def main():
+def main():
     # Configuración inicial
     print("[INFO] Configurando el bot...")
-    await create_db()  # Sincronización de la base de datos
+    asyncio.run(create_db())  # Sincronización de la base de datos
     check_initial_reports()  # Verificar informes iniciales
-
+    handle_candle_closure()
     # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
@@ -217,13 +217,12 @@ async def main():
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Crear una tarea asíncrona para handle_candle_closure
-    asyncio.create_task(handle_candle_closure(application.bot))  # Cambia "bot" si necesitas otro objeto aquí
+    asyncio.create_task(handle_candle_closure(bot))  # Ejecuta el manejo de cierre de velas en paralelo
+    await dp.start_polling()  
 
-    # Iniciar el bot
+    # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
-    
+    main()
