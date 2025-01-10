@@ -1,5 +1,5 @@
 import os
-import sqlite3
+import aiosqlite
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
@@ -22,36 +22,32 @@ bot_token = os.getenv('TELEGRAM_TOKEN')
 application = Application.builder().token(bot_token).build()
 
 # Conexión a la base de datos SQLite
-def create_db():
-    conn = sqlite3.connect('usuarios_telegram.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY,
-            chat_id INTEGER UNIQUE,
-            nombre TEXT,
-            suscripciones TEXT,
-            suscripcion_tipo TEXT,
-            suscripcion_fecha TIMESTAMP,
-            fecha_ultima_actividad TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+async def create_db():
+    async with aiosqlite.connect('usuarios_telegram.db') as conn:
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY,
+                chat_id INTEGER UNIQUE,
+                nombre TEXT,
+                suscripciones TEXT,
+                suscripcion_tipo TEXT,
+                suscripcion_fecha TIMESTAMP,
+                fecha_ultima_actividad TIMESTAMP
+            )
+        ''')
+        await conn.commit()
 
 # Función para guardar un nuevo usuario
-def save_user(chat_id, nombre):
-    with sqlite3.connect('usuarios_telegram.db') as conn:
-        c = conn.cursor()
-        c.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,))
-        user = c.fetchone()
-        
-        if not user:
-            current_time = datetime.now().isoformat()
-            c.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?, ?)", 
-                      (chat_id, nombre, current_time, 'Ninguna', current_time))
-            conn.commit()
-
+async def save_user(chat_id, nombre):
+    async with aiosqlite.connect('usuarios_telegram.db') as conn:
+        async with conn.execute("SELECT * FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
+            user = await cursor.fetchone()
+            if not user:
+                current_time = datetime.now().isoformat()
+                await conn.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, suscripcion_tipo, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)",
+                                 (chat_id, nombre, current_time, 'Ninguna', current_time))
+                await conn.commit()
+                
 # Función para obtener la lista de usuarios
 def get_users():
     conn = sqlite3.connect('usuarios_telegram.db')
@@ -218,51 +214,36 @@ async def send_report(chat_id, temporalidad, bot):
         print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
 
 # Revisa y envía los informes según las suscripciones
-async def check_and_send_reports(chat_id, suscripciones, bot, last_mod_times):
-    """Envía los informes a un usuario en base a sus suscripciones."""
-    temporalidades = ['1d', '4h', '1h', '15m']  # Orden de mayor a menor temporalidad
-    
+async def check_and_send_reports(chat_id, suscripciones, bot):
+    # ... (esta función se mantiene similar, pero sin el manejo de last_mod_times)
+    temporalidades = ['1d', '4h', '1h', '15m']
     for temporalidad in temporalidades:
         if temporalidad in suscripciones:
             report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-            if is_report_updated(report_path, last_mod_times):
+            if os.path.exists(report_path): # Simplificado, se envía si existe
                 await send_report(chat_id, temporalidad, bot)
 
-# Enviar informes a todos los usuarios
-async def send_reports_to_all_users(bot, last_mod_times):
-    """Revisa las suscripciones y envía informes actualizados a todos los usuarios."""
-    all_subscriptions = get_all_user_subscriptions()  # Diccionario: {chat_id: ['15m', '1h']}
-    
-    for chat_id, suscripciones in all_subscriptions.items():
-        print(f"[INFO] Revisando y enviando informes para chat_id: {chat_id}.")
-        await check_and_send_reports(chat_id, suscripciones, bot, last_mod_times)
+
+async def send_reports_to_all_users(bot):
+    async with aiosqlite.connect('usuarios_telegram.db') as conn:
+        async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
+            subscriptions = await cursor.fetchall()
+    subscriptions_dict = {}
+    for chat_id, suscripciones in subscriptions:
+        subscriptions_dict[chat_id] = suscripciones.split(',') if suscripciones else []
+    for chat_id, suscripciones in subscriptions_dict.items():
+        await check_and_send_reports(chat_id, suscripciones, bot)
+
 
 # Manejo del ciclo de cierre de vela
 async def handle_candle_closure(bot):
-    """Maneja el ciclo de cierres de vela."""
-    last_mod_times = {}
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
-        
-        # Verificar y enviar informes a todos los usuarios
-        await send_reports_to_all_users(bot, last_mod_times)
-        
-        # Esperar el tiempo para el próximo cierre de vela
+        await send_reports_to_all_users(bot)
         time_to_close = get_time_to_close()
-        retries = 0
-        max_retries = 8  # Retrasos por un total de 2 minutos
-        retry_interval = 15  # Intervalo de 15 segundos entre reintentos
-        
-        while retries < max_retries:
-            print(f"[INFO] Intento {retries + 1} de {max_retries}.")
-            await asyncio.sleep(retry_interval)
-            await send_reports_to_all_users(bot, last_mod_times)
-            retries += 1
-
-        # Si no hay actualizaciones, calcular el tiempo para el próximo cierre
-        print("[INFO] No se detectaron actualizaciones. Calculando próximo cierre de vela.")
-        time_to_close = get_time_to_close()
+        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
         await asyncio.sleep(time_to_close)
+
 
 # Configuración inicial del bot
 def get_all_user_subscriptions():
@@ -283,13 +264,12 @@ def get_all_user_subscriptions():
     return subscriptions_dict
 
 # Modificar la función main
-def main():
-    # Crear base de datos si no existe
-    create_db()
-    
-    # Verificar los informes iniciales
+async def main():
+    await create_db() # Ahora es asíncrona
     check_initial_reports()
-
-    # Utilizar directamente la configuración del bot existente
     print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
-    asyncio.run(handle_candle_closure(application.bot))  # Us
+    await handle_candle_closure(application.bot)
+
+if __name__ == '__main__':
+    application.run_polling()
+    asyncio.run(main())
