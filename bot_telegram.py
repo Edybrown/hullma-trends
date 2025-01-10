@@ -211,7 +211,7 @@ async def main():
         application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
         application.add_handler(CallbackQueryHandler(button))
 
-     await application.start() # Iniciar el bot (ahora sí necesario)
+        await application.start() # Iniciar el bot (ahora sí necesario)
         await application.updater.idle() # Mantener el bot en ejecución
 
 if __name__ == '__main__':
