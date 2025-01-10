@@ -5,11 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext, ContextTypes
 from datetime import datetime
 import asyncio
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import telegram 
-
-reports_dir = "Analisis_trading"
-last_report_file = 'last_report.txt'
 
 # Cargar variables de entorno
 load_dotenv()
