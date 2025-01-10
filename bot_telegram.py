@@ -213,9 +213,12 @@ async def send_report(chat_id, temporalidad, bot):
         else:
             await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
             print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
-    except Exception as e:
-        print(f"[ERROR] Error al enviar informe: {e}")
-        await bot.send_message(chat_id, text="Hubo un error al procesar el informe.")
+    except Exception as e:  # Captura cualquier excepción
+        print(f"[ERROR] Error al enviar informe {temporalidad} a {chat_id}: {e}")
+        try:
+            await bot.send_message(chat_id, text=f"Hubo un error al procesar el informe de {temporalidad}.")
+        except Exception as e2:
+            print(f"[CRITICAL] Fallo al enviar mensaje de error a {chat_id}: {e2}")
 
 
 # Revisa y envía los informes según las suscripciones
