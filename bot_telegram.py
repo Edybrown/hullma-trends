@@ -196,26 +196,27 @@ def is_report_updated(report_file, last_mod_times):
 
 # Calcula el tiempo hasta el cierre de la vela
 def get_time_to_close():
-    """Calcula el tiempo restante para el próximo cierre de vela."""
     current_time = datetime.now()
     next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
     remaining_time = (next_close_time - current_time).total_seconds()
     print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
     return remaining_time
 
-# Envía un informe a un usuario
 async def send_report(chat_id, temporalidad, bot):
-    """Envía el informe correspondiente a la temporalidad."""
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    
-    if os.path.exists(report_path):
-        with open(report_path, 'r') as file:
-            report_content = file.read()
-        await bot.send_message(chat_id=chat_id, text=report_content)
-        print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
-    else:
-        await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
-        print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
+    try:
+        if os.path.exists(report_path):
+            with open(report_path, 'r') as file:
+                report_content = file.read()
+            await bot.send_message(chat_id=chat_id, text=report_content)
+            print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
+        else:
+            await bot.send_message(chat_id, text=f"El informe de {temporalidad} no está disponible.")
+            print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
+    except Exception as e:
+        print(f"[ERROR] Error al enviar informe: {e}")
+        await bot.send_message(chat_id, text="Hubo un error al procesar el informe.")
+
 
 # Revisa y envía los informes según las suscripciones
 async def check_and_send_reports(chat_id, suscripciones, bot, last_mod_times):
@@ -239,26 +240,13 @@ async def send_reports_to_all_users(bot, last_mod_times):
 
 # Manejo del ciclo de cierre de vela
 async def handle_candle_closure(bot):
-    """Maneja el ciclo de cierres de vela."""
     last_mod_times = {}
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
-        
-        # Verificar y enviar informes a todos los usuarios
         await send_reports_to_all_users(bot, last_mod_times)
-        
-        # Esperar el tiempo para el próximo cierre de vela
         time_to_close = get_time_to_close()
-        retries = 0
-        max_retries = 8  # Retrasos por un total de 2 minutos
-        retry_interval = 15  # Intervalo de 15 segundos entre reintentos
-        
-        while retries < max_retries:
-            print(f"[INFO] Intento {retries + 1} de {max_retries}.")
-            await asyncio.sleep(retry_interval)
-            await send_reports_to_all_users(bot, last_mod_times)
-            retries += 1
-
+        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
+        await asyncio.sleep(time_to_close)
         # Si no hay actualizaciones, calcular el tiempo para el próximo cierre
         print("[INFO] No se detectaron actualizaciones. Calculando próximo cierre de vela.")
         time_to_close = get_time_to_close()
@@ -266,30 +254,29 @@ async def handle_candle_closure(bot):
 
 # Configuración inicial del bot
 def get_all_user_subscriptions():
-    """Obtiene un diccionario con todas las suscripciones de los usuarios."""
     with sqlite3.connect('usuarios_telegram.db') as conn:
         c = conn.cursor()
         c.execute("SELECT chat_id, suscripciones FROM usuarios")
         subscriptions = c.fetchall()
 
-    # Convertir a formato {chat_id: [temporalidades]}
     subscriptions_dict = {}
     for chat_id, suscripciones in subscriptions:
-        if suscripciones:
-            subscriptions_dict[chat_id] = suscripciones.split(',')
-        else:
-            subscriptions_dict[chat_id] = []
-    
+        subscriptions_dict[chat_id] = suscripciones.split(',') if suscripciones else []
     return subscriptions_dict
 
 # Modificar la función main
-def main():
-    # Crear base de datos si no existe
+async def main():
     create_db()
-    
-    # Verificar los informes iniciales
     check_initial_reports()
 
-    # Utilizar directamente la configuración del bot existente
-    print("[INFO] Bot configurado. Iniciando ciclo de manejo de velas.")
-    asyncio.run(handle_candle_closure(application.bot))  # Us
+    application = Application.builder().token(bot_token).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
+
+    asyncio.create_task(handle_candle_closure(application.bot)) #Ejecuta handle_candle_closure en segundo plano
+    await application.run_polling() #Ejecuta el bot en el bucle principal.
+
+if __name__ == "__main__":
+    asyncio.run(main())
