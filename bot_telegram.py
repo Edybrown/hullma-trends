@@ -227,5 +227,5 @@ async def main():
     await application.shutdown()  # Cierra la aplicación correctamente
 
 if __name__ == '__main__':
-    # Aquí eliminamos asyncio.run y solo ejecutamos el ciclo de eventos directamente
-    main()  # Ejecuta el programa principal directamente
+    asyncio.get_event_loop().create_task(main())
+    asyncio.get_event_loop().run_forever()()  # Ejecuta el programa principal directamente
