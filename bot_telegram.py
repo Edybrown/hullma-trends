@@ -197,26 +197,39 @@ async def get_all_user_subscriptions():
         return {}
 
 def main():
-    # Load environment variables
+    # Cargar las variables de entorno
     load_dotenv()
     bot_token = os.getenv('TELEGRAM_TOKEN')
 
-    # Create the application
+    if not bot_token:
+        print("[ERROR] TELEGRAM_TOKEN not found in environment variables.")
+        return
+
+    # Crear la aplicación del bot
     application = ApplicationBuilder().token(bot_token).build()
 
-    # Add handlers
+    # Agregar manejadores (handlers)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Set up the database
+    # Verificar los informes iniciales
+    try:
+        check_initial_reports()
+    except FileNotFoundError as e:
+        print(f"[ERROR] {e}")
+        return
+
+    # Crear base de datos (sincronizado)
     asyncio.run(create_db())
 
-    # Check initial reports
-    check_initial_reports()
+    # Iniciar el bot (sincrónicamente)
+    print("[INFO] Iniciando el bot...")
 
-    # Run the bot
-    print("[INFO] Starting bot...")
+    # Crear la tarea para el manejo del cierre de velas dentro del ciclo de eventos del bot
+    application.asyncio.create_task(handle_candle_closure(application.bot))  # Ejecuta la tarea de cierre de velas en paralelo
+
+    # Iniciar el polling del bot
     application.run_polling()
 
 if __name__ == "__main__":
-    main()
+    main()  # Solo una llamada a main()
