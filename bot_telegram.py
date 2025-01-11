@@ -167,12 +167,19 @@ async def send_reports_to_all_users(bot):
         await check_and_send_reports(chat_id, suscripciones, bot)
 
 async def handle_candle_closure(chat_id, suscripciones, bot):
-    #Alinear la primera ejecución al proximo cierre de vela
-    time_to_close = get_time_to_close()
-    print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela para chat_id: {chat_id} (alineación inicial).")
-    await asyncio.sleep(time_to_close)
+    try:  # Bloque try para la ALINEACIÓN INICIAL
+        time_to_close = get_time_to_close()
+        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela para chat_id: {chat_id} (alineación inicial).")
+        await asyncio.sleep(time_to_close)
+        print(f"[INFO] Se completó la espera inicial para chat_id: {chat_id}") #Mensaje para verificar que se completa la espera inicial
+    except Exception as e:
+        trace = traceback.format_exc()
+        print(f"[ERROR] Ocurrió un error en la espera inicial para chat_id {chat_id}: {e}\n{trace}")
+        return # Salir de la corutina si falla la espera inicial.
+
+    print(f"[INFO] Entrando al bucle while True para chat_id: {chat_id}") #Verificar si entra al bucle
     while True:
-        try:
+        try: #Bloque try para el bucle while
             print(f"[INFO] Iniciando ciclo de cierre de vela para chat_id: {chat_id}")
             start_time = time.time()
             await check_and_send_reports(chat_id, suscripciones, bot)
@@ -183,7 +190,8 @@ async def handle_candle_closure(chat_id, suscripciones, bot):
             print(f"[INFO] Esperando {remaining_time} segundos hasta el próximo cierre de vela para chat_id: {chat_id}.")
             await asyncio.sleep(remaining_time)
         except Exception as e:
-            print(f"[ERROR] Ocurrió un error en handle_candle_closure para chat_id {chat_id}: {e}")
+            trace = traceback.format_exc()
+            print(f"[ERROR] Ocurrió un error en handle_candle_closure para chat_id {chat_id}: {e}\n{trace}")
             await asyncio.sleep(60)  # Esperar 60 segundos antes de reintentar
             
 
