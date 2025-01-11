@@ -133,6 +133,8 @@ def get_time_to_close():
     print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
     return remaining_time
 
+
+
 async def send_report(chat_id, temporalidad, bot):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     if os.path.exists(report_path):
@@ -141,10 +143,11 @@ async def send_report(chat_id, temporalidad, bot):
         try:
             await bot.send_message(chat_id=chat_id, text=report_content)
             print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
-        except Exception as e:
+        except Exception as e: # Captura excepciones de Telegram
             print(f"[ERROR] Error al enviar mensaje a {chat_id}: {e}")
     else:
         print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
+
 
 async def check_and_send_reports(chat_id, suscripciones, bot):
     temporalidades = ['1d', '4h', '1h', '15m']
@@ -157,13 +160,30 @@ async def send_reports_to_all_users(bot):
     for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-async def handle_candle_closure(application: Application):
+async def handle_candle_closure(bot):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
-        await send_reports_to_all_users(application.bot)
+        await check_and_send_reports(bot)
         time_to_close = get_time_to_close()
         print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
         await asyncio.sleep(time_to_close)
+
+
+
+def check_initial_reports():
+    temporalidades = ['15m', '1h', '4h', '1d']
+    os.makedirs(reports_dir, exist_ok=True)
+    for temporalidad in temporalidades:
+        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+        if not os.path.exists(report_path):
+            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
+
+def get_time_to_close():
+    current_time = datetime.now()
+    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
+    remaining_time = (next_close_time - current_time).total_seconds()
+    print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
+    return remaining_time
 
 async def get_all_user_subscriptions():
     try:
@@ -181,23 +201,28 @@ async def get_all_user_subscriptions():
 async def main():
     # Configuración inicial
     print("[INFO] Configurando el bot...")
-    await create_db()  # Asegúrate de que create_db() sea una función asíncrona
-    check_initial_reports()
+    asyncio.run(create_db())  # Sincronización de la base de datos
+    check_initial_reports()  # Verificar informes iniciales
+    # Obtener el token desde la variable de entorno
+    bot_token = os.getenv("TELEGRAM_TOKEN")
+    if not bot_token:
+        raise ValueError("El token del bot no está configurado en las variables de entorno.")
 
     # Crear la aplicación del bot
-    application = Application.builder().token(bot_token).build()
+    application = ApplicationBuilder().token(bot_token).build()
 
     # Agregar manejadores (handlers)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Iniciar el manejo de cierre de velas en una tarea separada
-    asyncio.create_task(handle_candle_closure(application))
+    asyncio.create_task(handle_candle_closure(bot))  # Ejecuta el manejo de cierre de velas en paralelo
+    await dp.start_polling()  
 
-    # Iniciar el bot
+    # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
+    
