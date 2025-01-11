@@ -126,14 +126,6 @@ def check_initial_reports():
         if not os.path.exists(report_path):
             raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
-def get_time_to_close():
-    current_time = datetime.now()
-    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
-    remaining_time = (next_close_time - current_time).total_seconds()
-    print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
-    return remaining_time
-
-
 
 async def send_report(chat_id, temporalidad, bot):
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
@@ -163,20 +155,12 @@ async def send_reports_to_all_users(bot):
 async def handle_candle_closure(bot):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
-        await check_and_send_reports(bot)
+        await check_and_send_reports(chat_id, suscripciones, bot)
         time_to_close = get_time_to_close()
         print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
         await asyncio.sleep(time_to_close)
 
 
-
-def check_initial_reports():
-    temporalidades = ['15m', '1h', '4h', '1d']
-    os.makedirs(reports_dir, exist_ok=True)
-    for temporalidad in temporalidades:
-        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-        if not os.path.exists(report_path):
-            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
 def get_time_to_close():
     current_time = datetime.now()
@@ -216,7 +200,6 @@ async def start_bot(application):
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
-    await application.updater.idle()
     await application.stop()
 
 async def main():
