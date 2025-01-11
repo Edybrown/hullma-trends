@@ -197,27 +197,39 @@ async def get_all_user_subscriptions():
         return {}
 
 def main():
-    print("[INFO] Configurando el bot...")
+    # Load environment variables
+    load_dotenv()
+    bot_token = os.getenv('TELEGRAM_TOKEN')
 
-    # Obtener el token desde la variable de entorno
-    bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
-        raise ValueError("El token del bot no está configurado en las variables de entorno.")
+        print("[ERROR] TELEGRAM_TOKEN not found in environment variables.")
+        return
 
-    # Crear la aplicación del bot
+    # Create the application
     application = ApplicationBuilder().token(bot_token).build()
 
-    # Agregar manejadores (handlers)
+    # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Aquí es donde iniciamos el ciclo del bot y la tarea asíncrona
-    application.asyncio.create_task(handle_candle_closure())  # Ejecuta la tarea de cierre de velas en paralelo
+    # Check initial reports
+    try:
+        check_initial_reports()
+    except FileNotFoundError as e:
+        print(f"[ERROR] {e}")
+        return
 
-    # Iniciar el bot (sincrónicamente)
-    print("[INFO] Iniciando el bot...")
-    application.run_polling()  # El ciclo de eventos es manejado por el bot
+    # Create database
+    asyncio.run(create_db())
 
-# Ejecutar la función principal de forma estándar (sin usar asyncio.run())
+    # Start the bot
+    print("[INFO] Starting bot...")
+    application.run_polling()
+
+    # Start the candle closure handler in a separate thread
+    import threading
+    candle_thread = threading.Thread(target=lambda: asyncio.run(handle_candle_closure(application.bot)))
+    candle_thread.start()
+
 if __name__ == "__main__":
-    main()  # Solo una llamada a main()
+    main()
