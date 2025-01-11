@@ -232,14 +232,18 @@ async def main():
     setup_handlers(application)
 
     # Paso 3: Ejecutar tareas concurrentes usando la base de datos
+
     usuarios = await obtener_usuarios_de_db()
 
-    tareas = []  # Lista para almacenar las tareas
     for chat_id, suscripciones in usuarios.items():
         print(f"Creando tarea para chat_id: {chat_id}")
-        tarea = asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
-        tareas.append(tarea)
+        asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
 
+    # Paso 4: Iniciar el bot
+    await start_bot(application)
+
+if __name__ == "__main__":
+    asyncio.run(main())
     # Paso 4: Iniciar el bot y el bucle de eventos (sin detener el bot)
     print("[INFO] Iniciando el bot y *EL BUCLE DE EVENTOS*...")
     await application.run_polling()
