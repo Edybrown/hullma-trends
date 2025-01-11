@@ -196,32 +196,33 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-def main():  # main sigue siendo síncrona
+async def main():
     print("[INFO] Configurando el bot...")
 
-    loop = asyncio.get_event_loop()  # Obtener el bucle de eventos
-    loop.run_until_complete(create_db())  # Ejecutar create_db dentro del bucle
-    check_initial_reports()
+    # Ejecutar funciones iniciales asíncronas
+    await create_db()  # Sincroniza la base de datos
+    check_initial_reports()  # Aquí podrías llamar a otras funciones
 
+    # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
-        raise ValueError("El token del bot no está configurado.")
+        raise ValueError("El token del bot no está configurado en las variables de entorno.")
 
+    # Crear la aplicación del bot
     application = ApplicationBuilder().token(bot_token).build()
 
+    # Agregar manejadores (handlers)
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    asyncio.create_task(handle_candle_closure(application.bot)) # Ejecutar la tarea concurrentemente
+    # Crear la tarea asíncrona para el manejo del cierre de vela
+    application.job_queue.run_repeating(handle_candle_closure, interval=60)  # Ejemplo de uso del job_queue
 
+    # Iniciar el bot
     print("[INFO] Iniciando el bot...")
-    loop.run_until_complete(application.initialize())
-    loop.run_until_complete(application.start())
-    loop.run_until_complete(application.updater.start_polling())
-    loop.run_until_complete(application.updater.idle())
-    loop.run_until_complete(application.stop())
+    await application.run_polling()  # Aquí se usa await para iniciar el polling de Telegram
 
-
+# Ejecutar la función principal asíncrona en el ciclo de eventos principal
 if __name__ == "__main__":
-    main()  # Solo una llamada a main()
+    # Ejecutar main directamente, sin usar asyncio.run()
+    asyncio.get_event_loop().run_until_complete(main()) 
