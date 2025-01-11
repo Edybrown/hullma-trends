@@ -152,7 +152,7 @@ async def send_reports_to_all_users(bot):
     for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-async def handle_candle_closure(bot, chat_id, suscripciones):
+async def handle_candle_closure(bot):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
         await check_and_send_reports(chat_id, suscripciones, bot)
@@ -218,7 +218,7 @@ async def main():
     setup_handlers(application)
 
     # Paso 3: Ejecutar tareas concurrentes
-    asyncio.create_task(handle_candle_closure(application.bot))
+    asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
 
     # Paso 4: Iniciar el bot
     await start_bot(application)
