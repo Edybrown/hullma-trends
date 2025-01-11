@@ -232,8 +232,11 @@ async def start_bot(application):
     """Inicia el ciclo de vida del bot."""
     print("[INFO] Iniciando el bot...")
     await application.initialize()
+    print("[DEBUG] Bot inicializado.")
     await application.start()
+    print("[DEBUG] Bot iniciado.")
     await application.updater.start_polling()
+    print("[DEBUG] Bot en polling.")
    
 
 async def main():
