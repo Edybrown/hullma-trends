@@ -33,6 +33,19 @@ async def create_db():
     except aiosqlite.Error as e:
         print(f"[ERROR] Error al crear la base de datos: {e}")
 
+async def obtener_usuarios_de_db():
+    try:
+        async with aiosqlite.connect('usuarios_telegram.db') as conn:
+            async with conn.execute("SELECT chat_id, suscripciones FROM usuarios") as cursor:
+                usuarios = await cursor.fetchall()
+                usuarios_dict = {}
+                for usuario in usuarios:
+                    usuarios_dict[usuario[0]] = usuario[1].split(",") if usuario[1] else [] #Manejo de suscripciones vacias
+                return usuarios_dict
+    except aiosqlite.Error as e:
+        print(f"[ERROR] Error al obtener usuarios de la base de datos: {e}")
+        return {}
+
 async def save_user(chat_id, nombre):
     try:
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
@@ -205,7 +218,6 @@ async def start_bot(application):
     await application.stop()
 
 async def main():
-
     """Función principal."""
     print("[INFO] Configurando el bot...")
 
@@ -216,17 +228,20 @@ async def main():
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
         raise ValueError("El token del bot no está configurado.")
-    application = type("Application", (object,), {"bot": "MiBot"})() # Simula un objeto application con un bot
-   
+
     application = ApplicationBuilder().token(bot_token).build()
     setup_handlers(application)
 
-    # Paso 3: Ejecutar tareas concurrentes
-    asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
+    # Paso 3: Ejecutar tareas concurrentes usando la base de datos
+
+    usuarios = await obtener_usuarios_de_db()
+
+    for chat_id, suscripciones in usuarios.items():
+        print(f"Creando tarea para chat_id: {chat_id}")
+        asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
 
     # Paso 4: Iniciar el bot
     await start_bot(application)
 
 if __name__ == "__main__":
-
-    asyncio.run(main()) 
+    asyncio.run(main())
