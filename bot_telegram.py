@@ -215,7 +215,7 @@ async def main():
         raise ValueError("El token del bot no está configurado.")
     
     application = type("Application", (object,), {"bot": "MiBot"})() # Simula un objeto application con un bot
-    chat_ids= await obtener_chat_id()
+    chat_ids= await chat_id()
     suscripciones = await suscripciones()
 
     for chat_id, suscripciones in chat_ids_y_suscripciones.items():
