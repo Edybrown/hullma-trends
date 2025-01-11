@@ -257,17 +257,16 @@ async def main():
     # Paso 3: Ejecutar tareas concurrentes usando la base de datos
 
     usuarios = await obtener_usuarios_de_db()
+    tasks = []  # Lista para almacenar tareas
 
     for chat_id, suscripciones in usuarios.items():
         print(f"Creando tarea para chat_id: {chat_id}")
-        asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
+        task = asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
+        tasks.append(task)
 
     # Paso 4: Iniciar el bot
-    await start_bot(application)
+    bot_task = asyncio.create_task(start_bot(application))
+    tasks.append(bot_task)
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("[INFO] Bot detenido manualmente.")
-   
+    # Esperar a que todas las tareas se completen (o ejecutar indefinidamente)
+    await asyncio.gather(*tasks)
