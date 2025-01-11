@@ -152,10 +152,10 @@ async def send_reports_to_all_users(bot):
     for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-async def handle_candle_closure(bot):
+async def handle_candle_closure(bot, chat_id, suscripciones):
     while True:
         print("[INFO] Iniciando ciclo de cierre de vela.")
-        await check_and_send_reports()
+        await check_and_send_reports(chat_id, suscripciones, bot)
         time_to_close = get_time_to_close()
         print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
         await asyncio.sleep(time_to_close)
