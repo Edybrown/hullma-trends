@@ -213,7 +213,18 @@ async def main():
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
         raise ValueError("El token del bot no está configurado.")
-    
+    application = type("Application", (object,), {"bot": "MiBot"})() # Simula un objeto application con un bot
+    chat_ids_y_suscripciones = await obtener_chat_ids_y_suscripciones()
+
+    for chat_id, suscripciones in chat_ids_y_suscripciones.items():
+        print(f"Creando tarea para chat_id: {chat_id}")
+        asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
+
+    # Mantener el programa principal corriendo para que las tareas se ejecuten
+    # Una forma sencilla es usar asyncio.sleep(tiempo), pero en un programa real
+    # probablemente tendrías un bucle de eventos o un manejador de señales.
+    await asyncio.sleep(10) # Ejemplo: Espera 10 segundos
+
     application = ApplicationBuilder().token(bot_token).build()
     setup_handlers(application)
 
