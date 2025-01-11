@@ -244,12 +244,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    # Paso 4: Iniciar el bot y el bucle de eventos (sin detener el bot)
-    print("[INFO] Iniciando el bot y *EL BUCLE DE EVENTOS*...")
-    await application.run_polling()
-
-    # Opcional: Esperar a que las tareas finalicen (en este caso, no es necesario porque tienen un bucle infinito)
-    # await asyncio.gather(*tareas)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+   
