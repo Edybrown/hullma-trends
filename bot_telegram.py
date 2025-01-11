@@ -214,7 +214,7 @@ async def start_bot(application):
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
-    await application.stop()
+   
 
 async def main():
     """Función principal."""
