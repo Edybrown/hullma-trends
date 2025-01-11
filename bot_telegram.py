@@ -198,31 +198,36 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-async def main():
-    # Configuración inicial
+def main():  # main sigue siendo síncrona
     print("[INFO] Configurando el bot...")
-    asyncio.run(create_db())  # Sincronización de la base de datos
-    check_initial_reports()  # Verificar informes iniciales
-    # Obtener el token desde la variable de entorno
+
+    loop = asyncio.get_event_loop()  # Obtener el bucle de eventos
+    loop.run_until_complete(create_db())  # Ejecutar create_db dentro del bucle
+    check_initial_reports()
+que te parece
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
-        raise ValueError("El token del bot no está configurado en las variables de entorno.")
+        raise ValueError("El token del bot no está configurado.")
 
-    # Crear la aplicación del bot
     application = ApplicationBuilder().token(bot_token).build()
 
-    # Agregar manejadores (handlers)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    asyncio.create_task(handle_candle_closure(bot))  # Ejecuta el manejo de cierre de velas en paralelo
-    await dp.start_polling()  
+    asyncio.create_task(handle_candle_closure(application.bot)) # Ejecutar la tarea concurrentemente
 
-    # Iniciar el bot (la librería maneja el bucle de eventos)
     print("[INFO] Iniciando el bot...")
+    loop.run_until_complete(application.initialize())
+    loop.run_until_complete(application.start())
+    loop.run_until_complete(application.updater.start_polling())
+    loop.run_until_complete(application.updater.idle())
+    loop.run_until_complete(application.stop())
+
+
+if __name__ == "__main__":
+    main()  # Solo una llamada a main())
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-    
