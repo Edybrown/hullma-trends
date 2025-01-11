@@ -201,10 +201,6 @@ def main():
     load_dotenv()
     bot_token = os.getenv('TELEGRAM_TOKEN')
 
-    if not bot_token:
-        print("[ERROR] TELEGRAM_TOKEN not found in environment variables.")
-        return
-
     # Create the application
     application = ApplicationBuilder().token(bot_token).build()
 
@@ -212,24 +208,15 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Check initial reports
-    try:
-        check_initial_reports()
-    except FileNotFoundError as e:
-        print(f"[ERROR] {e}")
-        return
-
-    # Create database
+    # Set up the database
     asyncio.run(create_db())
 
-    # Start the bot
+    # Check initial reports
+    check_initial_reports()
+
+    # Run the bot
     print("[INFO] Starting bot...")
     application.run_polling()
-
-    # Start the candle closure handler in a separate thread
-    import threading
-    candle_thread = threading.Thread(target=lambda: asyncio.run(handle_candle_closure(application.bot)))
-    candle_thread.start()
 
 if __name__ == "__main__":
     main()
