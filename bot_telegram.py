@@ -196,12 +196,8 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-async def main():
+def main():
     print("[INFO] Configurando el bot...")
-
-    # Ejecutar funciones iniciales asíncronas
-    await create_db()  # Sincroniza la base de datos
-    check_initial_reports()  # Aquí podrías llamar a otras funciones
 
     # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
@@ -215,14 +211,13 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Crear la tarea asíncrona para el manejo del cierre de vela
-    application.job_queue.run_repeating(handle_candle_closure, interval=60)  # Ejemplo de uso del job_queue
+    # Aquí es donde iniciamos el ciclo del bot y la tarea asíncrona
+    application.asyncio.create_task(handle_candle_closure())  # Ejecuta la tarea de cierre de velas en paralelo
 
-    # Iniciar el bot
+    # Iniciar el bot (sincrónicamente)
     print("[INFO] Iniciando el bot...")
-    await application.run_polling()  # Aquí se usa await para iniciar el polling de Telegram
+    application.run_polling()  # El ciclo de eventos es manejado por el bot
 
-# Ejecutar la función principal asíncrona en el ciclo de eventos principal
+# Ejecutar la función principal de forma estándar (sin usar asyncio.run())
 if __name__ == "__main__":
-    # Ejecutar main directamente, sin usar asyncio.run()
-    asyncio.get_event_loop().run_until_complete(main()) 
+    main()  # Solo una llamada a main()
