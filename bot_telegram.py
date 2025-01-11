@@ -167,13 +167,25 @@ async def send_reports_to_all_users(bot):
         await check_and_send_reports(chat_id, suscripciones, bot)
 
 async def handle_candle_closure(chat_id, suscripciones, bot):
+    #Alinear la primera ejecución al proximo cierre de vela
+    time_to_close = get_time_to_close()
+    print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela para chat_id: {chat_id} (alineación inicial).")
+    await asyncio.sleep(time_to_close)
     while True:
-        print("[INFO] Iniciando ciclo de cierre de vela.")
-        await check_and_send_reports(chat_id, suscripciones, bot)
-        time_to_close = get_time_to_close()
-        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela.")
-        await asyncio.sleep(time_to_close)
-
+        try:
+            print(f"[INFO] Iniciando ciclo de cierre de vela para chat_id: {chat_id}")
+            start_time = time.time()
+            await check_and_send_reports(chat_id, suscripciones, bot)
+            elapsed_time = time.time() - start_time
+            print(f"[INFO] Tiempo transcurrido en check_and_send_reports: {elapsed_time} segundos para chat_id: {chat_id}")
+            time_to_close = get_time_to_close() #Recalcular el tiempo de espera en cada iteración
+            remaining_time = max(0, 900 - elapsed_time)
+            print(f"[INFO] Esperando {remaining_time} segundos hasta el próximo cierre de vela para chat_id: {chat_id}.")
+            await asyncio.sleep(remaining_time)
+        except Exception as e:
+            print(f"[ERROR] Ocurrió un error en handle_candle_closure para chat_id {chat_id}: {e}")
+            await asyncio.sleep(60)  # Esperar 60 segundos antes de reintentar
+            
 
 
 def get_time_to_close():
