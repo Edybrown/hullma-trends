@@ -196,34 +196,32 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-async def main():
-    # Configuración inicial
+def main():  # main sigue siendo síncrona
     print("[INFO] Configurando el bot...")
 
-    # Ejecutar funciones iniciales asíncronas
-    await create_db()  # Sincroniza la base de datos
-    check_initial_reports()  # Aquí, podrías llamar a otras funciones que necesiten ejecutarse antes del bot
+    loop = asyncio.get_event_loop()  # Obtener el bucle de eventos
+    loop.run_until_complete(create_db())  # Ejecutar create_db dentro del bucle
+    check_initial_reports()
 
-    # Obtener el token desde la variable de entorno
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
-        raise ValueError("El token del bot no está configurado en las variables de entorno.")
+        raise ValueError("El token del bot no está configurado.")
 
-    # Crear la aplicación del bot
     application = ApplicationBuilder().token(bot_token).build()
 
-    # Agregar manejadores (handlers)
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Crear la tarea asíncrona para el manejo del cierre de vela
-    loop = asyncio.get_event_loop()
-    loop.create_task(handle_candle_closure(application.bot))  # Ejecuta el manejo de cierre de vela en paralelo
+    asyncio.create_task(handle_candle_closure(application.bot)) # Ejecutar la tarea concurrentemente
 
-    # Iniciar el bot
     print("[INFO] Iniciando el bot...")
-    await application.run_polling()  # Aquí se usa await para iniciar el polling de Telegram
+    loop.run_until_complete(application.initialize())
+    loop.run_until_complete(application.start())
+    loop.run_until_complete(application.updater.start_polling())
+    loop.run_until_complete(application.updater.idle())
+    loop.run_until_complete(application.stop())
 
-# Ejecutar la función main asíncrona
+
 if __name__ == "__main__":
-    asyncio.run(main())  # Usa asyncio.run() para ejecutar el ciclo 
+    main()  # Solo una llamada a main()
