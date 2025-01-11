@@ -213,8 +213,9 @@ async def main():
     bot_token = os.getenv("TELEGRAM_TOKEN")
     if not bot_token:
         raise ValueError("El token del bot no está configurado.")
+    
     application = type("Application", (object,), {"bot": "MiBot"})() # Simula un objeto application con un bot
-    chat_ids= await obtener_chat_ids()
+    chat_ids= await obtener_chat_id()
     suscripciones = await suscripciones()
 
     for chat_id, suscripciones in chat_ids_y_suscripciones.items():
