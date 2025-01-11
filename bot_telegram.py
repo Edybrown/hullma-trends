@@ -7,6 +7,8 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Call
 from datetime import datetime, timedelta
 
 reports_dir = "Analisis_trading"
+chat_id ={}
+suscripciones =[]
 
 load_dotenv()
 bot_token = os.getenv('TELEGRAM_TOKEN')
