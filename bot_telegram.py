@@ -198,36 +198,47 @@ async def get_all_user_subscriptions():
         print(f"[ERROR] Error al obtener las suscripciones: {e}")
         return {}
 
-def main():  # main sigue siendo síncrona
-    print("[INFO] Configurando el bot...")
-
-    loop = asyncio.get_event_loop()  # Obtener el bucle de eventos
-    loop.run_until_complete(create_db())  # Ejecutar create_db dentro del bucle
+async def initialize():
+    """Configura la base de datos y verifica reportes iniciales."""
+    print("[INFO] Configurando la base de datos y reportes iniciales...")
+    await create_db()  # Debe ser asincrónico
     check_initial_reports()
-que te parece
-    bot_token = os.getenv("TELEGRAM_TOKEN")
-    if not bot_token:
-        raise ValueError("El token del bot no está configurado.")
 
-    application = ApplicationBuilder().token(bot_token).build()
-
+def setup_handlers(application):
+    """Configura los handlers del bot."""
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(show_temporalidades, pattern='^suscripcion$'))
     application.add_handler(CallbackQueryHandler(button))
 
-    asyncio.create_task(handle_candle_closure(application.bot)) # Ejecutar la tarea concurrentemente
-
+async def start_bot(application):
+    """Inicia el ciclo de vida del bot."""
     print("[INFO] Iniciando el bot...")
-    loop.run_until_complete(application.initialize())
-    loop.run_until_complete(application.start())
-    loop.run_until_complete(application.updater.start_polling())
-    loop.run_until_complete(application.updater.idle())
-    loop.run_until_complete(application.stop())
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    await application.updater.idle()
+    await application.stop()
 
+async def main():
+    """Función principal."""
+    print("[INFO] Configurando el bot...")
+
+    # Paso 1: Inicialización
+    await initialize()
+
+    # Paso 2: Configuración del bot
+    bot_token = os.getenv("TELEGRAM_TOKEN")
+    if not bot_token:
+        raise ValueError("El token del bot no está configurado.")
+    
+    application = ApplicationBuilder().token(bot_token).build()
+    setup_handlers(application)
+
+    # Paso 3: Ejecutar tareas concurrentes
+    asyncio.create_task(handle_candle_closure(application.bot))
+
+    # Paso 4: Iniciar el bot
+    await start_bot(application)
 
 if __name__ == "__main__":
-    main()  # Solo una llamada a main())
-    application.run_polling()
-
-if __name__ == "__main__":
-    main()
+    asyncio.run(main())
