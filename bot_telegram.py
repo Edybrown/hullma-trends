@@ -266,5 +266,8 @@ async def main():
     await start_bot(application)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("[INFO] Bot detenido manualmente.")
    
