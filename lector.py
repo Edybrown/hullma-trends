@@ -557,6 +557,7 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
     """
     try:
         ahora = pd.Timestamp.now(tz='UTC')
+
         if timeframe == "15m":
             ultima_apertura = ahora.floor('15min') - pd.Timedelta(minutes=15)
         elif timeframe == "1h":
@@ -568,15 +569,16 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
         else:
             print(f"Timeframe no válido: {timeframe}")
             return None
-        
+
         print(f"Timeframe: {timeframe}")
         print(f"Hora actual (UTC): {ahora}")
         print(f"Ultima apertura calculada (UTC): {ultima_apertura}")
 
         try:
-            df = pd.read_csv(file_path, index_col="Open Time", parse_dates=True)
-            df.index = df.index.tz_localize('UTC')
+            df = pd.read_csv(file_path, index_col="time", parse_dates=True) # Corrección: index_col="time"
+            df.index = df.index.tz_localize('UTC') # Asegurar que el índice esté en UTC
             df_ultima_vela = df.loc[[ultima_apertura]]
+
         except KeyError:
             print(f"No se encontraron datos para la hora de apertura {ultima_apertura} en {timeframe}. Esperando...")
             return None
@@ -584,12 +586,12 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
         if df_ultima_vela.empty:
             print(f"No se encontraron datos para la hora de apertura {ultima_apertura} en {timeframe}. Esperando...")
             return None
-        
+
         if timeframe == "15m":
             tiempo_transcurrido = 0
             while tiempo_transcurrido < tiempo_espera_15m and pd.Timestamp.now(tz='UTC') < ultima_apertura + pd.Timedelta(minutes=15):
                 time.sleep(5)
-                tiempo_transcurrido += 15
+                tiempo_transcurrido += 5
                 print(f"Timeframe: {timeframe} - Verificando nuevamente. Tiempo transcurrido: {tiempo_transcurrido} segundos")
             if pd.Timestamp.now(tz='UTC') < ultima_apertura + pd.Timedelta(minutes=15):
                 tiempo_restante = (ultima_apertura + pd.Timedelta(minutes=15) - pd.Timestamp.now(tz='UTC')).total_seconds()
@@ -607,7 +609,6 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
         print(f"Error al obtener la última vela válida de {timeframe}: {e}")
         traceback.print_exc()
         return None
-
 
 
 def main_loop():
