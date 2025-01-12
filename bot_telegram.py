@@ -265,6 +265,8 @@ async def main():
     # Paso 4: Iniciar el bot
     await start_bot(application)
 
+
+    candle_task = asyncio.create_task(handle_candle_closure())
     await candle_task
 
 if __name__ == "__main__":
