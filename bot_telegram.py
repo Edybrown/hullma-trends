@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Call
 from datetime import datetime, timedelta
 
 reports_dir = "Analisis_trading"
-
+last_checked = {}
 
 load_dotenv()
 bot_token = os.getenv('TELEGRAM_TOKEN')
@@ -144,20 +144,47 @@ def check_initial_reports():
 
 
 async def send_report(chat_id, temporalidad, bot):
+    """Envía un informe al usuario solo si ha sido actualizado desde la última revisión."""
+    global last_checked
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-    if os.path.exists(report_path):
-        with open(report_path, 'r') as file:
-            report_content = file.read()
-        try:
-            await bot.send_message(chat_id=chat_id, text=report_content)
-            print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
-        except Exception as e: # Captura excepciones de Telegram
-            print(f"[ERROR] Error al enviar mensaje a {chat_id}: {e}")
-    else:
+    
+    if not os.path.exists(report_path):
         print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
+        return
+    
+    # Obtener la última modificación del archivo
+    last_modified = os.path.getmtime(report_path)
+    last_reviewed = last_checked.get(report_path, 0)
+
+    # Si no ha sido modificado desde la última revisión, tomar acciones según la temporalidad
+    if last_modified <= last_reviewed:
+        if temporalidad == '15m':  # Solo para 15 minutos
+            print(f"[INFO] Informe de 15m no actualizado, esperando un minuto para chat_id: {chat_id}.")
+            for _ in range(12):  # Intentar 12 veces con un intervalo de 5 segundos
+                await asyncio.sleep(5)
+                last_modified = os.path.getmtime(report_path)
+                if last_modified > last_reviewed:
+                    break  # Salir si el archivo se actualiza
+            else:
+                print(f"[WARNING] Informe de 15m no actualizado tras 1 minuto para chat_id: {chat_id}.")
+                return  # Salir si no se actualizó tras esperar
+        else:
+            print(f"[INFO] Informe de {temporalidad} no actualizado para chat_id: {chat_id}.")
+            return  # Salir para otras temporalidades si no está actualizado
+
+    # Leer y enviar el informe si está actualizado
+    with open(report_path, 'r') as file:
+        report_content = file.read()
+    try:
+        await bot.send_message(chat_id=chat_id, text=report_content)
+        print(f"[INFO] Informe de {temporalidad} enviado a chat_id: {chat_id}.")
+        last_checked[report_path] = last_modified  # Actualizar el registro de revisión
+    except Exception as e:
+        print(f"[ERROR] Error al enviar mensaje a {chat_id}: {e}")
 
 
 async def check_and_send_reports(chat_id, suscripciones, bot):
+    """Revisa y envía informes según las suscripciones del usuario."""
     temporalidades = ['1d', '4h', '1h', '15m']
     for temporalidad in temporalidades:
         if temporalidad in suscripciones:
