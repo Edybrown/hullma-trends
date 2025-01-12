@@ -591,7 +591,7 @@ def main_loop():
 
     analisis_inicial_completo = True
 
-   while True:
+    while True:
         espera_cierre_vela("15m")
         df_15m = load_csv(CSV_FILES["15m"])
 
@@ -623,3 +623,4 @@ def main_loop():
             print("El dataframe de 15m está vacío")
 if __name__ == "__main__":
     main_loop()
+  
