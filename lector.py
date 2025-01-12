@@ -561,7 +561,7 @@ def main_loop():
                 indicators = analyze_indicators(df, timeframe)
                 price_action_analysis = analyze_price_action(df)
                 report = generate_report(timeframe, indicators, price_action_analysis)
-                export_to_json(report, timeframe) #Usa la funcion export_to_json que maneja timestamps
+                export_to_json(report, timeframe)
                 LAST_RUN[timeframe] = df.index[-1]
             except Exception as e:
                 print(f"Error durante el análisis inicial de {timeframe}: {e}")
@@ -593,13 +593,14 @@ def main_loop():
                         LAST_RUN[timeframe] = df.index[-1]
 
                 for timeframe in timeframes_a_procesar:
-                    df = load_csv(CSV_FILES[timeframe])
+                    df = load_csv(CSV_FILES[timeframe])  # Cargar el DataFrame DENTRO del bucle
                     if df is not None and not df.empty:
                         try:
+                            # ***AQUÍ ESTÁ LA CORRECCIÓN: ANÁLISIS DENTRO DEL IF***
                             indicators = analyze_indicators(df, timeframe)
                             price_action_analysis = analyze_price_action(df)
                             report = generate_report(timeframe, indicators, price_action_analysis)
-                            export_to_json(report, timeframe) #Usa la funcion export_to_json que maneja timestamps
+                            export_to_json(report, timeframe)
                         except Exception as e:
                             print(f"Error durante el análisis de {timeframe}: {e}")
                             traceback.print_exc()
@@ -609,6 +610,6 @@ def main_loop():
             print("Error al cargar el dataframe de 15m, revisa el archivo")
         else:
             print("El dataframe de 15m está vacío")
-            
+
 if __name__ == "__main__":
     main_loop()
