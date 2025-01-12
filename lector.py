@@ -542,14 +542,6 @@ def export_to_json(report, timeframe):
         print(f"Error al exportar a JSON: {e}")
         traceback.print_exc()
         
-def espera_cierre_vela(timeframe, margen_segundos=5):
-    """Espera hasta el cierre de la próxima vela, con un margen."""
-    ahora = time.time()
-    intervalo = TIME_INTERVALS[timeframe]
-    tiempo_para_siguiente_vela = intervalo - (ahora % intervalo)
-    tiempo_para_siguiente_vela = max(0, tiempo_para_siguiente_vela - margen_segundos)
-    print(f"Esperando {tiempo_para_siguiente_vela:.0f} segundos para el cierre de la vela de {timeframe}...")
-    time.sleep(tiempo_para_siguiente_vela)
 
 def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
     """
