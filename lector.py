@@ -21,6 +21,14 @@ for path in [DATA_DIR, OUTPUT_DIR]:
         print(f"Error: '{path}' existe pero no es un directorio.")
         exit()
 
+LAST_PROCESSED = { # Diccionario para almacenar la última hora procesada
+    "15m": None,
+    "1h": None,
+    "4h": None,
+    "1d": None,
+}
+
+
 CSV_FILES = {
     "15m": os.path.join(DATA_DIR, "XBTUSDT_15m.csv"),
     "1h": os.path.join(DATA_DIR, "XBTUSDT_1h.csv"),
@@ -543,7 +551,7 @@ def export_to_json(report, timeframe):
         traceback.print_exc()
         
 
-def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
+def obtener_ultima_vela_valida(file_path, timeframe):
     """
     Obtiene la última vela válida calculando la hora de apertura y filtrando el CSV.
     """
@@ -567,10 +575,13 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
         print(f"Ultima apertura calculada (UTC): {ultima_apertura}")
 
         try:
-            df = pd.read_csv(file_path, index_col="time", parse_dates=True) # Corrección: index_col="time"
-            df.index = df.index.tz_localize('UTC') # Asegurar que el índice esté en UTC
-            df_ultima_vela = df.loc[[ultima_apertura]]
+            df = pd.read_csv(file_path, index_col="time", parse_dates=True)
+            df.index = df.index.tz_localize('UTC')
 
+            if timeframe == "1d":
+                df.index = df.index.normalize() # Convertir el índice a solo la fecha para 1d
+
+            df_ultima_vela = df.loc[[ultima_apertura]]
         except KeyError:
             print(f"No se encontraron datos para la hora de apertura {ultima_apertura} en {timeframe}. Esperando...")
             return None
@@ -578,18 +589,6 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
         if df_ultima_vela.empty:
             print(f"No se encontraron datos para la hora de apertura {ultima_apertura} en {timeframe}. Esperando...")
             return None
-
-        if timeframe == "15m":
-            tiempo_transcurrido = 0
-            while tiempo_transcurrido < tiempo_espera_15m and pd.Timestamp.now(tz='UTC') < ultima_apertura + pd.Timedelta(minutes=15):
-                time.sleep(5)
-                tiempo_transcurrido += 5
-                print(f"Timeframe: {timeframe} - Verificando nuevamente. Tiempo transcurrido: {tiempo_transcurrido} segundos")
-            if pd.Timestamp.now(tz='UTC') < ultima_apertura + pd.Timedelta(minutes=15):
-                tiempo_restante = (ultima_apertura + pd.Timedelta(minutes=15) - pd.Timestamp.now(tz='UTC')).total_seconds()
-                print(f"Vela de {timeframe} aun no cerrada despues de {tiempo_espera_15m} segundos. Esperando {tiempo_restante:.0f} segundos hasta la siguiente vela.")
-                time.sleep(tiempo_restante)
-                return None
 
         print(f"Vela de {timeframe} válida. Procesando...")
         return df_ultima_vela
@@ -601,7 +600,6 @@ def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
         print(f"Error al obtener la última vela válida de {timeframe}: {e}")
         traceback.print_exc()
         return None
-
 
 def main_loop():
     analisis_inicial_completo = False
@@ -623,19 +621,52 @@ def main_loop():
 
     analisis_inicial_completo = True
 
+    timeframes_ordenadas = ["15m", "1h", "4h", "1d"]
+
     while True:
-        time.sleep(1)
-        for timeframe in CSV_FILES.keys():
-            df_ultima_vela = obtener_ultima_vela_valida(CSV_FILES[timeframe], timeframe)
+        # 1. Calcular el tiempo de espera para 15m
+        ahora = pd.Timestamp.now(tz='UTC')
+        ultima_apertura_15m = (ahora.floor('15min') - pd.Timedelta(minutes=15))
+        siguiente_cierre_15m = ultima_apertura_15m + pd.Timedelta(minutes=15)
+        tiempo_espera_15m = (siguiente_cierre_15m - ahora).total_seconds()
+        tiempo_espera_15m = max(0, tiempo_espera_15m)
+
+        tiempo_transcurrido_15m = 0
+        while tiempo_transcurrido_15m < 60 and tiempo_espera_15m > 0: #Maximo 60 segundos de espera
+            time.sleep(5)
+            tiempo_transcurrido_15m += 5
+            ahora = pd.Timestamp.now(tz='UTC')
+            tiempo_espera_15m = (siguiente_cierre_15m - ahora).total_seconds()
+            tiempo_espera_15m = max(0, tiempo_espera_15m)
+            print(f"Verificando 15m. Tiempo transcurrido: {tiempo_transcurrido_15m}, Tiempo restante: {tiempo_espera_15m}")
+        if tiempo_espera_15m > 0:
+            print(f"Esperando {tiempo_espera_15m:.0f} segundos para el cierre de la siguiente vela de 15m")
+            time.sleep(tiempo_espera_15m)
+
+        # 2. Verificar todas las temporalidades
+        for timeframe in timeframes_ordenadas:
+            file_path = CSV_FILES[timeframe]
+            df_ultima_vela = obtener_ultima_vela_valida(file_path, timeframe)
+
             if df_ultima_vela is not None:
-                try:
-                    indicators = analyze_indicators(df_ultima_vela, timeframe)
-                    price_action_analysis = analyze_price_action(df_ultima_vela)
-                    report = generate_report(timeframe, indicators, price_action_analysis)
-                    export_to_json(report, timeframe)
-                except Exception as e:
-                    print(f"Error durante el análisis de {timeframe}: {e}")
-                    traceback.print_exc()
+                ultima_apertura = df_ultima_vela.index[0]
+
+                if LAST_PROCESSED[timeframe] is None or ultima_apertura > LAST_PROCESSED[timeframe]:
+                    try:
+                        indicators = analyze_indicators(df_ultima_vela, timeframe)
+                        price_action_analysis = analyze_price_action(df_ultima_vela)
+                        report = generate_report(timeframe, indicators, price_action_analysis)
+                        export_to_json(report, timeframe)
+                        LAST_PROCESSED[timeframe] = ultima_apertura
+                        print(f"Procesada vela de {timeframe} con apertura {ultima_apertura}")
+                    except Exception as e:
+                        print(f"Error durante el análisis de {timeframe}: {e}")
+                        traceback.print_exc()
+                else:
+                    print(f"Vela de {timeframe} con apertura {ultima_apertura} ya procesada. Saltando...")
+        else:
+            print("No se procesó ninguna vela. Esperando 10 segundos para la siguiente iteración.")
+            time.sleep(10)
 
 if __name__ == "__main__":
     main_loop()
