@@ -596,7 +596,6 @@ def main_loop():
         cierre_15m = CURRENT_OPEN["15m"] + pd.Timedelta(minutes=15)
         tiempo_espera_15m = (cierre_15m - ahora).total_seconds()
         tiempo_espera_15m = max(0, tiempo_espera_15m)
-        tiempo_transcurrido_15m = 0
 
         # 3. Verificar y procesar cada temporalidad
         for timeframe in timeframes_ordenadas:
@@ -606,7 +605,6 @@ def main_loop():
             if df is not None and not df.empty:
                 ultima_fecha_csv = df.index[-1]
 
-                #Comparacion de fechas con UTC y normalizando para 1d
                 current_open_utc = CURRENT_OPEN[timeframe].tz_convert('UTC')
                 ultima_fecha_csv_utc = ultima_fecha_csv.tz_convert('UTC')
 
@@ -614,8 +612,20 @@ def main_loop():
                     current_open_utc = current_open_utc.normalize()
                     ultima_fecha_csv_utc = ultima_fecha_csv_utc.normalize()
 
-                if ultima_fecha_csv_utc == current_open_utc:
-                    try:
+                if ultima_fecha_csv_utc < current_open_utc:
+                    print(f"Esperando actualización de datos para {timeframe}...")
+                    tiempo_espera_temporalidad = 0
+                    while tiempo_espera_temporalidad < 120:  # Aumentado a 2 minutos
+                        time.sleep(10)
+                        tiempo_espera_temporalidad += 10
+                        df_actualizado = obtener_ultima_vela_valida(file_path, timeframe)
+                        if df_actualizado is not None and not df_actualizado.empty:
+                            ultima_fecha_csv_actualizado = df_actualizado.index[-1]
+                            ultima_fecha_csv_actualizado_utc = ultima_fecha_csv_actualizado.tz_convert('UTC')
+                            if timeframe == "1d":
+                                ultima_fecha_csv_actualizado_utc = ultima_fecha_csv_actualizado_utc.normalize()
+                            if ultima_fecha_csv_actualizado_utc == current_open_utc:
+                                try:
                         indicators = analyze_indicators(df, timeframe)
                         price_action_analysis = analyze_price_action(df.tail(100))
                         report = generate_report(timeframe, indicators, price_action_analysis)
@@ -653,17 +663,6 @@ def main_loop():
             elif df is None:
                 print(f"No se pudo obtener la vela para {timeframe}. Revisar el archivo o la conexión.")
 
-        # 4. Esperar el tiempo calculado para 15m
-        while tiempo_transcurrido_15m < 60 and tiempo_espera_15m > 0: #Maximo 60 segundos de espera
-            time.sleep(5)
-            tiempo_transcurrido_15m += 5
-            ahora = pd.Timestamp.now(tz='UTC')
-            tiempo_espera_15m = (cierre_15m - ahora).total_seconds()
-            tiempo_espera_15m = max(0, tiempo_espera_15m)
-            print(f"Verificando 15m. Tiempo transcurrido: {tiempo_transcurrido_15m}, Tiempo restante: {tiempo_espera_15m}")
-        if tiempo_espera_15m > 0:
-            print(f"Esperando {tiempo_espera_15m:.0f} segundos para el cierre de la siguiente vela de 15m")
-            time.sleep(tiempo_espera_15m)
-
+     
 if __name__ == "__main__":
     main_loop()
