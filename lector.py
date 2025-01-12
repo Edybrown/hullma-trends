@@ -604,10 +604,6 @@ def obtener_ultima_vela_valida(file_path, timeframe):
 def main_loop():
     timeframes_ordenadas = ["15m", "1h", "4h", "1d"]
 
-    # ***ELIMINAR EL ANÁLISIS INICIAL***
-    # El análisis inicial causaba confusión y no es necesario.
-    # El bucle principal ya se encarga de procesar las velas nuevas.
-
     while True:
         ahora = pd.Timestamp.now(tz='UTC')
 
@@ -625,9 +621,10 @@ def main_loop():
 
             if df_ultima_vela is not None:
                 ultima_apertura = df_ultima_vela.index[0]
+                ultima_apertura_utc = ultima_apertura.tz_convert('UTC') # Convertir a UTC para la comparación
 
-                # ***VERIFICACIÓN INMEDIATA***
-                if LAST_PROCESSED[timeframe] is None or ultima_apertura > LAST_PROCESSED[timeframe]:
+                # ***COMPARACIÓN CORREGIDA CON ZONA HORARIA UTC***
+                if LAST_PROCESSED[timeframe] is None or ultima_apertura_utc > (LAST_PROCESSED[timeframe].tz_convert('UTC') if LAST_PROCESSED[timeframe] is not None else pd.Timestamp('1970-01-01', tz='UTC')):
                     try:
                         indicators = analyze_indicators(df_ultima_vela, timeframe)
                         price_action_analysis = analyze_price_action(df_ultima_vela.tail(100))
