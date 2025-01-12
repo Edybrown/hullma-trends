@@ -624,26 +624,14 @@ def main_loop():
     timeframes_ordenadas = ["15m", "1h", "4h", "1d"]
 
     while True:
-        # 1. Calcular el tiempo de espera para 15m
         ahora = pd.Timestamp.now(tz='UTC')
+        #Calculo de la hora de cierre de la vela de 15m para la espera
         ultima_apertura_15m = (ahora.floor('15min') - pd.Timedelta(minutes=15))
         siguiente_cierre_15m = ultima_apertura_15m + pd.Timedelta(minutes=15)
         tiempo_espera_15m = (siguiente_cierre_15m - ahora).total_seconds()
         tiempo_espera_15m = max(0, tiempo_espera_15m)
-
         tiempo_transcurrido_15m = 0
-        while tiempo_transcurrido_15m < 60 and tiempo_espera_15m > 0: #Maximo 60 segundos de espera
-            time.sleep(5)
-            tiempo_transcurrido_15m += 5
-            ahora = pd.Timestamp.now(tz='UTC')
-            tiempo_espera_15m = (siguiente_cierre_15m - ahora).total_seconds()
-            tiempo_espera_15m = max(0, tiempo_espera_15m)
-            print(f"Verificando 15m. Tiempo transcurrido: {tiempo_transcurrido_15m}, Tiempo restante: {tiempo_espera_15m}")
-        if tiempo_espera_15m > 0:
-            print(f"Esperando {tiempo_espera_15m:.0f} segundos para el cierre de la siguiente vela de 15m")
-            time.sleep(tiempo_espera_15m)
 
-        # 2. Verificar todas las temporalidades
         for timeframe in timeframes_ordenadas:
             file_path = CSV_FILES[timeframe]
             df_ultima_vela = obtener_ultima_vela_valida(file_path, timeframe)
@@ -664,9 +652,16 @@ def main_loop():
                         traceback.print_exc()
                 else:
                     print(f"Vela de {timeframe} con apertura {ultima_apertura} ya procesada. Saltando...")
-        else:
+        else: #Si no se procesa ninguna vela en todas las temporalidades se espera 10 segundos
             print("No se procesó ninguna vela. Esperando 10 segundos para la siguiente iteración.")
-            time.sleep(10)
 
-if __name__ == "__main__":
-    main_loop()
+        while tiempo_transcurrido_15m < 60 and tiempo_espera_15m > 0: #Maximo 60 segundos de espera
+            time.sleep(5)
+            tiempo_transcurrido_15m += 5
+            ahora = pd.Timestamp.now(tz='UTC')
+            tiempo_espera_15m = (siguiente_cierre_15m - ahora).total_seconds()
+            tiempo_espera_15m = max(0, tiempo_espera_15m)
+            print(f"Verificando 15m. Tiempo transcurrido: {tiempo_transcurrido_15m}, Tiempo restante: {tiempo_espera_15m}")
+        if tiempo_espera_15m > 0:
+            print(f"Esperando {tiempo_espera_15m:.0f} segundos para el cierre de la siguiente vela de 15m")
+            time.sleep(tiempo_espera_15m)
