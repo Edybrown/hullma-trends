@@ -601,7 +601,7 @@ def obtener_ultima_vela_valida(file_path, timeframe):
         traceback.print_exc()
         return None
 
-ef main_loop():
+def main_loop():
     timeframes_ordenadas = ["15m", "1h", "4h", "1d"]
 
     # ***ELIMINAR EL ANÁLISIS INICIAL***
