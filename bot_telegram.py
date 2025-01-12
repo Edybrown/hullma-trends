@@ -266,7 +266,7 @@ async def main():
     await start_bot(application)
 
 
-    candle_task = asyncio.create_task(handle_candle_closure())
+    candle_task = asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
     await candle_task
 
 if __name__ == "__main__":
