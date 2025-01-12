@@ -551,23 +551,62 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
     print(f"Esperando {tiempo_para_siguiente_vela:.0f} segundos para el cierre de la vela de {timeframe}...")
     time.sleep(tiempo_para_siguiente_vela)
 
-def vela_esta_cerrada(df, timeframe):
-    """Verifica si la última vela en el DataFrame está cerrada."""
-    if df is None or df.empty:
-        return False
+def obtener_ultima_vela_valida(file_path, timeframe, tiempo_espera_15m=60):
+    """
+    Obtiene la última vela válida calculando la hora de apertura y filtrando el CSV.
+    """
+    try:
+        ahora = pd.Timestamp.now(tz='UTC')
+        if timeframe == "15m":
+            ultima_apertura = ahora.floor('15min') - pd.Timedelta(minutes=15)
+        elif timeframe == "1h":
+            ultima_apertura = ahora.floor('1h') - pd.Timedelta(hours=1)
+        elif timeframe == "4h":
+            ultima_apertura = ahora.floor('4h') - pd.Timedelta(hours=4)
+        elif timeframe == "1d":
+            ultima_apertura = ahora.floor('1D') - pd.Timedelta(days=1)
+        else:
+            print(f"Timeframe no válido: {timeframe}")
+            return None
+        
+        print(f"Timeframe: {timeframe}")
+        print(f"Hora actual (UTC): {ahora}")
+        print(f"Ultima apertura calculada (UTC): {ultima_apertura}")
 
-    ultima_apertura = df.index[-1]
-    intervalo = TIME_INTERVALS[timeframe]
-    cierre_esperado = ultima_apertura + pd.Timedelta(seconds=intervalo)
-    ahora = pd.Timestamp.now(tz='UTC')  # Usar UTC para consistencia
+        try:
+            df = pd.read_csv(file_path, index_col="Open Time", parse_dates=True)
+            df.index = df.index.tz_localize('UTC')
+            df_ultima_vela = df.loc[[ultima_apertura]]
+        except KeyError:
+            print(f"No se encontraron datos para la hora de apertura {ultima_apertura} en {timeframe}. Esperando...")
+            return None
 
-    # Imprimir para depurar (opcional)
-    print(f"Timeframe: {timeframe}")
-    print(f"Última apertura: {ultima_apertura}")
-    print(f"Cierre esperado: {cierre_esperado}")
-    print(f"Hora actual (UTC): {ahora}")
+        if df_ultima_vela.empty:
+            print(f"No se encontraron datos para la hora de apertura {ultima_apertura} en {timeframe}. Esperando...")
+            return None
+        
+        if timeframe == "15m":
+            tiempo_transcurrido = 0
+            while tiempo_transcurrido < tiempo_espera_15m and pd.Timestamp.now(tz='UTC') < ultima_apertura + pd.Timedelta(minutes=15):
+                time.sleep(5)
+                tiempo_transcurrido += 15
+                print(f"Timeframe: {timeframe} - Verificando nuevamente. Tiempo transcurrido: {tiempo_transcurrido} segundos")
+            if pd.Timestamp.now(tz='UTC') < ultima_apertura + pd.Timedelta(minutes=15):
+                tiempo_restante = (ultima_apertura + pd.Timedelta(minutes=15) - pd.Timestamp.now(tz='UTC')).total_seconds()
+                print(f"Vela de {timeframe} aun no cerrada despues de {tiempo_espera_15m} segundos. Esperando {tiempo_restante:.0f} segundos hasta la siguiente vela.")
+                time.sleep(tiempo_restante)
+                return None
 
-    return ahora >= cierre_esperado
+        print(f"Vela de {timeframe} válida. Procesando...")
+        return df_ultima_vela
+
+    except FileNotFoundError:
+        print(f"Archivo no encontrado: {file_path}")
+        return None
+    except Exception as e:
+        print(f"Error al obtener la última vela válida de {timeframe}: {e}")
+        traceback.print_exc()
+        return None
 
 
 
@@ -592,35 +631,18 @@ def main_loop():
     analisis_inicial_completo = True
 
     while True:
-        espera_cierre_vela("15m")
-        df_15m = load_csv(CSV_FILES["15m"])
+        time.sleep(1)
+        for timeframe in CSV_FILES.keys():
+            df_ultima_vela = obtener_ultima_vela_valida(CSV_FILES[timeframe], timeframe)
+            if df_ultima_vela is not None:
+                try:
+                    indicators = analyze_indicators(df_ultima_vela, timeframe)
+                    price_action_analysis = analyze_price_action(df_ultima_vela)
+                    report = generate_report(timeframe, indicators, price_action_analysis)
+                    export_to_json(report, timeframe)
+                except Exception as e:
+                    print(f"Error durante el análisis de {timeframe}: {e}")
+                    traceback.print_exc()
 
-        if df_15m is not None and not df_15m.empty:
-            if not analisis_inicial_completo:
-                print("Esperando a que se complete el análisis inicial...")
-                continue
-            
-            if vela_esta_cerrada(df_15m, "15m"): # Usar la nueva función
-                print("Nueva vela de 15m cerrada. Procesando todas las temporalidades...")
-
-                for timeframe in CSV_FILES.keys():
-                    df = load_csv(CSV_FILES[timeframe])
-                    if df is not None and not df.empty and vela_esta_cerrada(df, timeframe): # Usar la nueva función
-                        try:
-                            indicators = analyze_indicators(df, timeframe)
-                            price_action_analysis = analyze_price_action(df)
-                            report = generate_report(timeframe, indicators, price_action_analysis)
-                            export_to_json(report, timeframe)
-                            LAST_RUN[timeframe] = df.index[-1]
-                        except Exception as e:
-                            print(f"Error durante el análisis de {timeframe}: {e}")
-                            traceback.print_exc()
-                    elif df is not None and df.empty:
-                        print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
-        elif df_15m is None:
-            print("Error al cargar el dataframe de 15m, revisa el archivo")
-        else:
-            print("El dataframe de 15m está vacío")
 if __name__ == "__main__":
     main_loop()
-  
