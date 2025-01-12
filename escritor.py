@@ -24,6 +24,7 @@ def leer_informe_json(timeframe):
     except json.JSONDecodeError:
         print(f"Error: El archivo {archivo} no es un JSON válido.")
         return None
+
 def archivos_actualizados(timeframe, tiempo_maximo_esperado):
     """Verifica si el archivo del timeframe especificado está actualizado."""
     archivo = os.path.join(DATA_DIR, f"report_{timeframe}.json")
@@ -43,19 +44,10 @@ def generar_analisis_texto(informe):
 
     timeframe = informe["timeframe"]
     indicators = informe["indicators"]
-    price_action = informe.get("price_action_analysis", {})  # Manejo de la clave opcional
+    price_action = informe.get("price_action_analysis",{}) #Manejo de la clave price_action_analysis que podria no existir en informes antiguos
 
     analisis = f"**Análisis Técnico - {timeframe}**\n\n"
-    analisis += f"Indicadores:\n"
-    for key, value in indicators.items():
-        analisis += f"- {key}: {value}\n"
 
-    if price_action:
-        analisis += "\nAnálisis de la acción del precio:\n"
-        for key, value in price_action.items():
-            analisis += f"- {key}: {value}\n"
-
-    return analisis
   # Análisis del RSI--------------------------------------------------------
     rsi = indicators["RSI"]
     analisis += f"*   **RSI:** {rsi['message']}\n"
@@ -353,19 +345,18 @@ def generar_analisis_texto(informe):
 
 
 def guardar_informe(timeframe, analisis_markdown):
-    """Guarda el análisis en formato Markdown."""
+    """Guarda el análisis directamente en formato Markdown."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    archivo = os.path.join(OUTPUT_DIR, f"report_{timeframe}.md")
+    archivo = os.path.join(OUTPUT_DIR, f"report_{timeframe}.md") # Guarda con extensión .md
     with open(archivo, "w", encoding="utf-8") as f:
-        f.write(analisis_markdown)
-        
+        f.write(analisis_markdown) # Escribe directamente el string Markdown
+
 def analizar_temporalidad(timeframe):
     """Analiza una temporalidad y guarda el informe."""
     informe = leer_informe_json(timeframe)
     if informe:
         analisis_markdown = generar_analisis_texto(informe)
         guardar_informe(timeframe, analisis_markdown)
-
 
 def main():
     while True:
@@ -392,9 +383,13 @@ def main():
             continue  # Salta al siguiente ciclo si falla la actualización de 15m
 
         # Análisis de las temporalidades
-        for timeframe in ["15m", "1h", "4h", "1d"]:
-            analizar_temporalidad(timeframe)
-
+        analizar_temporalidad("15m")
+        analizar_temporalidad("1h")
+        analizar_temporalidad("4h")
+        analizar_temporalidad("1d")
+        
+        # Guardar análisis en archivos .md
+       
         tiempo_fin_ciclo = datetime.now()
         tiempo_transcurrido = tiempo_fin_ciclo - tiempo_inicio_ciclo
         print(f"Ciclo de análisis completado: {tiempo_fin_ciclo}, Tiempo transcurrido: {tiempo_transcurrido}")
@@ -405,9 +400,7 @@ def main():
             print(f"Esperando {tiempo_espera:.0f} segundos hasta el próximo ciclo...")
             time.sleep(tiempo_espera)
         else:
-            print("El análisis tardó más de 15 minutos. Iniciando ciclo inmediatamente...")
-
+            print("El analisis tardo mas de 15 minutos. Iniciando ciclo inmediatamente...")
 
 if __name__ == "__main__":
     main()
-
