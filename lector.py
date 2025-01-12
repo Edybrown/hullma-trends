@@ -592,14 +592,20 @@ def main_loop():
             elif timeframe == "1d":
                 CURRENT_OPEN[timeframe] = ahora.floor('1D')
 
-        # 2. Calcular el tiempo de espera para el cierre de la vela de 15m
+        # 2. Calcular el tiempo de espera para el cierre de la vela de 15m (ESTO DEFINE EL INICIO DEL SIGUIENTE CICLO)
         cierre_15m = CURRENT_OPEN["15m"] + pd.Timedelta(minutes=15)
         tiempo_espera_15m = (cierre_15m - ahora).total_seconds()
         tiempo_espera_15m = max(0, tiempo_espera_15m)
 
+        print(f"Esperando {tiempo_espera_15m:.0f} segundos para el cierre de la siguiente vela de 15m")
+        time.sleep(tiempo_espera_15m)
+
+        ahora = pd.Timestamp.now(tz='UTC') #Actualizar 'ahora' despues de la espera
+
         # 3. Verificar y procesar cada temporalidad
         for timeframe in timeframes_ordenadas:
             file_path = CSV_FILES[timeframe]
+            print(f"Verificando {timeframe}...") #Mensaje informativo
             df = obtener_ultima_vela_valida(file_path, timeframe)
 
             if df is not None and not df.empty:
@@ -618,29 +624,7 @@ def main_loop():
                     while tiempo_espera_temporalidad < 120:  # Aumentado a 2 minutos
                         time.sleep(10)
                         tiempo_espera_temporalidad += 10
-                        df_actualizado = obtener_ultima_vela_valida(file_path, timeframe)
-                        if df_actualizado is not None and not df_actualizado.empty:
-                            ultima_fecha_csv_actualizado = df_actualizado.index[-1]
-                            ultima_fecha_csv_actualizado_utc = ultima_fecha_csv_actualizado.tz_convert('UTC')
-                            if timeframe == "1d":
-                                ultima_fecha_csv_actualizado_utc = ultima_fecha_csv_actualizado_utc.normalize()
-                            if ultima_fecha_csv_actualizado_utc == current_open_utc:
-                                try:
-                        indicators = analyze_indicators(df, timeframe)
-                        price_action_analysis = analyze_price_action(df.tail(100))
-                        report = generate_report(timeframe, indicators, price_action_analysis)
-                        export_to_json(report, timeframe)
-                        LAST_PROCESSED[timeframe] = current_open_utc
-                        print(f"Procesada vela de {timeframe} con apertura {current_open_utc}")
-                    except Exception as e:
-                        print(f"Error durante el análisis de {timeframe}: {e}")
-                        traceback.print_exc()
-                elif ultima_fecha_csv_utc < current_open_utc:
-                    print(f"Esperando actualización de datos para {timeframe}...")
-                    tiempo_espera_temporalidad = 0
-                    while tiempo_espera_temporalidad < 60:
-                        time.sleep(10)
-                        tiempo_espera_temporalidad += 10
+                        print(f"Revisando actualizacion para {timeframe}, Tiempo transcurrido: {tiempo_espera_temporalidad} segundos") #Mensaje informativo
                         df_actualizado = obtener_ultima_vela_valida(file_path, timeframe)
                         if df_actualizado is not None and not df_actualizado.empty:
                             ultima_fecha_csv_actualizado = df_actualizado.index[-1]
@@ -656,13 +640,30 @@ def main_loop():
                                     export_to_json(report, timeframe)
                                     LAST_PROCESSED[timeframe] = current_open_utc
                                     print(f"Datos actualizados. Procesada vela de {timeframe} con apertura {current_open_utc}")
-                                    break #Sale del bucle de espera
+                                    break  # Salir del bucle interno
                                 except Exception as e:
                                     print(f"Error durante el análisis de {timeframe}: {e}")
                                     traceback.print_exc()
+                        else:
+                            print(f"No se pudo obtener la vela actualizada para {timeframe}. Revisar el archivo o la conexión.")
+                            break
+                elif ultima_fecha_csv_utc == current_open_utc:
+                    if LAST_PROCESSED[timeframe] != current_open_utc: #Verificar que no se haya procesado antes
+                        try:
+                            indicators = analyze_indicators(df, timeframe)
+                            price_action_analysis = analyze_price_action(df.tail(100))
+                            report = generate_report(timeframe, indicators, price_action_analysis)
+                            export_to_json(report, timeframe)
+                            LAST_PROCESSED[timeframe] = current_open_utc
+                            print(f"Procesada vela de {timeframe} con apertura {current_open_utc}")
+                        except Exception as e:
+                            print(f"Error durante el análisis de {timeframe}: {e}")
+                            traceback.print_exc()
+                    else:
+                        print(f"Vela de {timeframe} con apertura {current_open_utc} ya procesada. Saltando...")
+
             elif df is None:
                 print(f"No se pudo obtener la vela para {timeframe}. Revisar el archivo o la conexión.")
 
-     
 if __name__ == "__main__":
     main_loop()
