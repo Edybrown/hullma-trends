@@ -601,37 +601,24 @@ def obtener_ultima_vela_valida(file_path, timeframe):
         traceback.print_exc()
         return None
 
-def main_loop():
-    analisis_inicial_completo = False
-
-    for timeframe, file_path in CSV_FILES.items():
-        df = load_csv(file_path)
-        if df is not None and not df.empty:
-            try:
-                indicators = analyze_indicators(df, timeframe)
-                price_action_analysis = analyze_price_action(df)
-                report = generate_report(timeframe, indicators, price_action_analysis)
-                export_to_json(report, timeframe)
-                LAST_RUN[timeframe] = df.index[-1]
-            except Exception as e:
-                print(f"Error durante el análisis inicial de {timeframe}: {e}")
-                traceback.print_exc()
-        elif df is not None and df.empty:
-            print(f"DataFrame vacío para {timeframe}. Revisar archivo: {file_path}")
-
-    analisis_inicial_completo = True
-
+ef main_loop():
     timeframes_ordenadas = ["15m", "1h", "4h", "1d"]
+
+    # ***ELIMINAR EL ANÁLISIS INICIAL***
+    # El análisis inicial causaba confusión y no es necesario.
+    # El bucle principal ya se encarga de procesar las velas nuevas.
 
     while True:
         ahora = pd.Timestamp.now(tz='UTC')
-        #Calculo de la hora de cierre de la vela de 15m para la espera
-        ultima_apertura_15m = (ahora.floor('15min') - pd.Timedelta(minutes=15))
+
+        # 1. Calcular el tiempo de espera para 15m (al principio del bucle)
+        ultima_apertura_15m = ahora.floor('15min') - pd.Timedelta(minutes=15)
         siguiente_cierre_15m = ultima_apertura_15m + pd.Timedelta(minutes=15)
         tiempo_espera_15m = (siguiente_cierre_15m - ahora).total_seconds()
         tiempo_espera_15m = max(0, tiempo_espera_15m)
         tiempo_transcurrido_15m = 0
 
+        # 2. Verificar todas las temporalidades (INMEDIATAMENTE DESPUÉS DE OBTENER LA VELA)
         for timeframe in timeframes_ordenadas:
             file_path = CSV_FILES[timeframe]
             df_ultima_vela = obtener_ultima_vela_valida(file_path, timeframe)
@@ -639,10 +626,11 @@ def main_loop():
             if df_ultima_vela is not None:
                 ultima_apertura = df_ultima_vela.index[0]
 
+                # ***VERIFICACIÓN INMEDIATA***
                 if LAST_PROCESSED[timeframe] is None or ultima_apertura > LAST_PROCESSED[timeframe]:
                     try:
                         indicators = analyze_indicators(df_ultima_vela, timeframe)
-                        price_action_analysis = analyze_price_action(df_ultima_vela)
+                        price_action_analysis = analyze_price_action(df_ultima_vela.tail(100))
                         report = generate_report(timeframe, indicators, price_action_analysis)
                         export_to_json(report, timeframe)
                         LAST_PROCESSED[timeframe] = ultima_apertura
@@ -652,9 +640,10 @@ def main_loop():
                         traceback.print_exc()
                 else:
                     print(f"Vela de {timeframe} con apertura {ultima_apertura} ya procesada. Saltando...")
-        else: #Si no se procesa ninguna vela en todas las temporalidades se espera 10 segundos
-            print("No se procesó ninguna vela. Esperando 10 segundos para la siguiente iteración.")
+            else:
+                print(f"No se pudo obtener la vela para {timeframe}. Revisar el archivo o la conexión.")
 
+        # 3. Esperar el tiempo de 15m (DESPUÉS de verificar todas las temporalidades)
         while tiempo_transcurrido_15m < 60 and tiempo_espera_15m > 0: #Maximo 60 segundos de espera
             time.sleep(5)
             tiempo_transcurrido_15m += 5
@@ -665,3 +654,6 @@ def main_loop():
         if tiempo_espera_15m > 0:
             print(f"Esperando {tiempo_espera_15m:.0f} segundos para el cierre de la siguiente vela de 15m")
             time.sleep(tiempo_espera_15m)
+
+if __name__ == "__main__":
+    main_loop()
