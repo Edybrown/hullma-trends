@@ -6,6 +6,7 @@ import numpy as np
 import ta
 import traceback
 import re
+import datetime
 
 # --- CONFIGURACIÓN DE ARCHIVOS Y CARPETAS ---
 DATA_DIR = "datos_BTC"
@@ -550,6 +551,25 @@ def espera_cierre_vela(timeframe, margen_segundos=5):
     print(f"Esperando {tiempo_para_siguiente_vela:.0f} segundos para el cierre de la vela de {timeframe}...")
     time.sleep(tiempo_para_siguiente_vela)
 
+def vela_esta_cerrada(df, timeframe):
+    """Verifica si la última vela en el DataFrame está cerrada."""
+    if df is None or df.empty:
+        return False
+
+    ultima_apertura = df.index[-1]
+    intervalo = TIME_INTERVALS[timeframe]
+    cierre_esperado = ultima_apertura + pd.Timedelta(seconds=intervalo)
+    ahora = pd.Timestamp.now(tz='UTC')  # Usar UTC para consistencia
+
+    # Imprimir para depurar (opcional)
+    print(f"Timeframe: {timeframe}")
+    print(f"Última apertura: {ultima_apertura}")
+    print(f"Cierre esperado: {cierre_esperado}")
+    print(f"Hora actual (UTC): {ahora}")
+
+    return ahora >= cierre_esperado
+
+
 
 def main_loop():
     analisis_inicial_completo = False
@@ -571,7 +591,7 @@ def main_loop():
 
     analisis_inicial_completo = True
 
-    while True:
+   while True:
         espera_cierre_vela("15m")
         df_15m = load_csv(CSV_FILES["15m"])
 
@@ -579,28 +599,19 @@ def main_loop():
             if not analisis_inicial_completo:
                 print("Esperando a que se complete el análisis inicial...")
                 continue
+            
+            if vela_esta_cerrada(df_15m, "15m"): # Usar la nueva función
+                print("Nueva vela de 15m cerrada. Procesando todas las temporalidades...")
 
-            if df_15m.index[-1] != LAST_RUN["15m"]:
-                print("Nueva vela detectada para 15m. Verificando otras temporalidades...")
-                LAST_RUN["15m"] = df_15m.index[-1]
-                timeframes_a_procesar = ["15m"]
-
-                for timeframe in ["1h", "4h", "1d"]:
+                for timeframe in CSV_FILES.keys():
                     df = load_csv(CSV_FILES[timeframe])
-                    if df is not None and not df.empty and df.index[-1] != LAST_RUN[timeframe]:
-                        print(f"Nueva vela detectada para {timeframe}. Incluyendo en el procesamiento.")
-                        timeframes_a_procesar.append(timeframe)
-                        LAST_RUN[timeframe] = df.index[-1]
-
-                for timeframe in timeframes_a_procesar:
-                    df = load_csv(CSV_FILES[timeframe])  # Cargar el DataFrame DENTRO del bucle
-                    if df is not None and not df.empty:
+                    if df is not None and not df.empty and vela_esta_cerrada(df, timeframe): # Usar la nueva función
                         try:
-                            # ***AQUÍ ESTÁ LA CORRECCIÓN: ANÁLISIS DENTRO DEL IF***
                             indicators = analyze_indicators(df, timeframe)
                             price_action_analysis = analyze_price_action(df)
                             report = generate_report(timeframe, indicators, price_action_analysis)
                             export_to_json(report, timeframe)
+                            LAST_RUN[timeframe] = df.index[-1]
                         except Exception as e:
                             print(f"Error durante el análisis de {timeframe}: {e}")
                             traceback.print_exc()
@@ -610,6 +621,5 @@ def main_loop():
             print("Error al cargar el dataframe de 15m, revisa el archivo")
         else:
             print("El dataframe de 15m está vacío")
-
 if __name__ == "__main__":
     main_loop()
