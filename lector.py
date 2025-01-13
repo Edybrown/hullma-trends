@@ -73,34 +73,56 @@ COLUMN_MAPPING = {
     "ATR": "atr"
 }
 
+# Mapeo de columnas (asegúrate de que coincida con tu CSV)
+COLUMN_MAPPING = {
+    "RSI": "rsi",
+    "MACD": "macd",
+    "MACD_Signal": "macd_signal",
+    "MACD_Hist": "macd_hist",
+    "BB_Upper": "bb_upper",
+    "BB_Middle": "bb_middle",
+    "BB_Lower": "bb_lower",
+    "HULLMA": "hullma",
+    "ATR": "atr",
+    "time": "time",
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "close": "close",
+    "vwap": "vwap",
+    "volume": "volume",
+    "count":"count"
+}
+
 def load_csv(file_path):
     try:
         if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
             print(f"Archivo inexistente o vacío: {file_path}")
             return None
 
-        # Leer el CSV
         df = pd.read_csv(file_path)
-        
-        print(f"Columnas ANTES del mapeo: {df.columns}")
 
-        # Aplicar el mapeo de columnas
+        print(f"Columnas INMEDIATAMENTE después de pd.read_csv: {df.columns}")
+
+        # Limpieza y normalización de nombres de columnas (¡LO MÁS IMPORTANTE!)
+        df.columns = df.columns.str.strip().str.replace(r'[^\w\s]', '', regex=True).str.replace(r'\s+', '_', regex=True).str.lower()
+        print(f"Columnas DESPUÉS de la LIMPIEZA: {df.columns}")
         df = df.rename(columns=COLUMN_MAPPING)
-        
         print(f"Columnas DESPUÉS del mapeo: {df.columns}")
 
-        # Convertir la columna de tiempo a datetime y establecer como índice
+        if 'time' not in df.columns:
+            print("Error: La columna 'time' no se encuentra después de la limpieza y el mapeo.")
+            return None
         df['time'] = pd.to_datetime(df['time'], utc=True)
         df.set_index('time', inplace=True)
-
-        # Convertir columnas numéricas
-        numeric_cols = ['close', 'volume', 'open', 'high', 'low', 'rsi', 'atr', 'hullma', 'vwap', 'bb_upper', 'bb_middle', 'bb_lower', 'macd', 'macd_signal', 'macd_hist']
+        
+        numeric_cols = list(COLUMN_MAPPING.values())
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
         if df.empty:
-            print(f"El DataFrame está vacío después de la carga y el mapeo: {file_path}")
+            print(f"El DataFrame está vacío después de la carga: {file_path}")
             return None
 
         return df
@@ -108,49 +130,30 @@ def load_csv(file_path):
     except FileNotFoundError:
         print(f"Error: Archivo no encontrado en la ruta {file_path}")
     except pd.errors.EmptyDataError:
-        print(f"Error: No se encontraron columnas para analizar en el archivo {file_path}.")
+        print(f"Error: No se encontraron datos en el archivo {file_path}.")
     except pd.errors.ParserError:
-        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate de que el formato sea correcto.")
+        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate del formato.")
     except Exception as e:
-        print(f"Error desconocido al cargar el archivo {file_path}: {e}")
+        print(f"Error desconocido al cargar {file_path}: {e}")
         traceback.print_exc()
-    
     return None
-    
+
 def analyze_rsi(df):
-    print(f"Columnas disponibles en el DataFrame: {df.columns.tolist()}")
-    required_columns = ['rsi', 'close']
-
-    if not all(col in df.columns for col in required_columns) or df.empty or df['rsi'].isnull().all() or df['close'].isnull().all(): #Combina las comprobaciones
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        message = "Datos insuficientes. "
-        if missing_columns:
-            message += f"Faltan las columnas: {', '.join(missing_columns)}. "
-        if df.empty:
-            message += "El DataFrame está vacío. "
-        if df['rsi'].isnull().all() or df['close'].isnull().all():
-            message += "Las columnas 'rsi' o 'close' no contienen datos validos."
-        return {"value": None, "signal": "Datos insuficientes", "message": message}
-
+    if df is None or df.empty: #Comprueba si el dataframe es None o esta vacio antes de realizar cualquier operacion
+        return {"value": None, "signal": "Datos insuficientes", "message": "DataFrame vacío o None."}
+    if 'rsi' not in df.columns:
+        print("Error: La columna 'rsi' no se encuentra en el DataFrame.")
+        return {"value": None, "signal": "Datos insuficientes", "message": "La columna 'rsi' no está presente."}
+    if df['rsi'].isnull().all():
+        return {"value": None, "signal": "Datos insuficientes", "message": "La columna 'rsi' no contiene datos validos."}
     try:
         last_rsi = df['rsi'].iloc[-1]
         if pd.isna(last_rsi):
             return {"value": None, "signal": "Error", "message": "El último valor de RSI no es válido (NaN)."}
 
-        last_rsi = df['rsi'].iloc[-1]
-        
-        # Verificar si last_rsi es un número válido
-        if pd.isna(last_rsi):
-            return {
-                "value": None, 
-                "signal": "Error", 
-                "message": "El último valor de RSI no es válido (NaN)."
-            }
-
         signal = "Neutral"
         message = f"RSI en {last_rsi:.2f}. "
 
-        # Rangos de fuerza (sin cambios)
         if last_rsi > 70:
             signal = "Sobrecompra"
             message += "Entrando en zona de sobrecompra."
@@ -166,25 +169,13 @@ def analyze_rsi(df):
         else:
             message += "En zona neutral."
 
-        # Detección de divergencias (incluyendo ocultas)
-        if len(df) >= 3:
-            # ... (el resto del código de divergencias permanece igual)
+        return {"value": last_rsi, "signal": signal, "message": message}
 
-            return {"value": last_rsi, "signal": signal, "message": message}
-
-    except IndexError as e:
-        return {
-            "value": None, 
-            "signal": "Error", 
-            "message": f"Error al analizar el RSI. DataFrame vacío o datos insuficientes. Detalles: {str(e)}"
-        }
+    except IndexError:
+        return {"value": None, "signal": "Error", "message": "Error al acceder a los datos, posible dataframe vacio"}
     except Exception as e:
-        return {
-            "value": None, 
-            "signal": "Error", 
-            "message": f"Error inesperado al analizar el RSI. Detalles: {str(e)}"
-        }
-        
+        return {"value": None, "signal": "Error", "message": f"Error inesperado al analizar el RSI. Detalles: {str(e)}"}
+
 def analyze_vwap(df):
     try:
         if not all(col in df.columns for col in ['vwap', 'close']):
