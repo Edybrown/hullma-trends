@@ -118,27 +118,24 @@ def load_csv(file_path):
     return None
     
 def analyze_rsi(df):
-    """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     print(f"Columnas disponibles en el DataFrame: {df.columns.tolist()}")
     required_columns = ['rsi', 'close']
-    
-    # Verificar si todas las columnas requeridas están presentes
-    if not all(col in df.columns for col in required_columns):
+
+    if not all(col in df.columns for col in required_columns) or df.empty or df['rsi'].isnull().all() or df['close'].isnull().all(): #Combina las comprobaciones
         missing_columns = [col for col in required_columns if col not in df.columns]
-        return {
-            "value": None, 
-            "signal": "Datos insuficientes", 
-            "message": f"Faltan las columnas: {', '.join(missing_columns)} en el DataFrame."
-        }
+        message = "Datos insuficientes. "
+        if missing_columns:
+            message += f"Faltan las columnas: {', '.join(missing_columns)}. "
+        if df.empty:
+            message += "El DataFrame está vacío. "
+        if df['rsi'].isnull().all() or df['close'].isnull().all():
+            message += "Las columnas 'rsi' o 'close' no contienen datos validos."
+        return {"value": None, "signal": "Datos insuficientes", "message": message}
 
     try:
-        # Verificar si hay datos en las columnas requeridas
-        if df['rsi'].empty or df['close'].empty:
-            return {
-                "value": None, 
-                "signal": "Datos insuficientes", 
-                "message": "Las columnas 'rsi' o 'close' están vacías."
-            }
+        last_rsi = df['rsi'].iloc[-1]
+        if pd.isna(last_rsi):
+            return {"value": None, "signal": "Error", "message": "El último valor de RSI no es válido (NaN)."}
 
         last_rsi = df['rsi'].iloc[-1]
         
