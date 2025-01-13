@@ -28,7 +28,7 @@ LAST_PROCESSED = { # Diccionario para almacenar la última hora procesada
     "1d": None,
 }
 
-CURRENT_OPEN = {  # Nuevo diccionario para la hora de apertura actual
+CURRENT_OPEN = {# Nuevo diccionario para la hora de apertura actual
     "15m": None,
     "1h": None,
     "4h": None,
