@@ -64,6 +64,10 @@ COLUMN_MAPPING = {
     "Close": "close",
     "CLOSE": "close",
     "cLOSE": "close"
+    "RSI": "rsi"
+    "HULLMA":"hullma"
+    "ATR": "atr" 
+
 }
 
 # --- FUNCIONES ---
@@ -79,36 +83,53 @@ def normalize_column_name(name):
     return name
 
 def load_csv(file_path):
-    """
-    Carga un archivo CSV, normaliza las columnas y aplica un mapeo para homogeneizar los nombres.
-    """
     try:
-        if os.path.exists(file_path):
-            # Leer archivo CSV y configurar la columna de tiempo como índice
-            df = pd.read_csv(file_path, index_col='time', parse_dates=True)
-
-            # Normalizar nombres de columnas
-            df.columns = [normalize_column_name(col) for col in df.columns]
-
-            # Aplicar mapeo de nombres de columnas
-            df = df.rename(columns=COLUMN_MAPPING)
-
-            if not df.empty:
-                return df
-            else:
-                print(f"Advertencia: El archivo {file_path} está vacío.")
-                return None
-        else:
-            print(f"Error: El archivo {file_path} no existe.")
+        # Verificar si el archivo existe
+        if not os.path.exists(file_path):
+            print(f"El archivo {file_path} no existe.")
             return None
+        
+        # Verificar si el archivo está vacío
+        if os.path.getsize(file_path) == 0:
+            print(f"El archivo {file_path} está vacío.")
+            return None
+        
+        # Intentar cargar el archivo CSV
+        df = pd.read_csv(file_path, index_col='time', parse_dates=True)
+
+        # Convertir todos los nombres de columnas a minúsculas
+        df.columns = df.columns.str.lower()
+
+        # Normalización de nombres de columnas
+        def normalize_column_name(name):
+            name = re.sub(r"[^a-zA-Z0-9]+", "_", name)
+            name = re.sub(r"__+", "_", name)
+            name = name.strip("_")
+            return name
+
+        df.columns = [normalize_column_name(col) for col in df.columns]
+
+        # Mapeo de columnas
+        df = df.rename(columns=COLUMN_MAPPING)
+
+        # Verificar si el DataFrame está vacío después de la carga
+        if df.empty:
+            print(f"El archivo {file_path} no contiene datos después de la carga.")
+            return None
+
+        return df
+
     except FileNotFoundError:
-        print(f"Error: Archivo no encontrado en la ruta {file_path}.")
+        print(f"Error: Archivo no encontrado en la ruta {file_path}")
+        return None
+    except pd.errors.EmptyDataError:
+        print(f"Error: No se encontraron columnas para analizar en el archivo {file_path}.")
         return None
     except pd.errors.ParserError:
-        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Verifica el formato.")
+        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate de que el formato sea correcto.")
         return None
     except Exception as e:
-        print(f"Error desconocido al cargar el archivo {file_path}: {traceback.format_exc()}")
+        print(f"Error desconocido al cargar el archivo {file_path}: {e}")
         return None
 
 def analyze_rsi(df):
