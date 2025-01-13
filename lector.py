@@ -21,20 +21,19 @@ for path in [DATA_DIR, OUTPUT_DIR]:
         print(f"Error: '{path}' existe pero no es un directorio.")
         exit()
 
-LAST_PROCESSED = { # Diccionario para almacenar la última hora procesada
+LAST_PROCESSED = {  # Diccionario para almacenar la última hora procesada
     "15m": None,
     "1h": None,
     "4h": None,
     "1d": None,
 }
 
-CURRENT_OPEN = {# Nuevo diccionario para la hora de apertura actual
+CURRENT_OPEN = {  # Nuevo diccionario para la hora de apertura actual
     "15m": None,
     "1h": None,
     "4h": None,
     "1d": None,
 }
-
 
 CSV_FILES = {
     "15m": os.path.join(DATA_DIR, "XBTUSDT_15m.csv"),
@@ -52,57 +51,66 @@ TIME_INTERVALS = {
 
 LAST_RUN = {key: None for key in CSV_FILES.keys()}
 
-# Unificar mapeos (si es necesario)
-COLUMN_MAPPING_EXTERIOR = {  # Ejemplo de mapeo exterior (si existe)
-    "close": "cierre",
-    "volume": "volumen"
-}
-COLUMN_MAPPING_INTERIOR = {
+# Unificar mapeos de nombres de columnas
+COLUMN_MAPPING = {
+    "close": "close",
+    "volume": "volume",
+    "time": "time",
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "cierre": "close",
+    "volumen": "volume",
     "Close": "close",
     "CLOSE": "close",
     "cLOSE": "close"
 }
-COLUMN_MAPPING = {**COLUMN_MAPPING_EXTERIOR, **COLUMN_MAPPING_INTERIOR} 
+
+# --- FUNCIONES ---
+def normalize_column_name(name):
+    """
+    Normaliza los nombres de las columnas: convierte a minúsculas,
+    reemplaza caracteres no alfanuméricos por guiones bajos y elimina guiones bajos redundantes.
+    """
+    name = name.lower()  # Convertir a minúsculas
+    name = re.sub(r"[^a-z0-9]+", "_", name)  # Reemplazar caracteres no alfanuméricos
+    name = re.sub(r"__+", "_", name)  # Reemplazar múltiples guiones bajos por uno solo
+    name = name.strip("_")  # Eliminar guiones bajos al inicio o final
+    return name
 
 def load_csv(file_path):
+    """
+    Carga un archivo CSV, normaliza las columnas y aplica un mapeo para homogeneizar los nombres.
+    """
     try:
         if os.path.exists(file_path):
+            # Leer archivo CSV y configurar la columna de tiempo como índice
             df = pd.read_csv(file_path, index_col='time', parse_dates=True)
 
-            # Convertir todos los nombres de columnas a minúsculas
-            df.columns = df.columns.str.lower()
-
-            # Normalización (MANTENER ESTO PARA ROBUSTEZ)
-            def normalize_column_name(name):
-                name = re.sub(r"[^a-zA-Z0-9]+", "_", name)
-                name = re.sub(r"__+", "_", name)
-                name = name.strip("_")
-                return name
+            # Normalizar nombres de columnas
             df.columns = [normalize_column_name(col) for col in df.columns]
 
-            # Mapeo de columnas
-            df = df.rename(columns=COLUMN_MAPPING) 
+            # Aplicar mapeo de nombres de columnas
+            df = df.rename(columns=COLUMN_MAPPING)
 
             if not df.empty:
                 return df
             else:
-                print(f"El archivo {file_path} está vacío.")
+                print(f"Advertencia: El archivo {file_path} está vacío.")
                 return None
         else:
-            print(f"El archivo {file_path} no existe.")
+            print(f"Error: El archivo {file_path} no existe.")
             return None
     except FileNotFoundError:
-        print(f"Error: Archivo no encontrado en la ruta {file_path}")
+        print(f"Error: Archivo no encontrado en la ruta {file_path}.")
         return None
     except pd.errors.ParserError:
-        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate de que el formato sea correcto.")
+        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Verifica el formato.")
         return None
     except Exception as e:
-        print(f"Error desconocido al cargar el archivo {file_path}: {e}")
-        return None 
+        print(f"Error desconocido al cargar el archivo {file_path}: {traceback.format_exc()}")
+        return None
 
-# ... (resto del código)
-        
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     try:
