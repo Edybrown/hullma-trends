@@ -116,7 +116,13 @@ def load_csv(file_path):
         if df.empty:
             print(f"El archivo {file_path} no contiene datos después de la carga.")
             return None
-
+        if df is not None:
+        try:
+            df.index = pd.to_datetime(df.index)
+        except ValueError as e:
+            print(f"Error al convertir el índice a datetime: {e}")
+            return None
+        
         return df
 
     except FileNotFoundError:
