@@ -63,10 +63,10 @@ COLUMN_MAPPING = {
     "volumen": "volume",
     "Close": "close",
     "CLOSE": "close",
-    "cLOSE": "close"
-    "RSI": "rsi"
-    "HULLMA":"hullma"
-    "ATR": "atr" 
+    "cLOSE": "close" ,
+    "RSI": "rsi" ,
+    "HULLMA":"hullma" ,
+    "ATR": "atr" ,
 
 }
 
