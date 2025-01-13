@@ -93,7 +93,7 @@ def load_csv(file_path):
         return None
     except Exception as e:
         print(f"Error desconocido al cargar el archivo {file_path}: {e}")
-        return None.
+        return None  # Indentación corregida: DENTRO del except
         
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
