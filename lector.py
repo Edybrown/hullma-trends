@@ -100,16 +100,25 @@ def load_csv(file_path):
             print(f"Archivo inexistente o vacío: {file_path}")
             return None
 
-        df = pd.read_csv(file_path)
+        # Lectura del CSV con encoding='utf-8' (¡IMPORTANTE!)
+        df = pd.read_csv(file_path, encoding='utf-8')
 
-        print(f"Columnas INMEDIATAMENTE después de pd.read_csv: {df.columns}")
+        # Diagnóstico EXHAUSTIVO
+        print(f"1. Tipo de df: {type(df)}")
+        print(f"2. Columnas INMEDIATAMENTE después de pd.read_csv (tipo): {type(df.columns)}")
+        print(f"3. Columnas INMEDIATAMENTE después de pd.read_csv (lista): {df.columns.tolist()}")
+        print(f"4. Columnas INMEDIATAMENTE después de pd.read_csv (valores): {df.columns.values}")
+        print(f"5. Primeras 5 filas ANTES de la limpieza:\n{df.head().to_string()}")
+        print(f"6. info del dataframe:\n {df.info()}")
 
-        # Limpieza y normalización de nombres de columnas (¡LO MÁS IMPORTANTE!)
-        df.columns = df.columns.str.strip().str.replace(r'[^\w\s]', '', regex=True).str.replace(r'\s+', '_', regex=True).str.lower()
-        print(f"Columnas DESPUÉS de la LIMPIEZA: {df.columns}")
+        # Limpieza y normalización (¡CLAVE!)
+        df.columns = df.columns.astype(str).str.strip().str.replace(r'[^\w\s]', '', regex=True).str.replace(r'\s+', '_', regex=True).str.lower()
+
+        print(f"7. Columnas DESPUÉS de la LIMPIEZA: {df.columns.tolist()}")
+        print(f"8. Primeras 5 filas DESPUÉS de la limpieza:\n{df.head().to_string()}")
+
         df = df.rename(columns=COLUMN_MAPPING)
-        print(f"Columnas DESPUÉS del mapeo: {df.columns}")
-
+        print(f"9. Columnas DESPUÉS del mapeo: {df.columns.tolist()}")
         if 'time' not in df.columns:
             print("Error: La columna 'time' no se encuentra después de la limpieza y el mapeo.")
             return None
@@ -133,6 +142,8 @@ def load_csv(file_path):
         print(f"Error: No se encontraron datos en el archivo {file_path}.")
     except pd.errors.ParserError:
         print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate del formato.")
+    except UnicodeDecodeError: #Captura el error de decodificacion
+        print(f"Error de decodificación Unicode al leer {file_path}. Intenta con un encoding diferente (ej. 'latin1', 'cp1252').")
     except Exception as e:
         print(f"Error desconocido al cargar {file_path}: {e}")
         traceback.print_exc()
