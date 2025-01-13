@@ -119,6 +119,10 @@ def load_csv(file_path):
     
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
+    print(f"Columnas disponibles en MACD: {df.columns.tolist()}")
+    required_columns = ['rsi','close']
+    if not all(col in df.columns for col in required_columns):
+        missing_columns = [col for col in required_columns if col not in df.columns]
     try:
         if 'rsi' not in df.columns or 'close' not in df.columns:
             return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'rsi' o 'close' en el DataFrame."}
@@ -225,6 +229,11 @@ def analyze_atr(df, lookback=5):
         dict: Un diccionario con el valor del ATR ('value'), la señal ('signal') y un mensaje descriptivo ('message').
               Devuelve un mensaje de error si faltan las columnas necesarias o si no hay suficientes datos.
     """
+    print(f"Columnas disponibles en MACD: {df.columns.tolist()}")
+    required_columns = ['atr', 'close']
+    if not all(col in df.columns for col in required_columns):
+        missing_columns = [col for col in required_columns if col not in df.columns]  
+    
     try:
         if 'atr' not in df.columns:
             return {"value": None, "signal": "Datos insuficientes", "message": "Falta la columna 'ATR' en el DataFrame."}
