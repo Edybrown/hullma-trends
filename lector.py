@@ -28,7 +28,7 @@ LAST_PROCESSED = { # Diccionario para almacenar la última hora procesada
     "1d": None,
 }
 
-CURRENT_OPEN = {  # Nuevo diccionario para la hora de apertura actual
+CURRENT_OPEN = {  # Nuevo diccionario para la hora de apertura actual
     "15m": None,
     "1h": None,
     "4h": None,
@@ -52,18 +52,24 @@ TIME_INTERVALS = {
 
 LAST_RUN = {key: None for key in CSV_FILES.keys()}
 
-COLUMN_MAPPING = {
+# Unificar mapeos (si es necesario)
+COLUMN_MAPPING_EXTERIOR = {  # Ejemplo de mapeo exterior (si existe)
+    "close": "cierre",
+    "volume": "volumen"
+}
+COLUMN_MAPPING_INTERIOR = {
     "Close": "close",
     "CLOSE": "close",
     "cLOSE": "close"
 }
+COLUMN_MAPPING = {**COLUMN_MAPPING_EXTERIOR, **COLUMN_MAPPING_INTERIOR} 
 
 def load_csv(file_path):
     try:
         if os.path.exists(file_path):
             df = pd.read_csv(file_path, index_col='time', parse_dates=True)
 
-            # CONVERSIÓN A MINÚSCULAS (SOLUCIÓN PRINCIPAL)
+            # Convertir todos los nombres de columnas a minúsculas
             df.columns = df.columns.str.lower()
 
             # Normalización (MANTENER ESTO PARA ROBUSTEZ)
@@ -74,8 +80,8 @@ def load_csv(file_path):
                 return name
             df.columns = [normalize_column_name(col) for col in df.columns]
 
-            # Mapeo (SOLO PARA CASOS ESPECIALES, NO PARA RSI, ATR, HULLMA)
-            df = df.rename(columns=COLUMN_MAPPING)
+            # Mapeo de columnas
+            df = df.rename(columns=COLUMN_MAPPING) 
 
             if not df.empty:
                 return df
@@ -93,7 +99,9 @@ def load_csv(file_path):
         return None
     except Exception as e:
         print(f"Error desconocido al cargar el archivo {file_path}: {e}")
-        return None  # Indentación corregida: DENTRO del except
+        return None 
+
+# ... (resto del código)
         
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
