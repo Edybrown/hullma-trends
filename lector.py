@@ -63,22 +63,18 @@ def load_csv(file_path):
         if os.path.exists(file_path):
             df = pd.read_csv(file_path, index_col='time', parse_dates=True)
 
-            # Normalización de nombres de columna (con manejo de excepciones)
-            try:
-                def normalize_column_name(name):
-                    name = name.lower()
-                    name = re.sub(r"[^a-zA-Z0-9]+", "_", name)  # Sustituye caracteres no alfanuméricos por _
-                    name = re.sub(r"__+", "_", name)  # Sustituye múltiples _ por uno solo
-                    name = name.strip("_")  # Elimina _ al principio y al final
-                    return name
-                df.columns = [normalize_column_name(col) for col in df.columns]
-            except AttributeError as e:
-                print(f"Error al normalizar nombres de columna: {e}. Asegúrate de que las columnas sean strings")
-                return None
-            except Exception as e:
-                print(f"Error desconocido al normalizar nombres de columna: {e}")
-                return None
+            # CONVERSIÓN A MINÚSCULAS (SOLUCIÓN PRINCIPAL)
+            df.columns = df.columns.str.lower()
 
+            # Normalización (MANTENER ESTO PARA ROBUSTEZ)
+            def normalize_column_name(name):
+                name = re.sub(r"[^a-zA-Z0-9]+", "_", name)
+                name = re.sub(r"__+", "_", name)
+                name = name.strip("_")
+                return name
+            df.columns = [normalize_column_name(col) for col in df.columns]
+
+            # Mapeo (SOLO PARA CASOS ESPECIALES, NO PARA RSI, ATR, HULLMA)
             df = df.rename(columns=COLUMN_MAPPING)
 
             if not df.empty:
@@ -97,8 +93,8 @@ def load_csv(file_path):
         return None
     except Exception as e:
         print(f"Error desconocido al cargar el archivo {file_path}: {e}")
-        return None
-
+        return None.
+        
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     try:
