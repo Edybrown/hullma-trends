@@ -173,7 +173,7 @@ def analyze_rsi(df):
         if len(df) >= 3:
             # ... (el resto del código de divergencias permanece igual)
 
-        return {"value": last_rsi, "signal": signal, "message": message}
+            return {"value": last_rsi, "signal": signal, "message": message}
 
     except IndexError as e:
         return {
