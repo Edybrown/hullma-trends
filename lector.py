@@ -52,79 +52,66 @@ TIME_INTERVALS = {
 LAST_RUN = {key: None for key in CSV_FILES.keys()}
 
 # Unificar mapeos de nombres de columnas
+
+# Mapeo de columnas CORRECTO
 COLUMN_MAPPING = {
-    "close": "close",
-    "volume": "volume",
+    "RSI": "rsi",
+    "MACD": "macd",
+    "MACD_Signal": "macd_signal",
+    "MACD_Hist": "macd_hist",
+    "BB_Upper": "bb_upper",
+    "BB_Middle": "bb_middle",
+    "BB_Lower": "bb_lower",
+    "HULLMA": "hullma",
+    "ATR": "atr",
     "time": "time",
     "open": "open",
     "high": "high",
     "low": "low",
-    "cierre": "close",
-    "volumen": "volume",
-    "Close": "close",
-    "CLOSE": "close",
-    "cLOSE": "close" ,
-    "RSI": "rsi" ,
-    "HULLMA":"hullma" ,
-    "ATR": "atr" ,
-
+    "close": "close",
+    "vwap": "vwap",
+    "volume": "volume"
 }
-
-# --- FUNCIONES ---
-def normalize_column_name(name):
-    """
-    Normaliza los nombres de las columnas: convierte a minúsculas,
-    reemplaza caracteres no alfanuméricos por guiones bajos y elimina guiones bajos redundantes.
-    """
-    name = name.lower()  # Convertir a minúsculas
-    name = re.sub(r"[^a-z0-9]+", "_", name)  # Reemplazar caracteres no alfanuméricos
-    name = re.sub(r"__+", "_", name)  # Reemplazar múltiples guiones bajos por uno solo
-    name = name.strip("_")  # Eliminar guiones bajos al inicio o final
-    return name
 
 def load_csv(file_path):
     try:
-        # Verificar si el archivo existe
-        if not os.path.exists(file_path):
-            print(f"El archivo {file_path} no existe.")
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            print(f"Archivo inexistente o vacío: {file_path}")
             return None
-        
-        # Verificar si el archivo está vacío
-        if os.path.getsize(file_path) == 0:
-            print(f"El archivo {file_path} está vacío.")
-            return None
-        
-        # Intentar cargar el archivo CSV
+
         df = pd.read_csv(file_path, index_col='time', parse_dates=True)
+        df.index = pd.to_datetime(df.index, utc=True) #Convierte el indice a datetime y le asigna la zona horaria UTC
 
-        # Convertir todos los nombres de columnas a minúsculas
-        df.columns = df.columns.str.lower()
+        print(f"Columnas ANTES del mapeo: {df.columns}") #Imprime las columnas antes del mapeo
 
-        # Normalización de nombres de columnas
-        def normalize_column_name(name):
-            name = re.sub(r"[^a-zA-Z0-9]+", "_", name)
-            name = re.sub(r"__+", "_", name)
-            name = name.strip("_")
-            return name
+        df = df.rename(columns=COLUMN_MAPPING) #Aplica el mapeo justo despues de la lectura
 
-        df.columns = [normalize_column_name(col) for col in df.columns]
+        print(f"Columnas DESPUÉS del mapeo: {df.columns}") #Imprime las columnas despues del mapeo
 
-        # Mapeo de columnas
-        df = df.rename(columns=COLUMN_MAPPING)
+        numeric_cols = ['close', 'volume', 'open', 'high', 'low', 'rsi', 'atr', 'hullma', 'vwap', 'bb_upper', 'bb_middle', 'bb_lower', 'macd', 'macd_signal', 'macd_hist']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        # Verificar si el DataFrame está vacío después de la carga
         if df.empty:
-            print(f"El archivo {file_path} no contiene datos después de la carga.")
+            print(f"El DataFrame está vacío después de la carga y el mapeo: {file_path}")
             return None
-        if df is not None:
-            try:
-                df.index = pd.to_datetime(df.index)
-            except ValueError as e:
-                print(f"Error al convertir el índice a datetime: {e}")
-            return None
-        
-        return dff
 
+        return df
+
+    except FileNotFoundError:
+        print(f"Error: Archivo no encontrado en la ruta {file_path}")
+        return None
+    except pd.errors.EmptyDataError:
+        print(f"Error: No se encontraron columnas para analizar en el archivo {file_path}.")
+        return None
+    except pd.errors.ParserError:
+        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate de que el formato sea correcto.")
+        return None
+    except Exception as e:
+        print(f"Error desconocido al cargar el archivo {file_path}: {e}")
+        traceback.print_exc()
+        return None
     except FileNotFoundError:
         print(f"Error: Archivo no encontrado en la ruta {file_path}")
         return None
