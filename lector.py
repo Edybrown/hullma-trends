@@ -53,8 +53,15 @@ LAST_RUN = {key: None for key in CSV_FILES.keys()}
 
 # Unificar mapeos de nombres de columnas
 
-# Mapeo de columnas CORRECTO
 COLUMN_MAPPING = {
+    "time": "time",
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "close": "close",
+    "vwap": "vwap",
+    "volume": "volume",
+    "count": "count",
     "RSI": "rsi",
     "MACD": "macd",
     "MACD_Signal": "macd_signal",
@@ -63,14 +70,7 @@ COLUMN_MAPPING = {
     "BB_Middle": "bb_middle",
     "BB_Lower": "bb_lower",
     "HULLMA": "hullma",
-    "ATR": "atr",
-    "time": "time",
-    "open": "open",
-    "high": "high",
-    "low": "low",
-    "close": "close",
-    "vwap": "vwap",
-    "volume": "volume"
+    "ATR": "atr"
 }
 
 def load_csv(file_path):
@@ -79,15 +79,21 @@ def load_csv(file_path):
             print(f"Archivo inexistente o vacío: {file_path}")
             return None
 
-        df = pd.read_csv(file_path, index_col='time', parse_dates=True)
-        df.index = pd.to_datetime(df.index, utc=True) #Convierte el indice a datetime y le asigna la zona horaria UTC
+        # Leer el CSV
+        df = pd.read_csv(file_path)
+        
+        print(f"Columnas ANTES del mapeo: {df.columns}")
 
-        print(f"Columnas ANTES del mapeo: {df.columns}") #Imprime las columnas antes del mapeo
+        # Aplicar el mapeo de columnas
+        df = df.rename(columns=COLUMN_MAPPING)
+        
+        print(f"Columnas DESPUÉS del mapeo: {df.columns}")
 
-        df = df.rename(columns=COLUMN_MAPPING) #Aplica el mapeo justo despues de la lectura
+        # Convertir la columna de tiempo a datetime y establecer como índice
+        df['time'] = pd.to_datetime(df['time'], utc=True)
+        df.set_index('time', inplace=True)
 
-        print(f"Columnas DESPUÉS del mapeo: {df.columns}") #Imprime las columnas despues del mapeo
-
+        # Convertir columnas numéricas
         numeric_cols = ['close', 'volume', 'open', 'high', 'low', 'rsi', 'atr', 'hullma', 'vwap', 'bb_upper', 'bb_middle', 'bb_lower', 'macd', 'macd_signal', 'macd_hist']
         for col in numeric_cols:
             if col in df.columns:
@@ -101,30 +107,16 @@ def load_csv(file_path):
 
     except FileNotFoundError:
         print(f"Error: Archivo no encontrado en la ruta {file_path}")
-        return None
     except pd.errors.EmptyDataError:
         print(f"Error: No se encontraron columnas para analizar en el archivo {file_path}.")
-        return None
     except pd.errors.ParserError:
         print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate de que el formato sea correcto.")
-        return None
     except Exception as e:
         print(f"Error desconocido al cargar el archivo {file_path}: {e}")
         traceback.print_exc()
-        return None
-    except FileNotFoundError:
-        print(f"Error: Archivo no encontrado en la ruta {file_path}")
-        return None
-    except pd.errors.EmptyDataError:
-        print(f"Error: No se encontraron columnas para analizar en el archivo {file_path}.")
-        return None
-    except pd.errors.ParserError:
-        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate de que el formato sea correcto.")
-        return None
-    except Exception as e:
-        print(f"Error desconocido al cargar el archivo {file_path}: {e}")
-        return None
-
+    
+    return None
+    
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     try:
