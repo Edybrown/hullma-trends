@@ -106,10 +106,10 @@ def load_csv(file_path):
 def analyze_rsi(df):
     """Analiza el RSI PRECALCULADO en el DataFrame, incluyendo divergencias ocultas."""
     try:
-        if 'RSI' not in df.columns or 'close' not in df.columns:
-            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'RSI' o 'close' en el DataFrame."}
+        if 'rsi' not in df.columns or 'close' not in df.columns:
+            return {"value": None, "signal": "Datos insuficientes", "message": "Faltan las columnas 'rsi' o 'close' en el DataFrame."}
 
-        last_rsi = df['RSI'].iloc[-1]
+        last_rsi = df['rsi'].iloc[-1]
         signal = "Neutral"
         message = f"RSI en {last_rsi:.2f}. "
 
@@ -147,12 +147,12 @@ def analyze_rsi(df):
 
             # Divergencias ocultas (AÑADIDO)
             # Divergencia oculta alcista (precio hace un mínimo más alto, RSI hace un mínimo más bajo)
-            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['RSI'].iloc[-1] < df['RSI'].iloc[-2] and df['close'].iloc[-2] > df['close'].iloc[-3] and df['RSI'].iloc[-2] > df['RSI'].iloc[-3]:
+            if df['close'].iloc[-1] > df['close'].iloc[-2] and df['rsi'].iloc[-1] < df['rsi'].iloc[-2] and df['close'].iloc[-2] > df['close'].iloc[-3] and df['rsi'].iloc[-2] > df['rsi'].iloc[-3]:
                 message += " Posible divergencia oculta alcista."
                 signal = "Divergencia Oculta Alcista"
 
             # Divergencia oculta bajista (precio hace un máximo más bajo, RSI hace un máximo más alto)
-            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['RSI'].iloc[-1] > df['RSI'].iloc[-2] and df['close'].iloc[-2] < df['close'].iloc[-3] and df['RSI'].iloc[-2] < df['RSI'].iloc[-3]:
+            elif df['close'].iloc[-1] < df['close'].iloc[-2] and df['rsi'].iloc[-1] > df['rsi'].iloc[-2] and df['close'].iloc[-2] < df['close'].iloc[-3] and df['rsi'].iloc[-2] < df['rsi'].iloc[-3]:
                 message += " Posible divergencia oculta bajista."
                 signal = "Divergencia Oculta Bajista"
         return {"value": last_rsi, "signal": signal, "message": message}
