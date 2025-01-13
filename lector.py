@@ -100,10 +100,44 @@ def load_csv(file_path):
             print(f"Archivo inexistente o vacío: {file_path}")
             return None
 
-        # Lectura del CSV con encoding='utf-8' (¡IMPORTANTE!)
-        df = pd.read_csv(file_path, encoding='utf-8')
+        # Lectura del CSV con manejo EXTREMO de codificación y errores
+        try:
+            with open(file_path, 'r', encoding='utf-8-sig') as f: #Abre el archivo y lo lee con utf-8-sig
+                csv_content = f.read()
+            df = pd.read_csv(io.StringIO(csv_content)) #Lee el contenido del archivo con pandas
+            print("Se leyo el archivo con encoding utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f: #Abre el archivo y lo lee con utf-8
+                    csv_content = f.read()
+                df = pd.read_csv(io.StringIO(csv_content)) #Lee el contenido del archivo con pandas
+                print("Se leyo el archivo con encoding utf-8")
+            except UnicodeDecodeError:
+                try:
+                    with open(file_path, 'r', encoding='latin1') as f: #Abre el archivo y lo lee con latin1
+                        csv_content = f.read()
+                    df = pd.read_csv(io.StringIO(csv_content), sep=';') #Lee el contenido del archivo con pandas y delimitador ;
+                    print("Se leyo el archivo con encoding latin1 y delimitador ;")
+                except UnicodeDecodeError:
+                    try:
+                        with open(file_path, 'r', encoding='cp1252') as f: #Abre el archivo y lo lee con cp1252
+                            csv_content = f.read()
+                        df = pd.read_csv(io.StringIO(csv_content), sep=';') #Lee el contenido del archivo con pandas y delimitador ;
+                        print("Se leyo el archivo con encoding cp1252 y delimitador ;")
+                    except Exception as e:
+                        print(f"No se pudo leer el archivo con ninguna codificacion conocida: {e}")
+                        return None
+                except Exception as e:
+                    print(f"Error desconocido al parsear con latin1 y ; {e}")
+                    return None
+            except Exception as e:
+                print(f"Error desconocido al parsear con utf-8: {e}")
+                return None
+        except Exception as e:
+            print(f"Error desconocido al parsear con utf-8-sig: {e}")
+            return None
 
-        # Diagnóstico EXHAUSTIVO
+        # DIAGNÓSTICO EXTREMO (¡NECESITO VER ESTA SALIDA!)
         print(f"1. Tipo de df: {type(df)}")
         print(f"2. Columnas INMEDIATAMENTE después de pd.read_csv (tipo): {type(df.columns)}")
         print(f"3. Columnas INMEDIATAMENTE después de pd.read_csv (lista): {df.columns.tolist()}")
@@ -136,14 +170,6 @@ def load_csv(file_path):
 
         return df
 
-    except FileNotFoundError:
-        print(f"Error: Archivo no encontrado en la ruta {file_path}")
-    except pd.errors.EmptyDataError:
-        print(f"Error: No se encontraron datos en el archivo {file_path}.")
-    except pd.errors.ParserError:
-        print(f"Error: No se pudo analizar el archivo CSV en {file_path}. Asegúrate del formato.")
-    except UnicodeDecodeError: #Captura el error de decodificacion
-        print(f"Error de decodificación Unicode al leer {file_path}. Intenta con un encoding diferente (ej. 'latin1', 'cp1252').")
     except Exception as e:
         print(f"Error desconocido al cargar {file_path}: {e}")
         traceback.print_exc()
