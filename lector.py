@@ -209,8 +209,8 @@ def analyze_rsi(df):
     print(f"Columnas disponibles en RSI: {df.columns.tolist()}")  # Imprime las columnas disponibles
 
     # Verifica si la columna 'rsi' está presente
-    if 'rsi' not in df.columns:
-        missing_columns = ['rsi'] if 'rsi' not in df.columns else []
+    if 'RSI' not in df.columns:
+        missing_columns = ['RSI'] if 'rsi' not in df.columns else []
         return {
             "value": None,
             "signal": "Datos insuficientes",
