@@ -292,8 +292,16 @@ async def main():
     await start_bot(application)
 
 
-    candle_task = asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
-    await candle_task
+    if usuarios:
+        for chat_id, suscripciones in usuarios.items():
+            print(f"Creando tarea para chat_id: {chat_id}")
+            asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
+        
+        # Esperar a que todas las tareas se ejecuten
+        await asyncio.gather(*asyncio.all_tasks())
+
+    else:
+        print("[INFO] No hay usuarios en la base de datos.")
 
 if __name__ == "__main__":
     asyncio.run(main())
