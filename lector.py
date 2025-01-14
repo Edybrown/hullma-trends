@@ -94,9 +94,6 @@ COLUMN_MAPPING = {
     "count":"count"
 }
 
-import pandas as pd
-import os
-import io
 
 def load_csv(file_path):
     def inspect_csv_headers(file_path):
@@ -204,18 +201,32 @@ def load_csv(file_path):
         return None
 
 def analyze_rsi(df):
-    if df is None or df.empty: #Comprueba si el dataframe es None o esta vacio antes de realizar cualquier operacion
+    if df is None or df.empty:  # Comprueba si el DataFrame es None o está vacío antes de realizar cualquier operación
         return {"value": None, "signal": "Datos insuficientes", "message": "DataFrame vacío o None."}
+
+    print(f"Columnas disponibles en RSI: {df.columns.tolist()}")  # Imprime las columnas disponibles
+
+    # Validación de la columna 'rsi'
     if 'rsi' not in df.columns:
-        print("Error: La columna 'rsi' no se encuentra en el DataFrame.")
-        return {"value": None, "signal": "Datos insuficientes", "message": "La columna 'rsi' no está presente."}
+        missing_columns = ['rsi'] if 'rsi' not in df.columns else []
+        return {
+            "value": None,
+            "signal": "Datos insuficientes",
+            "message": f"La columna 'rsi' no está presente. Faltan columnas: {missing_columns}. Columnas presentes: {df.columns.tolist()}"
+        }
+
+    # Verifica si todos los valores de la columna 'rsi' son NaN
     if df['rsi'].isnull().all():
-        return {"value": None, "signal": "Datos insuficientes", "message": "La columna 'rsi' no contiene datos validos."}
+        return {"value": None, "signal": "Datos insuficientes", "message": "La columna 'rsi' no contiene datos válidos."}
+
     try:
+        # Obtiene el último valor del RSI
         last_rsi = df['rsi'].iloc[-1]
+
         if pd.isna(last_rsi):
             return {"value": None, "signal": "Error", "message": "El último valor de RSI no es válido (NaN)."}
 
+        # Determina la señal en función del valor del RSI
         signal = "Neutral"
         message = f"RSI en {last_rsi:.2f}. "
 
@@ -237,9 +248,10 @@ def analyze_rsi(df):
         return {"value": last_rsi, "signal": signal, "message": message}
 
     except IndexError:
-        return {"value": None, "signal": "Error", "message": "Error al acceder a los datos, posible dataframe vacio"}
+        return {"value": None, "signal": "Error", "message": "Error al acceder a los datos, posible DataFrame vacío."}
     except Exception as e:
         return {"value": None, "signal": "Error", "message": f"Error inesperado al analizar el RSI. Detalles: {str(e)}"}
+
 
 def analyze_vwap(df):
     try:
