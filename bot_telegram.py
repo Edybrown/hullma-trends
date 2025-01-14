@@ -86,32 +86,38 @@ async def show_temporalidades(update: Update, context: CallbackContext):
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
             async with conn.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
                 suscripciones_db = await cursor.fetchone()
-                # Si no existe suscripción, inicializar como lista vacía
                 suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
     except aiosqlite.Error as e:
         print(f"[ERROR] Error al obtener las suscripciones del usuario: {e}")
         return
 
-    # Crear el teclado con las opciones de suscripción o desuscripción
     keyboard = []
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
-        # Determinar si está suscrito o no y ajustar el texto y callback_data
         button_text = f"{'Desuscribirse' if temporalidad in suscripciones else 'Suscribirse'} {temporalidad}"
         callback_data = f"{'desuscribir' if temporalidad in suscripciones else 'suscribir'}_{temporalidad}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    # Editar el mensaje con los botones actualizados
-    await update.callback_query.edit_message_text('Selecciona una temporalidad:', reply_markup=reply_markup)
 
+    # *** SOLUCIÓN CLAVE: Editar con un texto diferente (invisible) ***
+    try:
+        await update.callback_query.edit_message_text(
+            text="Actualizando suscripciones...",  # Texto temporal
+            reply_markup=reply_markup
+        )
+    except telegram.error.BadRequest as e:
+        if str(e).startswith("Message is not modified"):
+            # Si no hay cambios reales, enviar un mensaje diferente
+            await update.callback_query.answer("No hay cambios en tus suscripciones.")
+        else:
+            print(f"Error al editar mensaje: {e}")
 
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
     chat_id = query.message.chat.id
     data = query.data
 
-    # Manejo de errores al acceder a la base de datos
     try:
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
             async with conn.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
@@ -121,7 +127,6 @@ async def button(update: Update, context: CallbackContext):
             temporalidad = data.split('_')[1]
             accion = data.split('_')[0]
 
-            # Lógica de suscripción/desuscripción
             if accion == 'suscribir' and temporalidad not in suscripciones:
                 suscripciones.append(temporalidad)
                 await query.answer(f"Te has suscrito a {temporalidad}.")
@@ -129,10 +134,8 @@ async def button(update: Update, context: CallbackContext):
                 suscripciones.remove(temporalidad)
                 await query.answer(f"Te has desuscrito de {temporalidad}.")
             else:
-                # Si ya está suscrito o desuscrito
                 await query.answer(f"Ya estás {'suscrito' if temporalidad in suscripciones else 'desuscrito'} a {temporalidad}.")
 
-            # Actualizar la base de datos con las suscripciones modificadas
             await conn.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?", (','.join(suscripciones), chat_id))
             await conn.commit()
 
@@ -141,9 +144,7 @@ async def button(update: Update, context: CallbackContext):
         await query.answer("Ocurrió un error al procesar tu solicitud.")
         return
 
-    # Mostrar nuevamente las temporalidades con los botones actualizados
     await show_temporalidades(update, context)
-
 
 
 def check_initial_reports():
