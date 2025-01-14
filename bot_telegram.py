@@ -95,16 +95,19 @@ async def show_temporalidades(update: Update, context: CallbackContext):
     keyboard = []
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
+        # Definir el texto del botón y el callback_data basado en el estado actual
         button_text = f"{'Desuscribirse' if temporalidad in suscripciones else 'Suscribirse'} {temporalidad}"
         callback_data = f"{'desuscribir' if temporalidad in suscripciones else 'suscribir'}_{temporalidad}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.message.reply_text('Selecciona una temporalidad:', reply_markup=reply_markup)
+    # Se responde al usuario con los botones actualizados después de suscribirse/desuscribirse
+    await update.callback_query.edit_message_text('Selecciona una temporalidad:', reply_markup=reply_markup)
+
 
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
-    chat_id = query.message.chat_id
+    chat_id = query.message.chat.id
     data = query.data
     try:
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
@@ -115,6 +118,7 @@ async def button(update: Update, context: CallbackContext):
             temporalidad = data.split('_')[1]
             accion = data.split('_')[0]
 
+            # Lógica de suscripción/desuscripción
             if accion == 'suscribir' and temporalidad not in suscripciones:
                 suscripciones.append(temporalidad)
                 await query.answer(f"Te has suscrito a {temporalidad}.")
@@ -124,6 +128,7 @@ async def button(update: Update, context: CallbackContext):
             else:
                 await query.answer(f"Ya estás {'suscrito' if temporalidad in suscripciones else 'desuscrito'} a {temporalidad}.")
 
+            # Actualizar la base de datos con las suscripciones modificadas
             await conn.execute("UPDATE usuarios SET suscripciones = ? WHERE chat_id = ?", (','.join(suscripciones), chat_id))
             await conn.commit()
 
@@ -132,7 +137,9 @@ async def button(update: Update, context: CallbackContext):
         await query.answer("Ocurrió un error al procesar tu solicitud.")
         return
 
+    # Mostrar nuevamente las temporalidades con los botones actualizados
     await show_temporalidades(update, context)
+
 
 def check_initial_reports():
     temporalidades = ['15m', '1h', '4h', '1d']
