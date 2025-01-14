@@ -94,38 +94,85 @@ COLUMN_MAPPING = {
     "count":"count"
 }
 
+import pandas as pd
+import os
+import io
+
 def load_csv(file_path):
+    def inspect_csv_headers(file_path):
+        """
+        Inspecciona los encabezados de un archivo CSV intentando leerlo con diferentes codificaciones.
+        """
+        try:
+            if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                print(f"Archivo inexistente o vacío: {file_path}")
+                return None
+
+            encodings = ["utf-8-sig", "utf-8", "latin1", "cp1252"]
+            df = None
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        csv_content = f.read()
+                    df = pd.read_csv(io.StringIO(csv_content))
+                    print(f"Archivo leído con encoding '{encoding}'")
+                    break
+                except Exception as e:
+                    print(f"No se pudo leer con encoding '{encoding}': {e}")
+
+            if df is None:
+                print(f"No se pudo leer el archivo con ninguna codificación conocida: {file_path}")
+                return None
+
+            # Devuelve los encabezados tal como se leen
+            print("Encabezados detectados por Pandas:")
+            print(df.columns.tolist())
+            return df.columns.tolist()
+
+        except Exception as e:
+            print(f"Error al procesar el archivo: {e}")
+            return None
+
+    # Inicio de la lógica principal de load_csv
     try:
         if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
             print(f"Archivo inexistente o vacío: {file_path}")
             return None
 
-        # Lectura del CSV con manejo EXTREMO de codificación y errores
+        # Inspeccionar los encabezados antes de proceder con la carga completa
+        print("Inspeccionando encabezados...")
+        headers = inspect_csv_headers(file_path)
+        if headers is None:
+            print("No se pudieron detectar encabezados.")
+            return None
+        print(f"Encabezados detectados: {headers}")
+
+        # Lectura del archivo con manejo de codificación
         try:
-            with open(file_path, 'r', encoding='utf-8-sig') as f: #Abre el archivo y lo lee con utf-8-sig
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
                 csv_content = f.read()
-            df = pd.read_csv(io.StringIO(csv_content)) #Lee el contenido del archivo con pandas
-            print("Se leyo el archivo con encoding utf-8-sig")
+            df = pd.read_csv(io.StringIO(csv_content))
+            print("Se leyó el archivo con encoding utf-8-sig")
         except UnicodeDecodeError:
             try:
-                with open(file_path, 'r', encoding='utf-8') as f: #Abre el archivo y lo lee con utf-8
+                with open(file_path, 'r', encoding='utf-8') as f:
                     csv_content = f.read()
-                df = pd.read_csv(io.StringIO(csv_content)) #Lee el contenido del archivo con pandas
-                print("Se leyo el archivo con encoding utf-8")
+                df = pd.read_csv(io.StringIO(csv_content))
+                print("Se leyó el archivo con encoding utf-8")
             except UnicodeDecodeError:
                 try:
-                    with open(file_path, 'r', encoding='latin1') as f: #Abre el archivo y lo lee con latin1
+                    with open(file_path, 'r', encoding='latin1') as f:
                         csv_content = f.read()
-                    df = pd.read_csv(io.StringIO(csv_content), sep=';') #Lee el contenido del archivo con pandas y delimitador ;
-                    print("Se leyo el archivo con encoding latin1 y delimitador ;")
+                    df = pd.read_csv(io.StringIO(csv_content), sep=';')
+                    print("Se leyó el archivo con encoding latin1 y delimitador ;")
                 except UnicodeDecodeError:
                     try:
-                        with open(file_path, 'r', encoding='cp1252') as f: #Abre el archivo y lo lee con cp1252
+                        with open(file_path, 'r', encoding='cp1252') as f:
                             csv_content = f.read()
-                        df = pd.read_csv(io.StringIO(csv_content), sep=';') #Lee el contenido del archivo con pandas y delimitador ;
-                        print("Se leyo el archivo con encoding cp1252 y delimitador ;")
+                        df = pd.read_csv(io.StringIO(csv_content), sep=';')
+                        print("Se leyó el archivo con encoding cp1252 y delimitador ;")
                     except Exception as e:
-                        print(f"No se pudo leer el archivo con ninguna codificacion conocida: {e}")
+                        print(f"No se pudo leer el archivo con ninguna codificación conocida: {e}")
                         return None
                 except Exception as e:
                     print(f"Error desconocido al parsear con latin1 y ; {e}")
@@ -137,43 +184,24 @@ def load_csv(file_path):
             print(f"Error desconocido al parsear con utf-8-sig: {e}")
             return None
 
-        # DIAGNÓSTICO EXTREMO (¡NECESITO VER ESTA SALIDA!)
-        print(f"1. Tipo de df: {type(df)}")
-        print(f"2. Columnas INMEDIATAMENTE después de pd.read_csv (tipo): {type(df.columns)}")
-        print(f"3. Columnas INMEDIATAMENTE después de pd.read_csv (lista): {df.columns.tolist()}")
-        print(f"4. Columnas INMEDIATAMENTE después de pd.read_csv (valores): {df.columns.values}")
-        print(f"5. Primeras 5 filas ANTES de la limpieza:\n{df.head().to_string()}")
-        print(f"6. info del dataframe:\n {df.info()}")
+        print(f"1. Columnas detectadas: {df.columns.tolist()}")
+        print(f"2. Primeras 5 filas:\n{df.head().to_string()}")
 
-        # Limpieza y normalización (¡CLAVE!)
-        df.columns = df.columns.astype(str).str.strip().str.replace(r'[^\w\s]', '', regex=True).str.replace(r'\s+', '_', regex=True).str.lower()
-
-        print(f"7. Columnas DESPUÉS de la LIMPIEZA: {df.columns.tolist()}")
-        print(f"8. Primeras 5 filas DESPUÉS de la limpieza:\n{df.head().to_string()}")
-
-        df = df.rename(columns=COLUMN_MAPPING)
-        print(f"9. Columnas DESPUÉS del mapeo: {df.columns.tolist()}")
-        if 'time' not in df.columns:
-            print("Error: La columna 'time' no se encuentra después de la limpieza y el mapeo.")
-            return None
-        df['time'] = pd.to_datetime(df['time'], utc=True)
-        df.set_index('time', inplace=True)
-        
-        numeric_cols = list(COLUMN_MAPPING.values())
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-
-        if df.empty:
-            print(f"El DataFrame está vacío después de la carga: {file_path}")
-            return None
+        # Normalización de las columnas y otros pasos adicionales
+        df.columns = (
+            df.columns.astype(str)
+            .str.strip()
+            .str.replace(r'[^\w\s]', '', regex=True)
+            .str.replace(r'\s+', '_', regex=True)
+            .str.lower()
+        )
+        print(f"3. Columnas después de limpieza: {df.columns.tolist()}")
 
         return df
 
     except Exception as e:
         print(f"Error desconocido al cargar {file_path}: {e}")
-        traceback.print_exc()
-    return None
+        return None
 
 def analyze_rsi(df):
     if df is None or df.empty: #Comprueba si el dataframe es None o esta vacio antes de realizar cualquier operacion
