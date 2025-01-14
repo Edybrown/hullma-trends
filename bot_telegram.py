@@ -54,11 +54,11 @@ async def save_user(chat_id, nombre):
                 user = await cursor.fetchone()
                 if not user:
                     current_time = datetime.now().isoformat()
-                    await conn.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, fecha_ultima_actividad) VALUES (?, ?, '', ?, '', ?)", (chat_id, nombre, current_time, 'Ninguna', current_time))
+                    # *** CÓDIGO CORREGIDO ***
+                    await conn.execute("INSERT INTO usuarios (chat_id, nombre, suscripciones, suscripcion_fecha, fecha_ultima_actividad) VALUES (?, ?, ?, ?, ?)", (chat_id, nombre, '', current_time, current_time))
                     await conn.commit()
     except aiosqlite.Error as e:
         print(f"[ERROR] Error al guardar el usuario: {e}")
-
 async def get_users():
     try:
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
