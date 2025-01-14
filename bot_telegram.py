@@ -86,22 +86,23 @@ async def show_temporalidades(update: Update, context: CallbackContext):
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
             async with conn.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
                 suscripciones_db = await cursor.fetchone()
+                # Si no existe suscripción, inicializar como lista vacía
+                suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
     except aiosqlite.Error as e:
         print(f"[ERROR] Error al obtener las suscripciones del usuario: {e}")
         return
 
-    suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
-
+    # Crear el teclado con las opciones de suscripción o desuscripción
     keyboard = []
     temporalidades = ['15m', '1h', '4h', '1d']
     for temporalidad in temporalidades:
-        # Definir el texto del botón y el callback_data basado en el estado actual
+        # Determinar si está suscrito o no y ajustar el texto y callback_data
         button_text = f"{'Desuscribirse' if temporalidad in suscripciones else 'Suscribirse'} {temporalidad}"
         callback_data = f"{'desuscribir' if temporalidad in suscripciones else 'suscribir'}_{temporalidad}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    # Se responde al usuario con los botones actualizados después de suscribirse/desuscribirse
+    # Editar el mensaje con los botones actualizados
     await update.callback_query.edit_message_text('Selecciona una temporalidad:', reply_markup=reply_markup)
 
 
@@ -109,11 +110,13 @@ async def button(update: Update, context: CallbackContext):
     query = update.callback_query
     chat_id = query.message.chat.id
     data = query.data
+
+    # Manejo de errores al acceder a la base de datos
     try:
         async with aiosqlite.connect('usuarios_telegram.db') as conn:
             async with conn.execute("SELECT suscripciones FROM usuarios WHERE chat_id = ?", (chat_id,)) as cursor:
                 suscripciones_db = await cursor.fetchone()
-            suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
+                suscripciones = suscripciones_db[0].split(',') if suscripciones_db and suscripciones_db[0] else []
 
             temporalidad = data.split('_')[1]
             accion = data.split('_')[0]
@@ -126,6 +129,7 @@ async def button(update: Update, context: CallbackContext):
                 suscripciones.remove(temporalidad)
                 await query.answer(f"Te has desuscrito de {temporalidad}.")
             else:
+                # Si ya está suscrito o desuscrito
                 await query.answer(f"Ya estás {'suscrito' if temporalidad in suscripciones else 'desuscrito'} a {temporalidad}.")
 
             # Actualizar la base de datos con las suscripciones modificadas
@@ -139,6 +143,7 @@ async def button(update: Update, context: CallbackContext):
 
     # Mostrar nuevamente las temporalidades con los botones actualizados
     await show_temporalidades(update, context)
+
 
 
 def check_initial_reports():
