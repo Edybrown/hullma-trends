@@ -51,27 +51,6 @@ TIME_INTERVALS = {
 
 LAST_RUN = {key: None for key in CSV_FILES.keys()}
 
-# Unificar mapeos de nombres de columnas
-
-COLUMN_MAPPING = {
-    "time": "time",
-    "open": "open",
-    "high": "high",
-    "low": "low",
-    "close": "close",
-    "vwap": "vwap",
-    "volume": "volume",
-    "count": "count",
-    "RSI": "rsi",
-    "MACD": "macd",
-    "MACD_Signal": "macd_signal",
-    "MACD_Hist": "macd_hist",
-    "BB_Upper": "bb_upper",
-    "BB_Middle": "bb_middle",
-    "BB_Lower": "bb_lower",
-    "HULLMA": "hullma",
-    "ATR": "atr"
-}
 
 # Mapeo de columnas (asegúrate de que coincida con tu CSV)
 COLUMN_MAPPING = {
@@ -200,13 +179,36 @@ def load_csv(file_path):
         print(f"Error desconocido al cargar {file_path}: {e}")
         return None
 
+COLUMN_MAPPING = {
+    "time": "time",
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "close": "close",
+    "vwap": "vwap",
+    "volume": "volume",
+    "count": "count",
+    "RSI": "rsi",  # Mapeo de RSI a rsi
+    "MACD": "macd",
+    "MACD_Signal": "macd_signal",
+    "MACD_Hist": "macd_hist",
+    "BB_Upper": "bb_upper",
+    "BB_Middle": "bb_middle",
+    "BB_Lower": "bb_lower",
+    "HULLMA": "hullma",
+    "ATR": "atr"
+}
+
 def analyze_rsi(df):
     if df is None or df.empty:  # Comprueba si el DataFrame es None o está vacío antes de realizar cualquier operación
         return {"value": None, "signal": "Datos insuficientes", "message": "DataFrame vacío o None."}
 
+    # Normaliza las columnas usando el mapeo
+    df.columns = [COLUMN_MAPPING.get(col, col) for col in df.columns]  # Mapea las columnas a minúsculas
+
     print(f"Columnas disponibles en RSI: {df.columns.tolist()}")  # Imprime las columnas disponibles
 
-    # Validación de la columna 'rsi'
+    # Verifica si la columna 'rsi' está presente
     if 'rsi' not in df.columns:
         missing_columns = ['rsi'] if 'rsi' not in df.columns else []
         return {
