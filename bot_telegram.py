@@ -287,9 +287,6 @@ async def main():
 
     usuarios = await obtener_usuarios_de_db()
 
-    for chat_id, suscripciones in usuarios.items():
-        print(f"Creando tarea para chat_id: {chat_id}")
-        asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
 
     # Paso 4: Iniciar el bot
     await start_bot(application)
