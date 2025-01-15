@@ -323,8 +323,7 @@ async def main():
         asyncio.create_task(handle_candle_closure(application.bot))
 
     # Esperar a que todas las tareas se ejecuten
-    await asyncio.gather(*asyncio.all_tasks())r(*asyncio.all_tasks())
-
+    await asyncio.gather(*asyncio.all_tasks())
     else:
         print("[INFO] No hay usuarios en la base de datos.")
 
