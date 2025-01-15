@@ -394,13 +394,13 @@ def calcular_fechas_cierre(ahora):
 
 
 def main():
+    global fechas_cierre_vela  # Declaración global *antes* de cualquier uso
     ahora = datetime.now()
-    global fechas_cierre_vela
     fechas_cierre_vela = calcular_fechas_cierre(ahora)
 
     while True:
         tiempo_inicio_ciclo = datetime.now()
-        global fechas_cierre_vela
+        global fechas_cierre_vela # Declaración global *antes* de cualquier uso
 
         if tiempo_inicio_ciclo.day != fechas_cierre_vela["1d"].day:
             fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
@@ -408,7 +408,6 @@ def main():
         else:
             fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
             print("Mismo dia, recalculando fechas de cierre de vela")
-
         print(f"Iniciando ciclo de análisis: {tiempo_inicio_ciclo}")
 
         # Lógica de espera y reintento *solo para 15 minutos*
