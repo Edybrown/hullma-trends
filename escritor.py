@@ -392,15 +392,11 @@ def calcular_fechas_cierre(ahora):
     fechas["1d"] = ahora.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     return fechas
 
-
 def main():
-    global fechas_cierre_vela  # Declaración global *antes* de cualquier uso
-    ahora = datetime.now()
-    fechas_cierre_vela = calcular_fechas_cierre(ahora)
+    fechas_cierre_vela = calcular_fechas_cierre(datetime.now()) # Inicialización al principio
 
     while True:
         tiempo_inicio_ciclo = datetime.now()
-        global fechas_cierre_vela # Declaración global *antes* de cualquier uso
 
         if tiempo_inicio_ciclo.day != fechas_cierre_vela["1d"].day:
             fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
@@ -408,26 +404,28 @@ def main():
         else:
             fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
             print("Mismo dia, recalculando fechas de cierre de vela")
+
         print(f"Iniciando ciclo de análisis: {tiempo_inicio_ciclo}")
 
         # Lógica de espera y reintento *solo para 15 minutos*
         timeframe_15m = "15m"
         tiempo_maximo_esperado_15m = fechas_cierre_vela[timeframe_15m]
         print(f"Verificando {timeframe_15m}. Fecha de cierre de vela: {tiempo_maximo_esperado_15m}")
+
         reintentos_15m = 0
         while reintentos_15m < REINTENTOS_MAXIMOS:
             if archivos_actualizados(timeframe_15m, tiempo_maximo_esperado_15m):
                 print(f"Archivo de {timeframe_15m} actualizado.")
-                analizar_temporalidad(timeframe_15m)  # Analiza 15m inmediatamente
-                break  # Sale del bucle de reintentos de 15m
+                analizar_temporalidad(timeframe_15m)
+                break
             else:
                 reintentos_15m += 1
                 print(f"Esperando actualización del informe de {timeframe_15m} (intento {reintentos_15m}/{REINTENTOS_MAXIMOS})...")
-                time.sleep(TIEMPO_ESPERA_REINTENTO) #Espera 10 segundos entre intentos
+                time.sleep(TIEMPO_ESPERA_REINTENTO)
 
-        else:  # Se ejecuta si el bucle while termina sin un break (todos los reintentos fallaron)
+        else:
             print(f"Fallo al actualizar el informe de {timeframe_15m} después de {REINTENTOS_MAXIMOS} intentos. Omitiendo análisis de este ciclo.")
-            continue #Continua al siguiente ciclo de 15 minutos
+            continue
 
         # Verificación individual para las *demás* temporalidades (sin reintentos)
         for timeframe in ("1h", "4h", "1d"):
