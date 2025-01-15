@@ -1,4 +1,3 @@
-import json
 import os
 import time
 import json # Solo se usa para decodificar el informe simulado en este ejemplo
@@ -12,20 +11,34 @@ REINTENTOS_MAXIMOS = 6
 TIEMPO_ESPERA_REINTENTO = 10
 
 
+# Diccionario global para almacenar las fechas de cierre de vela
+fechas_cierre_vela = {
+    "15m": None,
+    "1h": None,
+    "4h": None,
+    "1d": None,
+}
+
 def leer_informe_json(timeframe):
     """Lee un informe JSON."""
     archivo = os.path.join(DATA_DIR, f"report_{timeframe}.json")
     try:
         with open(archivo, "r", encoding="utf-8") as f:
-            return json.load(f)
+            informe = json.load(f)
+            if not all(key in informe for key in ("timeframe", "indicators")):
+                raise ValueError(f"El informe en {archivo} no tiene el formato esperado.")
+            return informe
     except FileNotFoundError:
         print(f"Error: No se encontró el informe para {timeframe}.")
         return None
-    except json.JSONDecodeError:
-        print(f"Error: El archivo {archivo} no es un JSON válido.")
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"Error con el archivo {archivo}: {e}")
+        return None
+    except OSError as e:
+        print(f"Error al leer el archivo {archivo}: {e}")
         return None
 
-def archivos_actualizados(timeframe, tiempo_maximo_esperado):
+def archivos_actualizados(timeframe, fecha_cierre):
     """Verifica si el archivo del timeframe especificado está actualizado."""
     archivo = os.path.join(DATA_DIR, f"report_{timeframe}.json")
     if not os.path.exists(archivo):
@@ -33,8 +46,8 @@ def archivos_actualizados(timeframe, tiempo_maximo_esperado):
 
     modificacion_time = os.path.getmtime(archivo)
     modificacion_datetime = datetime.fromtimestamp(modificacion_time)
+    return modificacion_datetime >= fecha_cierre
 
-    return modificacion_datetime > tiempo_maximo_esperado
 
 
 def generar_analisis_texto(informe):
@@ -358,44 +371,83 @@ def analizar_temporalidad(timeframe):
         analisis_markdown = generar_analisis_texto(informe)
         guardar_informe(timeframe, analisis_markdown)
 
+
+def calcular_fechas_cierre(ahora):
+    fechas = {}
+    # 15 minutos
+    minutos_actuales = ahora.minute
+    minutos_restantes_15m = 15 - (minutos_actuales % 15)
+    fechas["15m"] = ahora + timedelta(minutes=minutos_restantes_15m)
+
+    # 1 hora
+    minutos_restantes_1h = 60 - minutos_actuales
+    fechas["1h"] = ahora + timedelta(minutes=minutos_restantes_1h)
+
+    # 4 horas
+    hora_actual = ahora.hour
+    horas_restantes_4h = 4 - (hora_actual % 4)
+    fechas["4h"] = ahora + timedelta(hours=horas_restantes_4h)
+
+    # 1 dia - Se calcula el cierre a las 00:00 del *siguiente* día
+    fechas["1d"] = ahora.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return fechas
+
+
 def main():
+    ahora = datetime.now()
+    global fechas_cierre_vela
+    fechas_cierre_vela = calcular_fechas_cierre(ahora)
+
     while True:
         tiempo_inicio_ciclo = datetime.now()
+        global fechas_cierre_vela
+
+        if tiempo_inicio_ciclo.day != fechas_cierre_vela["1d"].day:
+            fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
+            print("Nuevo dia detectado, recalculando fechas de cierre de vela")
+        else:
+            fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
+            print("Mismo dia, recalculando fechas de cierre de vela")
+
         print(f"Iniciando ciclo de análisis: {tiempo_inicio_ciclo}")
 
-        # Cálculo del tiempo restante para la vela de 15m
-        minutos_actuales = tiempo_inicio_ciclo.minute
-        minutos_restantes_15m = 15 - (minutos_actuales % 15)
-        print(f"Minutos restantes para la vela de 15m: {minutos_restantes_15m}")
-
-        tiempo_maximo_esperado_15m = tiempo_inicio_ciclo - timedelta(minutes=15)
-
-        # Reintentos para el informe de 15m
-        for intento in range(REINTENTOS_MAXIMOS):
-            if archivos_actualizados("15m", tiempo_maximo_esperado_15m):
-                print("Archivo de 15m actualizado.")
-                break
+        # Lógica de espera y reintento *solo para 15 minutos*
+        timeframe_15m = "15m"
+        tiempo_maximo_esperado_15m = fechas_cierre_vela[timeframe_15m]
+        print(f"Verificando {timeframe_15m}. Fecha de cierre de vela: {tiempo_maximo_esperado_15m}")
+        reintentos_15m = 0
+        while reintentos_15m < REINTENTOS_MAXIMOS:
+            if archivos_actualizados(timeframe_15m, tiempo_maximo_esperado_15m):
+                print(f"Archivo de {timeframe_15m} actualizado.")
+                analizar_temporalidad(timeframe_15m)  # Analiza 15m inmediatamente
+                break  # Sale del bucle de reintentos de 15m
             else:
-                print(f"Esperando actualización del informe de 15m (intento {intento + 1})...")
-                time.sleep(TIEMPO_ESPERA_REINTENTO)
-        else:
-            print("Fallo al actualizar el informe de 15m después de varios intentos.")
-            continue  # Salta al siguiente ciclo si falla la actualización de 15m
+                reintentos_15m += 1
+                print(f"Esperando actualización del informe de {timeframe_15m} (intento {reintentos_15m}/{REINTENTOS_MAXIMOS})...")
+                time.sleep(TIEMPO_ESPERA_REINTENTO) #Espera 10 segundos entre intentos
 
-        # Análisis de las temporalidades
-        analizar_temporalidad("15m")
-        analizar_temporalidad("1h")
-        analizar_temporalidad("4h")
-        analizar_temporalidad("1d")
-        
-        # Guardar análisis en archivos .md
-       
+        else:  # Se ejecuta si el bucle while termina sin un break (todos los reintentos fallaron)
+            print(f"Fallo al actualizar el informe de {timeframe_15m} después de {REINTENTOS_MAXIMOS} intentos. Omitiendo análisis de este ciclo.")
+            continue #Continua al siguiente ciclo de 15 minutos
+
+        # Verificación individual para las *demás* temporalidades (sin reintentos)
+        for timeframe in ("1h", "4h", "1d"):
+            tiempo_maximo_esperado = fechas_cierre_vela[timeframe]
+            print(f"Verificando {timeframe}. Fecha de cierre de vela: {tiempo_maximo_esperado}")
+            if archivos_actualizados(timeframe, tiempo_maximo_esperado):
+                print(f"Archivo de {timeframe} actualizado.")
+                analizar_temporalidad(timeframe)
+            else:
+                print(f"Archivo de {timeframe} no actualizado. Omitiendo análisis de {timeframe} en este ciclo.")
+
         tiempo_fin_ciclo = datetime.now()
         tiempo_transcurrido = tiempo_fin_ciclo - tiempo_inicio_ciclo
-        print(f"Ciclo de análisis completado: {tiempo_fin_ciclo}, Tiempo transcurrido: {tiempo_transcurrido}")
 
-        # Esperar hasta el próximo ciclo de 15 minutos
+        # Espera *entre ciclos* (se mantiene)
+        minutos_actuales = tiempo_inicio_ciclo.minute
+        minutos_restantes_15m = 15 - (minutos_actuales % 15)
         tiempo_espera = (minutos_restantes_15m * 60) - tiempo_transcurrido.total_seconds()
+
         if tiempo_espera > 0:
             print(f"Esperando {tiempo_espera:.0f} segundos hasta el próximo ciclo...")
             time.sleep(tiempo_espera)
