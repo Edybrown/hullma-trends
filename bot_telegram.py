@@ -318,12 +318,12 @@ async def main():
 
 
     if usuarios:
-        # No necesitamos pasar chat_id ni suscripciones ahora
+    # No necesitamos pasar chat_id ni suscripciones ahora
         print(f"Creando tarea para manejar el cierre de velas para todos los usuarios.")
         asyncio.create_task(handle_candle_closure(application.bot))
 
     # Esperar a que todas las tareas se ejecuten
-    await asyncio.gather(*asyncio.all_tasks())
+        await asyncio.gather(*asyncio.all_tasks())
     else:
         print("[INFO] No hay usuarios en la base de datos.")
 
