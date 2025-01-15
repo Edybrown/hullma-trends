@@ -156,6 +156,15 @@ def check_initial_reports():
             raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
 
+def check_initial_reports():
+    temporalidades = ['15m', '1h', '4h', '1d']
+    os.makedirs(reports_dir, exist_ok=True)
+    for temporalidad in temporalidades:
+        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
+        if not os.path.exists(report_path):
+            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
+
+
 async def send_report(chat_id, temporalidad, bot):
     """Envía un informe al usuario solo si ha sido actualizado desde la última revisión."""
     global last_checked
@@ -173,8 +182,8 @@ async def send_report(chat_id, temporalidad, bot):
     if last_modified <= last_reviewed:
         if temporalidad == '15m':  # Solo para 15 minutos
             print(f"[INFO] Informe de 15m no actualizado, esperando un minuto para chat_id: {chat_id}.")
-            for _ in range(12):  # Intentar 12 veces con un intervalo de 5 segundos
-                await asyncio.sleep(5)
+            for _ in range(6):  # Intentar 12 veces con un intervalo de 5 segundos
+                await asyncio.sleep(10)
                 last_modified = os.path.getmtime(report_path)
                 if last_modified > last_reviewed:
                     break  # Salir si el archivo se actualiza
@@ -208,35 +217,38 @@ async def send_reports_to_all_users(bot):
     for chat_id, suscripciones in all_subscriptions.items():
         await check_and_send_reports(chat_id, suscripciones, bot)
 
-async def handle_candle_closure(chat_id, suscripciones, bot):
+async def handle_candle_closure(bot):
     try:  # Bloque try para la ALINEACIÓN INICIAL
         time_to_close = get_time_to_close()
-        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela para chat_id: {chat_id} (alineación inicial).")
+        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela (alineación inicial).")
         await asyncio.sleep(time_to_close)
-        print(f"[INFO] Se completó la espera inicial para chat_id: {chat_id}") #Mensaje para verificar que se completa la espera inicial
+        print(f"[INFO] Se completó la espera inicial.")  # Mensaje para verificar que se completa la espera inicial
     except Exception as e:
         trace = traceback.format_exc()
-        print(f"[ERROR] Ocurrió un error en la espera inicial para chat_id {chat_id}: {e}\n{trace}")
-        return # Salir de la corutina si falla la espera inicial.
+        print(f"[ERROR] Ocurrió un error en la espera inicial: {e}\n{trace}")
+        return  # Salir de la corutina si falla la espera inicial
 
-    print(f"[INFO] Entrando al bucle while True para chat_id: {chat_id}") #Verificar si entra al bucle
+    print(f"[INFO] Entrando al bucle while True para manejar cierre de velas.")  # Verificar si entra al bucle
     while True:
-        try: #Bloque try para el bucle while
-            print(f"[INFO] Iniciando ciclo de cierre de vela para chat_id: {chat_id}")
+        try:  # Bloque try para el bucle while
+            print(f"[INFO] Iniciando ciclo de cierre de vela.")
             start_time = time.time()
-            await check_and_send_reports(chat_id, suscripciones, bot)
+
+            # Llamar a la función que gestiona informes para todos los usuarios
+            await send_reports_to_all_users(bot)
+
             elapsed_time = time.time() - start_time
-            print(f"[INFO] Tiempo transcurrido en check_and_send_reports: {elapsed_time} segundos para chat_id: {chat_id}")
-            time_to_close = get_time_to_close() #Recalcular el tiempo de espera en cada iteración
-            remaining_time = max(0, 900 - elapsed_time)
-            print(f"[INFO] Esperando {remaining_time} segundos hasta el próximo cierre de vela para chat_id: {chat_id}.")
+            print(f"[INFO] Tiempo transcurrido en send_reports_to_all_users: {elapsed_time} segundos.")
+            
+            # Calcular el tiempo restante antes del próximo cierre de vela
+            time_to_close = get_time_to_close()
+            remaining_time = max(0, time_to_close - elapsed_time)
+            print(f"[INFO] Esperando {remaining_time} segundos hasta el próximo cierre de vela.")
             await asyncio.sleep(remaining_time)
         except Exception as e:
             trace = traceback.format_exc()
-            print(f"[ERROR] Ocurrió un error en handle_candle_closure para chat_id {chat_id}: {e}\n{trace}")
+            print(f"[ERROR] Ocurrió un error en handle_candle_closure: {e}\n{trace}")
             await asyncio.sleep(60)  # Esperar 60 segundos antes de reintentar
-            
-
 
 def get_time_to_close():
     current_time = datetime.now()
@@ -306,12 +318,12 @@ async def main():
 
 
     if usuarios:
-        for chat_id, suscripciones in usuarios.items():
-            print(f"Creando tarea para chat_id: {chat_id}")
-            asyncio.create_task(handle_candle_closure(chat_id, suscripciones, application.bot))
-        
-        # Esperar a que todas las tareas se ejecuten
-        await asyncio.gather(*asyncio.all_tasks())
+        # No necesitamos pasar chat_id ni suscripciones ahora
+        print(f"Creando tarea para manejar el cierre de velas para todos los usuarios.")
+        asyncio.create_task(handle_candle_closure(application.bot))
+
+    # Esperar a que todas las tareas se ejecuten
+    await asyncio.gather(*asyncio.all_tasks())r(*asyncio.all_tasks())
 
     else:
         print("[INFO] No hay usuarios en la base de datos.")
