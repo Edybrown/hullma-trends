@@ -243,7 +243,7 @@ async def handle_candle_closure(bot):
             start_time = time.time()
 
             # Llamar a la función que envía informes a todos los usuarios
-            await send_reports_to_all_users(bot)
+            await send_reports_to_all_users(bot, closing_times)
 
             elapsed_time = time.time() - start_time
             print(f"[INFO] Tiempo transcurrido en send_reports_to_all_users: {elapsed_time} segundos.")
