@@ -374,24 +374,26 @@ def analizar_temporalidad(timeframe):
 
 def calcular_fechas_cierre(ahora):
     fechas = {}
-    # 15 minutos
+
+    # 15 minutos (Truncar segundos)
     minutos_actuales = ahora.minute
     minutos_restantes_15m = 15 - (minutos_actuales % 15)
-    fechas["15m"] = (ahora + timedelta(minutes=minutos_restantes_15m)).replace(second=0, microsecond=0) # Truncar segundos
+    fecha_15m_con_segundos = ahora + timedelta(minutes=minutos_restantes_15m)
+    fechas["15m"] = fecha_15m_con_segundos.replace(second=0, microsecond=0)
 
-    # 1 hora
-    minutos_restantes_1h = 60 - minutos_actuales
-    fechas["1h"] = (ahora + timedelta(minutes=minutos_restantes_1h)).replace(second=0, microsecond=0) # Truncar segundos
+    # 1 hora (Truncar minutos y segundos)
+    fecha_1h_actual = ahora.replace(minute=0, second=0, microsecond=0) # Truncar minutos y segundos
+    fechas["1h"] = fecha_1h_actual + timedelta(hours=1)
 
-    # 4 horas
+    # 4 horas (Truncar horas, minutos y segundos)
     hora_actual = ahora.hour
-    horas_restantes_4h = 4 - (hora_actual % 4)
-    fechas["4h"] = (ahora + timedelta(hours=horas_restantes_4h)).replace(second=0, microsecond=0) # Truncar segundos
+    hora_cierre_4h_actual = (hora_actual // 4) * 4
+    fecha_4h_actual = ahora.replace(hour=hora_cierre_4h_actual, minute=0, second=0, microsecond=0) # Truncar horas, minutos y segundos
+    fechas["4h"] = fecha_4h_actual + timedelta(hours=4)
 
-    # 1 dia
-    fechas["1d"] = ahora.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1) # No es necesario truncar, ya está a 00:00:00
+    # 1 dia (No es necesario truncar, ya está a 00:00:00)
+    fechas["1d"] = ahora.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     return fechas
-
 
 def main():
     fechas_cierre_vela = {}
