@@ -220,9 +220,11 @@ async def handle_candle_closure(bot):
     """Controla el ciclo principal."""
     while True:
         try:
+            # Definir start_time *dentro* del bucle
+            start_time = time.time() #Definicion correcta
+
             current_time = datetime.now()
 
-            # Se crea el diccionario closing_times
             closing_times = {}
             # Se itera sobre las temporalidades
             for timeframe in ['1d', '4h', '1h', '15m']:
