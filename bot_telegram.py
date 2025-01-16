@@ -188,7 +188,7 @@ async def send_report(chat_id, temporalidad, bot):
                 if last_modified > last_reviewed:
                     break  # Salir si el archivo se actualiza
             else:
-                print(f"[WARNING] Informe de 15m no actualizado tras 1 minuto para chat_id: {chat_id}.")
+                print(f"[WARNING] Informe de 15m no actualizado tras 1 y 30 minuto para chat_id: {chat_id}.")
                 return  # Salir si no se actualizó tras esperar
         else:
             print(f"[INFO] Informe de {temporalidad} no actualizado para chat_id: {chat_id}.")
