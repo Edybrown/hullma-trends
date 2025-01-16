@@ -395,14 +395,13 @@ def calcular_fechas_cierre(ahora):
 
 
 def main():
-    fechas_cierre_vela = {}  # Inicializar el diccionario aquí
-    dia_actual = None # Inicializar el dia actual
+    fechas_cierre_vela = {}
+    dia_actual = None
 
     while True:
         tiempo_inicio_ciclo = datetime.now()
 
-        # Comprobación de cambio de día y cálculo de fechas de cierre
-        if dia_actual is None or tiempo_inicio_ciclo.day != dia_actual: #Comprueba si es la primera iteracion o si cambio de dia
+        if dia_actual is None or tiempo_inicio_ciclo.day != dia_actual:
             fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
             dia_actual = tiempo_inicio_ciclo.day
             print("Nuevo dia detectado, recalculando fechas de cierre de vela")
@@ -410,14 +409,25 @@ def main():
             fechas_cierre_vela = calcular_fechas_cierre(tiempo_inicio_ciclo)
             print("Mismo dia, recalculando fechas de cierre de vela")
 
-        print(f"Iniciando ciclo de análisis: {tiempo_inicio_ciclo}")
+        # Cálculo del tiempo restante para la vela de 15m (para la espera *antes* de la verificación)
+        proximo_cierre_15m = fechas_cierre_vela["15m"]
+        tiempo_espera = (proximo_cierre_15m - tiempo_inicio_ciclo).total_seconds()
 
-        # Análisis de las temporalidades (con reintentos para 15m)
+        if tiempo_espera > 0:
+            print(f"Esperando {tiempo_espera:.0f} segundos hasta el próximo cierre de 15m: {proximo_cierre_15m}")
+            time.sleep(tiempo_espera)
+        else:
+            print("El analisis tardo mas de 15 minutos. Iniciando ciclo inmediatamente...")
+
+        tiempo_inicio_verificacion = datetime.now()
+        print(f"Iniciando ciclo de análisis: {tiempo_inicio_verificacion}")
+        # Análisis de las temporalidades (con reintentos para 15m) *DESPUÉS* de la espera
+
         for timeframe in ("15m", "1h", "4h", "1d"):
             tiempo_maximo_esperado = fechas_cierre_vela[timeframe]
             print(f"Verificando {timeframe}. Fecha de cierre de vela: {tiempo_maximo_esperado}")
 
-            if timeframe == "15m": #Manejo especifico para 15 minutos
+            if timeframe == "15m":
                 if not archivos_actualizados(timeframe, tiempo_maximo_esperado):
                     print(f"El informe de {timeframe} no está actualizado. Iniciando reintentos...")
                     reintentos_15m = 0
@@ -433,28 +443,20 @@ def main():
 
                     else:
                         print(f"Fallo al actualizar el informe de {timeframe} después de {REINTENTOS_MAXIMOS} intentos. Omitiendo análisis de este ciclo.")
-                        break #Sale del bucle for timeframe en caso de que falle el de 15m
+                        break
                 else:
                     print(f"Archivo de {timeframe} actualizado en la primera verificación.")
                     analizar_temporalidad(timeframe)
-            elif archivos_actualizados(timeframe, tiempo_maximo_esperado):#Manejo para las demas temporalidades
+
+            elif archivos_actualizados(timeframe, tiempo_maximo_esperado):
                 print(f"Archivo de {timeframe} actualizado.")
                 analizar_temporalidad(timeframe)
             else:
                 print(f"Archivo de {timeframe} no actualizado. Omitiendo análisis de {timeframe} en este ciclo.")
-
+        
         tiempo_fin_ciclo = datetime.now()
-        tiempo_transcurrido = tiempo_fin_ciclo - tiempo_inicio_ciclo
+        tiempo_transcurrido = tiempo_fin_ciclo - tiempo_inicio_verificacion #Calcula el tiempo transcurrido desde que se inicio la verificacion
 
-        # Espera *hasta el *próximo* cierre de 15 minutos (ya calculado al principio)
-        proximo_cierre_15m = fechas_cierre_vela["15m"]
-        tiempo_espera = (proximo_cierre_15m - tiempo_fin_ciclo).total_seconds()
-
-        if tiempo_espera > 0:
-            print(f"Esperando {tiempo_espera:.0f} segundos hasta el próximo cierre de 15m: {proximo_cierre_15m}")
-            time.sleep(tiempo_espera)
-        else:
-            print("El analisis tardo mas de 15 minutos. Iniciando ciclo inmediatamente...")
 
 if __name__ == "__main__":
     main()
