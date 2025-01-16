@@ -265,16 +265,16 @@ def get_closing_time(temporalidad):
 
     if temporalidad == '15m':
         # Ajustar al múltiplo de 15 minutos más reciente
-        closing_time = current_time.replace(second=0, microsecond=0) - timedelta(minutes=current_time.minute % 15)
+        closing_times = current_time.replace(second=0, microsecond=0) - timedelta(minutes=current_time.minute % 15)
     elif temporalidad == '1h':
         # Ajustar al múltiplo de 1 hora más reciente
-        closing_time = current_time.replace(minute=0, second=0, microsecond=0)
+        closing_times = current_time.replace(minute=0, second=0, microsecond=0)
     elif temporalidad == '4h':
         # Ajustar al múltiplo de 4 horas más reciente
-        closing_time = current_time.replace(minute=0, second=0, microsecond=0) - timedelta(hours=current_time.hour % 4)
+        closing_times = current_time.replace(minute=0, second=0, microsecond=0) - timedelta(hours=current_time.hour % 4)
     elif temporalidad == '1d':
         # Ajustar al inicio del día
-        closing_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        closing_times = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         raise ValueError(f"Temporalidad no válida: {temporalidad}")
 
