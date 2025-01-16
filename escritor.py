@@ -377,21 +377,20 @@ def calcular_fechas_cierre(ahora):
     # 15 minutos
     minutos_actuales = ahora.minute
     minutos_restantes_15m = 15 - (minutos_actuales % 15)
-    fechas["15m"] = ahora + timedelta(minutes=minutos_restantes_15m)
+    fechas["15m"] = (ahora + timedelta(minutes=minutos_restantes_15m)).replace(second=0, microsecond=0) # Truncar segundos
 
     # 1 hora
     minutos_restantes_1h = 60 - minutos_actuales
-    fechas["1h"] = ahora + timedelta(minutes=minutos_restantes_1h)
+    fechas["1h"] = (ahora + timedelta(minutes=minutos_restantes_1h)).replace(second=0, microsecond=0) # Truncar segundos
 
     # 4 horas
     hora_actual = ahora.hour
     horas_restantes_4h = 4 - (hora_actual % 4)
-    fechas["4h"] = ahora + timedelta(hours=horas_restantes_4h)
+    fechas["4h"] = (ahora + timedelta(hours=horas_restantes_4h)).replace(second=0, microsecond=0) # Truncar segundos
 
-    # 1 dia - Se calcula el cierre a las 00:00 del *siguiente* día
-    fechas["1d"] = ahora.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    # 1 dia
+    fechas["1d"] = ahora.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1) # No es necesario truncar, ya está a 00:00:00
     return fechas
-
 
 
 def main():
