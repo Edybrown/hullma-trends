@@ -166,7 +166,7 @@ def check_initial_reports():
 
 
 async def send_report(chat_id, temporalidad, bot):
-    """Envía un informe al usuario solo si ha sido actualizado desde la última revisión."""
+    """Envía un informe al usuario si está actualizado con respecto al cierre de la vela."""
     global last_checked
     report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
     
@@ -174,24 +174,28 @@ async def send_report(chat_id, temporalidad, bot):
         print(f"[WARNING] Informe de {temporalidad} no encontrado para chat_id: {chat_id}.")
         return
     
-    # Obtener la última modificación del archivo
+    # Calcular el tiempo de cierre de la vela para esta temporalidad
+    closing_time = get_closing_time(temporalidad)
+    closing_timestamp = closing_time.timestamp()
+
+    # Verificar la última modificación del archivo
     last_modified = os.path.getmtime(report_path)
     last_reviewed = last_checked.get(report_path, 0)
 
-    # Si no ha sido modificado desde la última revisión, tomar acciones según la temporalidad
-    if last_modified <= last_reviewed:
-        if temporalidad == '15m':  # Solo para 15 minutos
-            print(f"[INFO] Informe de 15m no actualizado, esperando un minuto para chat_id: {chat_id}.")
-            for _ in range(9):  # Intentar 12 veces con un intervalo de 5 segundos
-                await asyncio.sleep(10)
+    # Si el archivo no está actualizado según el cierre de vela, tomar acción
+    if last_modified <= closing_timestamp:
+        if temporalidad == '15m':
+            print(f"[INFO] Informe de 15m no actualizado, intentando actualizar cada 15 segundos durante 90 segundos para chat_id: {chat_id}.")
+            for _ in range(6):  # Intentar 6 veces con intervalos de 15 segundos (6 x 15 = 90)
+                await asyncio.sleep(15)
                 last_modified = os.path.getmtime(report_path)
-                if last_modified > last_reviewed:
-                    break  # Salir si el archivo se actualiza
+                if last_modified > closing_timestamp:
+                    break  # Salir del bucle si el archivo se actualiza
             else:
-                print(f"[WARNING] Informe de 15m no actualizado tras 1 y 30 minuto para chat_id: {chat_id}.")
-                return  # Salir si no se actualizó tras esperar
+                print(f"[WARNING] Informe de 15m no actualizado tras 90 segundos, pasando al siguiente.")
+                return  # Salir si no se actualizó tras los 90 segundos
         else:
-            print(f"[INFO] Informe de {temporalidad} no actualizado para chat_id: {chat_id}.")
+            print(f"[INFO] Informe de {temporalidad} no actualizado, pasando al siguiente.")
             return  # Salir para otras temporalidades si no está actualizado
 
     # Leer y enviar el informe si está actualizado
@@ -204,58 +208,88 @@ async def send_report(chat_id, temporalidad, bot):
     except Exception as e:
         print(f"[ERROR] Error al enviar mensaje a {chat_id}: {e}")
 
-
-async def check_and_send_reports(chat_id, suscripciones, bot):
-    """Revisa y envía informes según las suscripciones del usuario."""
-    temporalidades = ['1d', '4h', '1h', '15m']
-    for temporalidad in temporalidades:
+async def check_and_send_reports(chat_id, suscripciones, bot, closing_times):
+    for temporalidad in ['1d', '4h', '1h', '15m']:
         if temporalidad in suscripciones:
-            await send_report(chat_id, temporalidad, bot)
+            await send_report(chat_id, temporalidad, bot, closing_times[temporalidad])
 
-async def send_reports_to_all_users(bot):
+
+async def send_reports_to_all_users(bot, closing_times):
     all_subscriptions = await get_all_user_subscriptions()
     for chat_id, suscripciones in all_subscriptions.items():
-        await check_and_send_reports(chat_id, suscripciones, bot)
+        await check_and_send_reports(chat_id, suscripciones, bot, closing_times)
+
 
 async def handle_candle_closure(bot):
-    try:  # Bloque try para la ALINEACIÓN INICIAL
+    """
+    Maneja el ciclo principal para enviar informes en función de los cierres de vela.
+    Las revisiones de los archivos y las suscripciones de los usuarios se hacen justo antes de enviar.
+    """
+    try:
+        # Calcular el tiempo inicial para alinear al cierre más cercano
         time_to_close = get_time_to_close()
-        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela (alineación inicial).")
+        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela inicial.")
         await asyncio.sleep(time_to_close)
-        print(f"[INFO] Se completó la espera inicial.")  # Mensaje para verificar que se completa la espera inicial
+        print("[INFO] Alineación inicial completada. Iniciando el bucle de manejo de velas.")
     except Exception as e:
         trace = traceback.format_exc()
-        print(f"[ERROR] Ocurrió un error en la espera inicial: {e}\n{trace}")
-        return  # Salir de la corutina si falla la espera inicial
+        print(f"[ERROR] Error durante la alineación inicial: {e}\n{trace}")
+        return
 
-    print(f"[INFO] Entrando al bucle while True para manejar cierre de velas.")  # Verificar si entra al bucle
+    # Bucle principal para manejar los cierres de vela
     while True:
-        try:  # Bloque try para el bucle while
-            print(f"[INFO] Iniciando ciclo de cierre de vela.")
-            start_time = time.time()
+        try:
+            # Calcular las fechas de cierre de todas las temporalidades
+            closing_times = {
+                '15m': datetime.now().replace(second=0, microsecond=0) - timedelta(minutes=(datetime.now().minute % 15)),
+                '1h': datetime.now().replace(minute=0, second=0, microsecond=0),
+                '4h': datetime.now().replace(hour=(datetime.now().hour // 4) * 4, minute=0, second=0, microsecond=0),
+                '1d': datetime.now().replace(hour=0, minute=0, second=0, microsecond=0),
+            }
+            print(f"[INFO] Fechas de cierre calculadas: {closing_times}")
 
-            # Llamar a la función que gestiona informes para todos los usuarios
-            await send_reports_to_all_users(bot)
+            # Llamar a la función que revisa y envía los informes
+            await send_reports_to_all_users(bot, closing_times)
 
-            elapsed_time = time.time() - start_time
-            print(f"[INFO] Tiempo transcurrido en send_reports_to_all_users: {elapsed_time} segundos.")
-            
-            # Calcular el tiempo restante antes del próximo cierre de vela
-            time_to_close = get_time_to_close()
-            remaining_time = max(0, time_to_close - elapsed_time)
-            print(f"[INFO] Esperando {remaining_time} segundos hasta el próximo cierre de vela.")
-            await asyncio.sleep(remaining_time)
+            # Calcular el tiempo restante para el próximo cierre de vela
+            elapsed_time = 0
+            for _ in range(6):  # Bucle de 15s x 6 iteraciones = 90s
+                time_to_close = get_time_to_close()
+                remaining_time = max(0, time_to_close - elapsed_time)
+                if remaining_time <= 0:
+                    break
+                print(f"[INFO] Esperando 15 segundos (o menos) hasta el próximo intento.")
+                await asyncio.sleep(min(15, remaining_time))
+                elapsed_time += 15
+
+            print(f"[INFO] Fin de ciclo, próximo cierre de vela en {time_to_close - elapsed_time} segundos.")
         except Exception as e:
             trace = traceback.format_exc()
             print(f"[ERROR] Ocurrió un error en handle_candle_closure: {e}\n{trace}")
-            await asyncio.sleep(60)  # Esperar 60 segundos antes de reintentar
+            await asyncio.sleep(60)  # Esperar antes de reintentar
 
-def get_time_to_close():
+
+def get_closing_time(temporalidad):
+    """Calcula el tiempo de cierre de la vela más reciente para la temporalidad dada."""
     current_time = datetime.now()
-    next_close_time = current_time.replace(second=0, microsecond=0) + timedelta(minutes=15 - (current_time.minute % 15))
-    remaining_time = (next_close_time - current_time).total_seconds()
-    print(f"[INFO] Tiempo hasta el próximo cierre de vela: {remaining_time} segundos.")
-    return remaining_time
+
+    if temporalidad == '15m':
+        # Ajustar al múltiplo de 15 minutos más reciente
+        closing_time = current_time.replace(second=0, microsecond=0) - timedelta(minutes=current_time.minute % 15)
+    elif temporalidad == '1h':
+        # Ajustar al múltiplo de 1 hora más reciente
+        closing_time = current_time.replace(minute=0, second=0, microsecond=0)
+    elif temporalidad == '4h':
+        # Ajustar al múltiplo de 4 horas más reciente
+        closing_time = current_time.replace(minute=0, second=0, microsecond=0) - timedelta(hours=current_time.hour % 4)
+    elif temporalidad == '1d':
+        # Ajustar al inicio del día
+        closing_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        raise ValueError(f"Temporalidad no válida: {temporalidad}")
+
+    return closing_time
+
 
 async def get_all_user_subscriptions():
     try:
