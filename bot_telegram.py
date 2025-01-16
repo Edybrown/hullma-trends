@@ -278,7 +278,7 @@ def get_closing_time(temporalidad):
     else:
         raise ValueError(f"Temporalidad no válida: {temporalidad}")
 
-    return closing_time
+    return closing_times
 
 
 async def get_all_user_subscriptions():
