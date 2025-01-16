@@ -217,19 +217,19 @@ async def send_reports_to_all_users(bot, latest_closing_times): #Recibe el dicci
         await check_and_send_reports(chat_id, suscripciones, bot, latest_closing_times)
 
 async def handle_candle_closure(bot):
-    """
-    Controla el ciclo principal para enviar informes basados en los cierres de velas.
-    """
+    """Controla el ciclo principal."""
     while True:
         try:
-            start_time = time.time()
             current_time = datetime.now()
-            closing_times = calcular_fechas_cierre(current_time) #Calcula los *proximos* cierres para la espera
-            latest_closing_times = {} #Diccionario para los ultimos cierres
-            for timeframe in ['1d', '4h', '1h', '15m']:
-                latest_closing_times[timeframe] = get_closing_time(timeframe) #Calcula los *ultimos* cierres para la verificacion
 
-            # Cálculo del tiempo restante hasta el próximo cierre de vela de 15m
+            # Se crea el diccionario closing_times
+            closing_times = {}
+            # Se itera sobre las temporalidades
+            for timeframe in ['1d', '4h', '1h', '15m']:
+                # Se llama a get_closing_time() para obtener el *próximo* cierre
+                # y se almacena en el diccionario con la temporalidad como clave
+                closing_times[timeframe] = get_closing_time(timeframe)
+
             proximo_cierre_15m = closing_times["15m"]
             tiempo_espera = (proximo_cierre_15m - current_time).total_seconds()
 
@@ -239,39 +239,36 @@ async def handle_candle_closure(bot):
             else:
                 print("El analisis tardo mas de 15 minutos. Iniciando ciclo inmediatamente...")
 
-            tiempo_inicio_verificacion = datetime.now()
-            print(f"Iniciando ciclo de análisis: {tiempo_inicio_verificacion}")
+            print(f"Iniciando ciclo de análisis: {datetime.now()}")
 
-            await send_reports_to_all_users(bot, latest_closing_times) #Pasa los ultimos cierres
+            # Se pasa el diccionario closing_times a las funciones de envío de reportes
+            await send_reports_to_all_users(bot, closing_times)
 
-            elapsed_time = time.time() - start_time
-            print(f"[INFO] Tiempo transcurrido en todo el ciclo: {elapsed_time} segundos.")
+            print(f"[INFO] Tiempo transcurrido en todo el ciclo: {(time.time() - start_time):.2f} segundos.")
 
         except Exception as e:
             print(f"[ERROR] Error en el ciclo principal: {e}")
-            await asyncio.sleep(60)  # Esperar 1 minuto antes de reintentar
-            
-def get_closing_time(temporalidad):
-    """Calcula el tiempo de cierre de la vela *más reciente* para la temporalidad dada."""
+            await asyncio.sleep(60)
+
+
+def get_closing_time(temporalidad): #Ahora calcula el proximo cierre
+    """Calcula el *próximo* tiempo de cierre de la vela para la temporalidad dada."""
     current_time = datetime.now()
 
     if temporalidad == '15m':
-        # Ajustar al múltiplo de 15 minutos más reciente
-        latest_closing_time = current_time.replace(second=0, microsecond=0) - timedelta(minutes=current_time.minute % 15)
+        minute_offset = current_time.minute % 15
+        closing_time = current_time + timedelta(minutes=15 - minute_offset)
     elif temporalidad == '1h':
-        # Ajustar al múltiplo de 1 hora más reciente
-        latest_closing_time = current_time.replace(minute=0, second=0, microsecond=0)
+        closing_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     elif temporalidad == '4h':
-        # Ajustar al múltiplo de 4 horas más reciente
-        latest_closing_time = current_time.replace(minute=0, second=0, microsecond=0) - timedelta(hours=current_time.hour % 4)
+        hour_offset = current_time.hour % 4
+        closing_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=4 - hour_offset)
     elif temporalidad == '1d':
-        # Ajustar al inicio del día
-        latest_closing_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        closing_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     else:
         raise ValueError(f"Temporalidad no válida: {temporalidad}")
 
-    return latest_closing_time #Nombre corregido
-
+    return closing_time.replace(second=0, microsecond=0)
 
 async def get_all_user_subscriptions():
     try:
