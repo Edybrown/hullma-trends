@@ -182,7 +182,7 @@ async def send_report(chat_id, temporalidad, bot):
     if last_modified <= last_reviewed:
         if temporalidad == '15m':  # Solo para 15 minutos
             print(f"[INFO] Informe de 15m no actualizado, esperando un minuto para chat_id: {chat_id}.")
-            for _ in range(6):  # Intentar 12 veces con un intervalo de 5 segundos
+            for _ in range(9):  # Intentar 12 veces con un intervalo de 5 segundos
                 await asyncio.sleep(10)
                 last_modified = os.path.getmtime(report_path)
                 if last_modified > last_reviewed:
