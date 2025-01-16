@@ -222,51 +222,41 @@ async def send_reports_to_all_users(bot, closing_times):
 
 async def handle_candle_closure(bot):
     """
-    Maneja el ciclo principal para enviar informes en función de los cierres de vela.
-    Las revisiones de los archivos y las suscripciones de los usuarios se hacen justo antes de enviar.
+    Controla el ciclo principal para enviar informes basados en los cierres de velas.
     """
     try:
-        # Calcular el tiempo inicial para alinear al cierre más cercano
-        time_to_close = get_time_to_close()
-        print(f"[INFO] Esperando {time_to_close} segundos hasta el próximo cierre de vela inicial.")
-        await asyncio.sleep(time_to_close)
-        print("[INFO] Alineación inicial completada. Iniciando el bucle de manejo de velas.")
+        # Alineación inicial al cierre de la vela de 15m
+        next_closing_time = get_closing_time('15m') + timedelta(minutes=15)
+        current_time = datetime.now()
+        time_to_wait = (next_closing_time - current_time).total_seconds()
+        
+        print(f"[INFO] Esperando {time_to_wait} segundos hasta el próximo cierre de vela.")
+        await asyncio.sleep(time_to_wait)
+        print("[INFO] Alineación inicial completada.")
     except Exception as e:
-        trace = traceback.format_exc()
-        print(f"[ERROR] Error durante la alineación inicial: {e}\n{trace}")
+        print(f"[ERROR] Error durante la alineación inicial: {e}")
         return
 
-    # Bucle principal para manejar los cierres de vela
+    print("[INFO] Entrando en el ciclo principal.")
     while True:
         try:
-            # Calcular las fechas de cierre de todas las temporalidades
-            closing_times = {
-                '15m': datetime.now().replace(second=0, microsecond=0) - timedelta(minutes=(datetime.now().minute % 15)),
-                '1h': datetime.now().replace(minute=0, second=0, microsecond=0),
-                '4h': datetime.now().replace(hour=(datetime.now().hour // 4) * 4, minute=0, second=0, microsecond=0),
-                '1d': datetime.now().replace(hour=0, minute=0, second=0, microsecond=0),
-            }
-            print(f"[INFO] Fechas de cierre calculadas: {closing_times}")
+            start_time = time.time()
 
-            # Llamar a la función que revisa y envía los informes
-            await send_reports_to_all_users(bot, closing_times)
+            # Llamar a la función que envía informes a todos los usuarios
+            await send_reports_to_all_users(bot)
 
-            # Calcular el tiempo restante para el próximo cierre de vela
-            elapsed_time = 0
-            for _ in range(6):  # Bucle de 15s x 6 iteraciones = 90s
-                time_to_close = get_time_to_close()
-                remaining_time = max(0, time_to_close - elapsed_time)
-                if remaining_time <= 0:
-                    break
-                print(f"[INFO] Esperando 15 segundos (o menos) hasta el próximo intento.")
-                await asyncio.sleep(min(15, remaining_time))
-                elapsed_time += 15
+            elapsed_time = time.time() - start_time
+            print(f"[INFO] Tiempo transcurrido en send_reports_to_all_users: {elapsed_time} segundos.")
 
-            print(f"[INFO] Fin de ciclo, próximo cierre de vela en {time_to_close - elapsed_time} segundos.")
+            # Calcular el tiempo restante hasta el próximo cierre de vela
+            next_closing_time = get_closing_time('15m') + timedelta(minutes=15)
+            current_time = datetime.now()
+            remaining_time = (next_closing_time - current_time).total_seconds()
+            print(f"[INFO] Esperando {remaining_time} segundos hasta el próximo cierre de vela.")
+            await asyncio.sleep(remaining_time)
         except Exception as e:
-            trace = traceback.format_exc()
-            print(f"[ERROR] Ocurrió un error en handle_candle_closure: {e}\n{trace}")
-            await asyncio.sleep(60)  # Esperar antes de reintentar
+            print(f"[ERROR] Error en el ciclo principal: {e}")
+            await asyncio.sleep(60)  # Esperar 1 minuto antes de reintentar
 
 
 def get_closing_time(temporalidad):
