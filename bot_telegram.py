@@ -156,13 +156,6 @@ def check_initial_reports():
             raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
 
-def check_initial_reports():
-    temporalidades = ['15m', '1h', '4h', '1d']
-    os.makedirs(reports_dir, exist_ok=True)
-    for temporalidad in temporalidades:
-        report_path = os.path.join(reports_dir, f"report_{temporalidad}.md")
-        if not os.path.exists(report_path):
-            raise FileNotFoundError(f"El archivo de informe para la temporalidad '{temporalidad}' no existe.")
 
 
 async def send_report(chat_id, temporalidad, bot, latest_closing_time): #Recibe el ultimo cierre
@@ -207,7 +200,7 @@ async def send_report(chat_id, temporalidad, bot, latest_closing_time): #Recibe 
         print(f"[ERROR] Error al enviar mensaje a {chat_id}: {e}")
 
 async def check_and_send_reports(chat_id, suscripciones, bot, latest_closing_times): #Recibe el diccionario de ultimos cierres
-    for temporalidad in ['1d', '4h', '1h', '15m']:
+    for temporalidad in ['15m', '1h', '4h', '1d']:
         if temporalidad in suscripciones:
             await send_report(chat_id, temporalidad, bot, latest_closing_times[temporalidad]) #Pasa el ultimo cierre correspondiente
 
