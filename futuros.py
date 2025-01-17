@@ -7,7 +7,7 @@ API_KEY = '78a5f138-1339-44b1-b209-554832b824f8'
 BASE_URL = 'https://api.coinalyze.net/v1'
 
 # Endpoint para obtener el funding rate actual
-endpoint_funding_rate = '/funding-rate/current'
+endpoint_funding_rate = '/funding-rate-history'
 
 # Función para probar la comunicación con la API
 def prueba_comunicacion(endpoint):
