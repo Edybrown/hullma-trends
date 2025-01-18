@@ -4,7 +4,7 @@ import requests
 API_KEY = '78a5f138-1339-44b1-b209-554832b824f8'
 
 # URL base de la API
-BASE_URL = 'https://api.coinalyze.net/v1/'
+BASE_URL = 'https://api.coinalyze.net'
 
 # Endpoint de prueba (este endpoint puede ser diferente dependiendo de la API de Coinanalyze)
 endpoint_test = '/ping'  # Este es solo un ejemplo de un endpoint de prueba genérico
