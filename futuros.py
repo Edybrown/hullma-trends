@@ -5,7 +5,7 @@ import datetime
 import json
 
 # Tu API Key de Coinanalyze (REEMPLAZA CON TU CLAVE REAL)
-api_key = "TU_API_KEY"
+api_key = "78a5f138-1339-44b1-b209-554832b824f8"
 
 # Base URL para acceder a los datos de Coinanalyze
 base_url = "https://api.coinalyze.net/v1"
