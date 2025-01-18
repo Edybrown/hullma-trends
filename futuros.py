@@ -15,7 +15,7 @@ def test_api_connection(use_header=True):
     url = f"{base_url}{endpoint}"
     headers = {}
     params = {
-        'symbols': 'BINANCE:BTCUSDT_PERP', #Símbolo necesario para este endpoint
+        'symbols': 'BINANCE:BTCUSDT_PERP.A', #Símbolo necesario para este endpoint
         'interval': '1hour',
         'from': int(time.time()) - 3600, #Hace una hora
         'to': int(time.time())
