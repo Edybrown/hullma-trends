@@ -5,7 +5,7 @@ url = "https://api.coinalyze.net/v1/future-markets"
 
 # Opcional: Agregar tu API Key si es necesario
 headers = {
-    "Authorization": "Bearer YOUR_API_KEY"
+    "Authorization": "Bearer 6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 }
 
 # Hacer la solicitud GET
