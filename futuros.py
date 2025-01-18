@@ -6,7 +6,7 @@ import csv
 api_key = "78a5f138-1339-44b1-b209-554832b824f8"
 
 # Base URL para acceder a los datos de Coinanalyze
-base_url = "https://api.coinalyze.net/v1/"
+base_url = "https://api.coinalyze.net/v1"
 
 # Función para realizar la solicitud con autenticación
 def get_data(endpoint, params):
@@ -32,7 +32,7 @@ def save_to_csv(filename, data, header):
 
 # Función para obtener los datos OHLCV
 def get_ohlcv_history(symbols, interval, from_timestamp, to_timestamp):
-    endpoint = "ohlcv-history"
+    endpoint = "/ohlcv-history"
     params = {
         "symbols": symbols,
         "interval": interval,
@@ -43,7 +43,7 @@ def get_ohlcv_history(symbols, interval, from_timestamp, to_timestamp):
 
 # Función para obtener el historial de Funding Rate
 def get_funding_rate(symbols, interval, from_timestamp, to_timestamp):
-    endpoint = "funding-rate-history"
+    endpoint = "/funding-rate-history"
     params = {
         "symbols": symbols,
         "interval": interval,
@@ -54,7 +54,7 @@ def get_funding_rate(symbols, interval, from_timestamp, to_timestamp):
 
 # Función para obtener el historial de Liquidaciones
 def get_liquidation_history(symbols, from_timestamp, to_timestamp):
-    endpoint = "liquidation-history"
+    endpoint = "/liquidation-history"
     params = {
         "symbols": symbols,
         "interval": interval,
@@ -67,7 +67,7 @@ def get_liquidation_history(symbols, from_timestamp, to_timestamp):
 
 # Función para obtener el Open Interest
 def get_open_interest(symbols):
-    endpoint = "open-interest"
+    endpoint = "/open-interest"
     params = {
         "symbols": symbols,
         "interval": interval,
@@ -78,7 +78,7 @@ def get_open_interest(symbols):
 
 # Función para obtener el Long/Short Ratio
 def get_long_short_ratio(symbols, interval, from_timestamp, to_timestamp):
-    endpoint = "long-short-ratio-history"
+    endpoint = "/long-short-ratio-history"
     params = {
         "symbols": symbols,
         "interval": interval,
