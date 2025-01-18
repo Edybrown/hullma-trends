@@ -1,36 +1,52 @@
 import requests
 import time
 import csv
+import datetime
+import json
 
-# Tu API Key de Coinanalyze
-api_key = "78a5f138-1339-44b1-b209-554832b824f8"
+# Tu API Key de Coinanalyze (REEMPLAZA CON TU CLAVE REAL)
+api_key = "TU_API_KEY"
 
 # Base URL para acceder a los datos de Coinanalyze
 base_url = "https://api.coinalyze.net/v1"
 
-# Función para realizar la solicitud con autenticación
+# Función para realizar la solicitud con autenticación y manejo de errores mejorado
 def get_data(endpoint, params):
     headers = {
         "Authorization": f"Bearer {api_key}"
     }
     url = f"{base_url}{endpoint}"
-    response = requests.get(url, headers=headers, params=params)
-    
-    if response.status_code == 200:
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP (4xx o 5xx)
         return response.json()
-    else:
-        print(f"Error en la comunicación. Código de estado: {response.status_code}")
-        print("Detalles del error:", response.json())
+    except requests.exceptions.RequestException as e:
+        print(f"Error en la solicitud a {url}: {e}")
+        if response is not None:
+          try:
+            error_json = response.json()
+            print(f"Detalles del error (JSON): {json.dumps(error_json, indent=4)}") # Intenta imprimir detalles en JSON
+          except json.JSONDecodeError:
+            print(f"Detalles del error (Texto): {response.text}") # Si no es JSON, imprime el texto
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Error al decodificar JSON: {e}")
         return None
 
-# Función para guardar los datos en un archivo CSV
+
+
+# Función para guardar los datos en un archivo CSV (sin cambios)
 def save_to_csv(filename, data, header):
+    if data is None:
+        print(f"No hay datos para guardar en {filename}")
+        return
     with open(filename, mode='w', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
         writer.writerows(data)
+    print(f"Datos guardados correctamente en {filename}")
 
-# Función para obtener los datos OHLCV
+# Funciones para obtener datos (con manejo de errores y comprobación de 'data' en la respuesta)
 def get_ohlcv_history(symbols, interval, from_timestamp, to_timestamp):
     endpoint = "/ohlcv-history"
     params = {
@@ -39,9 +55,9 @@ def get_ohlcv_history(symbols, interval, from_timestamp, to_timestamp):
         "from": from_timestamp,
         "to": to_timestamp
     }
-    return get_data(endpoint, params)
+    data = get_data(endpoint, params)
+    return data['data'] if data and 'data' in data else None #Comprueba que exista 'data'
 
-# Función para obtener el historial de Funding Rate
 def get_funding_rate(symbols, interval, from_timestamp, to_timestamp):
     endpoint = "/funding-rate-history"
     params = {
@@ -50,33 +66,30 @@ def get_funding_rate(symbols, interval, from_timestamp, to_timestamp):
         "from": from_timestamp,
         "to": to_timestamp
     }
-    return get_data(endpoint, params)
+    data = get_data(endpoint, params)
+    return data['data'] if data and 'data' in data else None
 
-# Función para obtener el historial de Liquidaciones
 def get_liquidation_history(symbols, from_timestamp, to_timestamp):
     endpoint = "/liquidation-history"
     params = {
         "symbols": symbols,
-        "interval": interval,
         "from": from_timestamp,
         "to": to_timestamp
     }
-    return get_data(endpoint, params)
+    data = get_data(endpoint, params)
+    return data['data'] if data and 'data' in data else None
 
-
-
-# Función para obtener el Open Interest
-def get_open_interest(symbols):
-    endpoint = "/open-interest"
+def get_open_interest(symbols, interval, from_timestamp, to_timestamp): #Añadidos from y to
+    endpoint = "/open-interest-history" #Endpoint correcto para historial
     params = {
         "symbols": symbols,
         "interval": interval,
         "from": from_timestamp,
         "to": to_timestamp
     }
-    return get_data(endpoint, params)
+    data = get_data(endpoint, params)
+    return data['data'] if data and 'data' in data else None
 
-# Función para obtener el Long/Short Ratio
 def get_long_short_ratio(symbols, interval, from_timestamp, to_timestamp):
     endpoint = "/long-short-ratio-history"
     params = {
@@ -85,43 +98,30 @@ def get_long_short_ratio(symbols, interval, from_timestamp, to_timestamp):
         "from": from_timestamp,
         "to": to_timestamp
     }
-    return get_data(endpoint, params)
+    data = get_data(endpoint, params)
+    return data['data'] if data and 'data' in data else None
 
-# Ejemplo de uso
+
+# Ejemplo de uso (con comprobaciones y mejor manejo de fechas)
 if __name__ == "__main__":
-    symbols = "BTCUSDT_PERP.A"  # Símbolos a utilizar
-    interval = "1hour"        # Intervalo de tiempo (por ejemplo, "1hour", "5min", etc.)
-    from_timestamp = int(time.time()) - (2000 * 3600)# 24 horas atrás
-    to_timestamp = int(time.time())           # Hora actual
+    symbols = "BINANCE:BTCUSDT_PERP"  # Símbolo con el exchange incluido
+    interval = "1hour"
+    dias_atras = 7 #Obtener los datos de los ultimos 7 dias
+    to_timestamp = int(time.time())
+    from_timestamp = to_timestamp - (dias_atras * 24 * 60 * 60)
 
-      # Obtener OHLCV History
+    # Obtener y guardar datos (con comprobaciones de None)
     ohlcv_data = get_ohlcv_history(symbols, interval, from_timestamp, to_timestamp)
-    if ohlcv_data:
-        save_to_csv("ohlcv_data.csv", ohlcv_data['data'], ['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume'])
-        print("Datos de OHLCV guardados.")
+    save_to_csv("ohlcv_data.csv", ohlcv_data, ['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume'])
 
-    
-    # Obtener Funding Rate History
     funding_rate_data = get_funding_rate(symbols, interval, from_timestamp, to_timestamp)
-    if funding_rate_data:
-        save_to_csv("funding_rate_data.csv", funding_rate_data['data'], ['timestamp', 'symbol', 'fundingRate'])
-        print("Datos de Funding Rate guardados.")
+    save_to_csv("funding_rate_data.csv", funding_rate_data, ['timestamp', 'symbol', 'fundingRate'])
 
-    # Obtener Liquidation History
-    liquidation_history = get_liquidation_history(symbols, from_timestamp, to_timestamp)
-    if liquidation_history:
-        save_to_csv("liquidation_history.csv", liquidation_history['data'], ['timestamp', 'symbol', 'liquidationPrice'])
-        print("Datos de Liquidation History guardados.")
+    liquidation_data = get_liquidation_history(symbols, from_timestamp, to_timestamp)
+    save_to_csv("liquidation_history.csv", liquidation_data, ['timestamp', 'symbol', 'liquidationPrice'])
 
-  
-    # Obtener Open Interest
-    open_interest_data = get_open_interest(symbols)
-    if open_interest_data:
-        save_to_csv("open_interest_data.csv", open_interest_data['data'], ['timestamp', 'symbol', 'openInterest'])
-        print("Datos de Open Interest guardados.")
+    open_interest_data = get_open_interest(symbols, interval, from_timestamp, to_timestamp)
+    save_to_csv("open_interest_data.csv", open_interest_data, ['timestamp', 'symbol', 'openInterest'])
 
-    # Obtener Long/Short Ratio History
     long_short_ratio_data = get_long_short_ratio(symbols, interval, from_timestamp, to_timestamp)
-    if long_short_ratio_data:
-        save_to_csv("long_short_ratio_data.csv", long_short_ratio_data['data'], ['timestamp', 'symbol', 'longShortRatio'])
-        print("Datos de Long/Short Ratio guardados.")
+    save_to_csv("long_short_ratio_data.csv", long_short_ratio_data, ['timestamp', 'symbol', 'longShortRatio'])
