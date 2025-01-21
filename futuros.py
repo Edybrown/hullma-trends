@@ -6,7 +6,7 @@ import csv
 api_key = "78a5f138-1339-44b1-b209-554832b824f8"
 
 # Base URL para acceder a los datos de Coinanalyze
-base_url = "https://api.coinalyze.net/v1"
+base_url = "https://api.coinalyze.net/v1/spot-markets"
 
 # Función para realizar la solicitud con la clave en la URL
 def get_data(endpoint, params=None):
