@@ -6,7 +6,7 @@ def get_btc_symbols(api_key):
     """
     Obtiene todos los símbolos de BTC en mercados de futuros.
     """
-    url = f"https://api.coinalyze.net/v1/future-markets?api_key={api_key}"
+    url = f"https://api.coinalyze.net/v1/exchanges?api_key={api_key}"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()  # Verifica si la respuesta es válida (2xx)
