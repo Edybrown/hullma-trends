@@ -11,7 +11,7 @@ def get_future_markets(api_key):
     """
 
     url = "https://api.coinalyze.net/v1/future-markets"
-    headers = {"Authorization": f"Bearer {6ecb2327-4d0c-49c8-9e96-2f5028891e1d}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     try:
         response = requests.get(url, headers=headers)
@@ -30,7 +30,7 @@ def get_future_markets(api_key):
         return []
 
 if __name__ == "__main__":
-    api_key = "tu_clave_api"  # Reemplaza con tu clave API
+    api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu clave API
     markets = get_future_markets(api_key)
 
     for market in markets:
