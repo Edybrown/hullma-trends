@@ -2,37 +2,29 @@ import requests
 
 api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 
-def get_btc_symbols(api_key):
+def get_supported_exchanges(api_key):
     """
-    Obtiene todos los símbolos de BTC en mercados de futuros.
+    Obtiene la lista de intercambios soportados desde la API de Coinalyze.
     """
-    url = f"https://api.coinalyze.net/v1/exchanges?api_key={api_key}"
+    url = "https://api.coinalyze.net/v1/exchanges"
+    
+    # Configura los encabezados con la clave API
+    headers = {"Authorization": f"Bearer {api_key}"}
+
     try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Verifica si la respuesta es válida (2xx)
-        markets = response.json()
-
-        # Filtra los mercados donde el base_asset es BTC
-        btc_markets = [market for market in markets if market["base_asset"] == "BTC"]
-
-        return btc_markets
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error al conectar con la API: {e}")
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Lanza una excepción si el código de estado no es 2xx
+        return response.json()
+    
+    except requests.exceptions.HTTPError as http_err:
+        print(f"Error al obtener los intercambios: {http_err}")
         return None
 
 # Ejemplo de uso
 if __name__ == "__main__":
-    btc_markets = get_btc_symbols(api_key)
-    if btc_markets:
-        print(f"Se encontraron {len(btc_markets)} mercados para BTC:")
-        for market in btc_markets:
-            print(f"- Símbolo: {market['symbol']}")
-            print(f"  Exchange: {market['exchange']}")
-            print(f"  Símbolo en Exchange: {market['symbol_on_exchange']}")
-            print(f"  Es perpetuo: {market['is_perpetual']}")
-            print(f"  Margen: {market['margined']}")
-            print(f"  Expira en: {market.get('expire_at', 'N/A')}")
-            print("-----")
+    exchanges = get_supported_exchanges(api_key)
+    if exchanges:
+        for exchange in exchanges:
+            print(f"Exchange: {exchange['name']} - Código: {exchange['code']}")
     else:
-        print("No se pudo obtener información sobre los mercados de BTC.")
+        print("No se pudo obtener la lista de intercambios.")
