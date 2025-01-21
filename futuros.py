@@ -1,5 +1,7 @@
 import requests
 
+api_key= "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
+
 def get_future_markets(api_key):
     """Obtiene información sobre los mercados futuros de CoinAnalyze.
 
@@ -17,19 +19,21 @@ def get_future_markets(api_key):
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Lanza una excepción si la solicitud HTTP no fue exitosa
 
-        # Verificar el estado de la solicitud
         if response.status_code == 200:
-            print("La conexión a la API fue exitosa.")
+            data = response.json()
+            return data
         else:
-            print("Error en la solicitud. Código de estado:", response.status_code)
-
-        # Si necesitas procesar los datos, puedes hacerlo aquí
-        # data = response.json()
-        # ...
+            print(f"Error inesperado: Código de estado {response.status_code}")
+            return None
 
     except requests.exceptions.RequestException as e:
-        print(f"Error al obtener datos de la API: {e}")
+        if isinstance(e, requests.exceptions.HTTPError):
+            if e.response.status_code == 401:
+                print("Error de autenticación: Verifica tu clave API y los permisos.")
+            else:
+                print(f"Error de solicitud HTTP: {e}")
+        else:
+            print(f"Error de conexión: {e}")
+        return None
 
-if __name__ == "__main__":
-    api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu clave API real
-    get_future_markets(api_key)
+# ... resto del código
