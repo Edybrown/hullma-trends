@@ -6,13 +6,10 @@ def get_supported_exchanges(api_key):
     """
     Obtiene la lista de intercambios soportados desde la API de Coinalyze.
     """
-    url = "https://api.coinalyze.net/v1/exchanges"
+    url = f"https://api.coinalyze.net/v1/exchanges?api_key={api_key}"  # API Key combinada en la URL
     
-    # Configura los encabezados con la clave API
-    headers = {"Authorization": f"Bearer {api_key}"}
-
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()  # Lanza una excepción si el código de estado no es 2xx
         return response.json()
     
