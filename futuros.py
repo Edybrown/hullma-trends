@@ -45,4 +45,8 @@ def obtener_perpetuos_btc(api_key):
         print("Resultados guardados en 'btc_perpetuos.txt'")
     
     except requests.exceptions.RequestException as e:
-      
+        print(f"Error al realizar la solicitud: {e}")
+
+# Ejecutar el script
+if __name__ == "__main__":
+    obtener_perpetuos_btc(api_key)
