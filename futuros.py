@@ -4,61 +4,37 @@ api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 
 def get_future_markets(api_key):
     """
-    Intenta obtener información sobre los mercados futuros usando diferentes configuraciones de encabezados.
+    Prueba diferentes formas de conexión con la API de Coinalyze para identificar la correcta.
     """
     url = "https://api.coinalyze.net/v1/future-markets"
 
-    # Prueba con "Bearer" en el encabezado
-    headers1 = {"Authorization": f"Bearer {api_key}"}
+    # Configuraciones de prueba
+    methods = {
+        "Bearer Header": {"url": url, "headers": {"Authorization": f"Bearer {api_key}"}},
+        "Direct API Key Header": {"url": url, "headers": {"Authorization": api_key}},
+        "API Key in URL": {"url": f"{url}?api_key={api_key}", "headers": None}
+    }
 
-    # Prueba con solo la clave API
-    headers2 = {"Authorization": api_key}
+    for method_name, config in methods.items():
+        print(f"Probando método: {method_name}")
+        try:
+            response = requests.get(config["url"], headers=config["headers"], timeout=10)
+            print(f"HTTP Status Code ({method_name}): {response.status_code}")
+            if response.status_code == 200:
+                print(f"Respuesta válida con el método: {method_name}")
+                return method_name, response.json()  # Devuelve el método exitoso y la respuesta
+            else:
+                print(f"Respuesta del servidor ({method_name}): {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error con el método {method_name}: {e}")
 
-    # Prueba con la clave en la URL
-    url_with_key = f"{url}?api_key={api_key}"
-
-    try:
-        # Prueba 1
-        print("Intentando con Bearer en el encabezado...")
-        response = requests.get(url, headers=headers1, timeout=10)
-        print(f"HTTP Status Code: {response.status_code}")
-        print(f"Response Text: {response.text}")
-        response.raise_for_status()
-        return response.json()
-
-    except requests.exceptions.HTTPError as http_err:
-        print(f"Error con Bearer: {http_err}")
-
-    try:
-        # Prueba 2
-        print("Intentando con clave directa en el encabezado...")
-        response = requests.get(url, headers=headers2, timeout=10)
-        print(f"HTTP Status Code: {response.status_code}")
-        print(f"Response Text: {response.text}")
-        response.raise_for_status()
-        return response.json()
-
-    except requests.exceptions.HTTPError as http_err:
-        print(f"Error con clave directa: {http_err}")
-
-    try:
-        # Prueba 3
-        print("Intentando con clave en la URL...")
-        response = requests.get(url_with_key, timeout=10)
-        print(f"HTTP Status Code: {response.status_code}")
-        print(f"Response Text: {response.text}")
-        response.raise_for_status()
-        return response.json()
-
-    except requests.exceptions.HTTPError as http_err:
-        print(f"Error con clave en la URL: {http_err}")
-
-    return None
+    return None, None
 
 # Ejemplo de uso
 if __name__ == "__main__":
-    mercados = get_future_markets(api_key)
+    method_used, mercados = get_future_markets(api_key)
     if mercados:
+        print(f"Se encontró conexión exitosa con el método: {method_used}")
         print(f"Se encontraron {len(mercados)} mercados futuros.")
     else:
         print("No se pudo obtener información sobre los mercados futuros.")
