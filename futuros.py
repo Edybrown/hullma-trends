@@ -1,24 +1,37 @@
 import requests
 
-# URL de la API de CoinAlyze para mercados futuros
-url = "https://api.coinalyze.net/v1/future-markets"
+def get_future_markets(api_key):
+    """Obtiene información sobre los mercados futuros de CoinAnalyze.
 
-# Opcional: Agregar tu API Key si es necesario
-headers = {
-    "Authorization": "Bearer 6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
-}
+    Args:
+        api_key (str): La clave API de CoinAnalyze.
 
-# Hacer la solicitud GET
-response = requests.get(url, headers=headers)
+    Returns:
+        list: Una lista de diccionarios, cada uno representando un mercado futuro.
+    """
 
-# Verificar si la solicitud fue exitosa
-if response.status_code == 200:
-    # Convertir la respuesta a formato JSON
-    data = response.json()
+    url = "https://api.coinalyze.net/v1/future-markets"
+    headers = {"Authorization": f"Bearer {6ecb2327-4d0c-49c8-9e96-2f5028891e1d}"}
 
-    # Mostrar algunos datos básicos (ajustar según la estructura de los datos)
-    print("Datos de mercados futuros:")
-    for market in data.get('data', []):
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise exception for error HTTP status codes
+        data = response.json()
+
+        # Validar la estructura de los datos (opcional)
+        for market in data.get('data', []):
+            # Agregar aquí las validaciones necesarias, por ejemplo:
+            assert 'symbol' in market, "Campo 'symbol' no encontrado"
+            assert 'lastPrice' in market, "Campo 'lastPrice' no encontrado"
+
+        return data['data']
+    except requests.exceptions.RequestException as e:
+        print(f"Error al obtener datos de la API: {e}")
+        return []
+
+if __name__ == "__main__":
+    api_key = "tu_clave_api"  # Reemplaza con tu clave API
+    markets = get_future_markets(api_key)
+
+    for market in markets:
         print(f"Mercado: {market['symbol']}, Precio: {market['lastPrice']}, Volumen: {market['volume']}")
-else:
-    print(f"Error en la solicitud. Código de estado: {response.status_code}")
