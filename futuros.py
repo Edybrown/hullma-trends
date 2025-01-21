@@ -15,23 +15,21 @@ def get_future_markets(api_key):
 
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise exception for error HTTP status codes
-        data = response.json()
+        response.raise_for_status()  # Lanza una excepción si la solicitud HTTP no fue exitosa
 
-        # Validar la estructura de los datos (opcional)
-        for market in data.get('data', []):
-            # Agregar aquí las validaciones necesarias, por ejemplo:
-            assert 'symbol' in market, "Campo 'symbol' no encontrado"
-            assert 'lastPrice' in market, "Campo 'lastPrice' no encontrado"
+        # Verificar el estado de la solicitud
+        if response.status_code == 200:
+            print("La conexión a la API fue exitosa.")
+        else:
+            print("Error en la solicitud. Código de estado:", response.status_code)
 
-        return data['data']
+        # Si necesitas procesar los datos, puedes hacerlo aquí
+        # data = response.json()
+        # ...
+
     except requests.exceptions.RequestException as e:
         print(f"Error al obtener datos de la API: {e}")
-        return []
 
 if __name__ == "__main__":
-    api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu clave API
-    markets = get_future_markets(api_key)
-
-    for market in markets:
-        print(f"Mercado: {market['symbol']}, Precio: {market['lastPrice']}, Volumen: {market['volume']}")
+    api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu clave API real
+    get_future_markets(api_key)
