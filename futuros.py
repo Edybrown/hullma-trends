@@ -1,27 +1,18 @@
 import requests
 
+# Sustituye con tu propia API key
 api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
+url = "https://api.coinalyze.net/v1/future-markets"
 
-def get_supported_exchanges(api_key):
-    """
-    Obtiene la lista de intercambios soportados desde la API de Coinalyze.
-    """
-    url = f"https://api.coinalyze.net/v1/exchanges?api_key={api_key}"  # API Key combinada en la URL
-    
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Lanza una excepción si el código de estado no es 2xx
-        return response.json()
-    
-    except requests.exceptions.HTTPError as http_err:
-        print(f"Error al obtener los intercambios: {http_err}")
-        return None
+# Construir la URL con la API key
+url_with_key = f"{url}?api_key={api_key}"
 
-# Ejemplo de uso
-if __name__ == "__main__":
-    exchanges = get_supported_exchanges(api_key)
-    if exchanges:
-        for exchange in exchanges:
-            print(f"Exchange: {exchange['name']} - Código: {exchange['code']}")
-    else:
-        print("No se pudo obtener la lista de intercambios.")
+# Realizar la solicitud GET
+response = requests.get(url_with_key)
+markets = response.json()
+
+# Filtrar el símbolo que deseas verificar
+btc_perpetual_a = [market for market in markets if market.get("symbol") == "BTC-PERPETUAL.A"]
+
+# Mostrar los resultados
+print(btc_perpetual_a)
