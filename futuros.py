@@ -1,44 +1,48 @@
 import requests
-import time
-import csv
+import json
 
-# Tu API Key de Coinanalyze
-api_key = "78a5f138-1339-44b1-b209-554832b824f8"
+# API Key
+api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 
-# Base URL para acceder a los datos de Coinanalyze
-base_url = "https://api.coinalyze.net/v1/spot-markets"
+# URL base con la clave incluida
+url = f"https://api.coinalyze.net/v1/spot-markets?api_key={api_key}"
 
-# Función para realizar la solicitud con la clave en la URL
-def get_data(endpoint, params=None):
-    if params is None:
-        params = {}
-    params["api_key"] = api_key  # Añadir la API Key a los parámetros
-    url = f"{base_url}{endpoint}"
-    response = requests.get(url, params=params)
+def obtener_perpetuos_btc(api_key):
+    """
+    Obtiene los mercados perpetuos de BTC de la API de CoinAlyze.
+    """
+    try:
+        # Solicitud a la API
+        print("Realizando solicitud a la API...")
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Lanza error si el código no es 200
+        
+        # Parsear los datos
+        data = response.json()
+        print(f"Total de mercados obtenidos: {len(data)}")
+        
+        # Filtrar solo los mercados perpetuos de BTC
+        perpetuos_btc = [
+            {
+                "symbol": mercado["symbol"],
+               
+            }
+            for mercado in data
+            if mercado["is_perpetual"] and mercado["base_asset"] == "BTC"
+        ]
+        
+        print(f"Mercados perpetuos de BTC encontrados: {len(perpetuos_btc)}")
+        
+        # Guardar en un archivo
+        with open("btc_spot.txt", "w") as archivo:
+            for mercado in perpetuos_btc:
+                archivo.write(json.dumps(mercado, indent=4) + "\n")
+        
+        print("Resultados guardados en 'btc_perpetuos.txt'")
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Error al realizar la solicitud: {e}")
 
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error en la solicitud a {url}: {response.status_code} {response.reason}")
-        try:
-            print("Detalles del error (JSON):", response.json())
-        except json.JSONDecodeError:
-            print("Respuesta del servidor no es JSON:", response.text)
-        return None
-
-# Función para guardar los datos en un archivo CSV
-def save_to_csv(filename, data, header):
-    with open(filename, mode='w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=header)
-        writer.writeheader()
-        writer.writerows(data)
-
-# Ejemplo de uso 
+# Ejecutar el script
 if __name__ == "__main__":
-  # Ejemplo para endpoint future-markets
-  future_markets_data = get_data("/future-markets")
-
-  if future_markets_data:
-      print("Datos de futuros mercados obtenidos.")
-  else:
-      print("No se pudieron obtener datos de futuros mercados.")
+    obtener_perpetuos_btc(api_key)
