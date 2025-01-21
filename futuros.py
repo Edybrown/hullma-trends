@@ -4,36 +4,55 @@ api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 
 def get_future_markets(api_key):
     """
-    Obtiene información sobre los mercados futuros de CoinAnalyze.
-
-    Args:
-        api_key (str): La clave API de CoinAnalyze.
-
-    Returns:
-        list: Una lista de diccionarios, cada uno representando un mercado futuro.
+    Intenta obtener información sobre los mercados futuros usando diferentes configuraciones de encabezados.
     """
     url = "https://api.coinalyze.net/v1/future-markets"
-    headers = {"Authorization": f"Bearer {api_key}"}
+
+    # Prueba con "Bearer" en el encabezado
+    headers1 = {"Authorization": f"Bearer {api_key}"}
+
+    # Prueba con solo la clave API
+    headers2 = {"Authorization": api_key}
+
+    # Prueba con la clave en la URL
+    url_with_key = f"{url}?api_key={api_key}"
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        # Prueba 1
+        print("Intentando con Bearer en el encabezado...")
+        response = requests.get(url, headers=headers1, timeout=10)
         print(f"HTTP Status Code: {response.status_code}")
-        print(f"Response Text: {response.text}")  # Para inspeccionar el contenido
+        print(f"Response Text: {response.text}")
         response.raise_for_status()
-
-        # Si no hay excepciones, procesa la respuesta JSON
-        data = response.json()
-        return data
+        return response.json()
 
     except requests.exceptions.HTTPError as http_err:
-        if response.status_code == 401:
-            print("Error de autenticación: Verifica tu clave API y los permisos.")
-        else:
-            print(f"HTTP error occurred: {http_err}")  # Error HTTP específico
-    except requests.exceptions.RequestException as req_err:
-        print(f"Request exception occurred: {req_err}")  # Error general de la solicitud
-    except Exception as e:
-        print(f"Unexpected error: {e}")  # Cualquier otro error inesperado
+        print(f"Error con Bearer: {http_err}")
+
+    try:
+        # Prueba 2
+        print("Intentando con clave directa en el encabezado...")
+        response = requests.get(url, headers=headers2, timeout=10)
+        print(f"HTTP Status Code: {response.status_code}")
+        print(f"Response Text: {response.text}")
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.HTTPError as http_err:
+        print(f"Error con clave directa: {http_err}")
+
+    try:
+        # Prueba 3
+        print("Intentando con clave en la URL...")
+        response = requests.get(url_with_key, timeout=10)
+        print(f"HTTP Status Code: {response.status_code}")
+        print(f"Response Text: {response.text}")
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.HTTPError as http_err:
+        print(f"Error con clave en la URL: {http_err}")
+
     return None
 
 # Ejemplo de uso
