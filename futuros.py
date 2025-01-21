@@ -28,10 +28,10 @@ def obtener_perpetuos_btc(api_key):
                
             }
             for mercado in data
-            if mercado["is_perpetual"] and mercado["base_asset"] == "BTC"
+            if mercado["is_spot"] and mercado["base_asset"] == "BTC"
         ]
         
-        print(f"Mercados perpetuos de BTC encontrados: {len(perpetuos_btc)}")
+        print(f"Mercados spot de BTC encontrados: {len(perpetuos_btc)}")
         
         # Guardar en un archivo
         with open("btc_spot.txt", "w") as archivo:
