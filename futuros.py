@@ -32,7 +32,7 @@ def calcular_rango_temporalidad(temporalidad, velas):
 
 # Función para hacer solicitudes a la API
 def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp):
-    url = f"{BASE_URL}{endpoint}?symbols={symbols}&interval={interval}&from={from_timestamp}&to={to_timestamp}&convert_to_usd=false&apikey={API_KEY}"
+    url = f"{BASE_URL}{endpoint}?symbols={symbols}&interval={interval}&from={from_timestamp}&to={to_timestamp}&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
