@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # Parámetros generales
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Tu clave API
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 BASE_URL = "https://api.coinalyze.net/v1/"
 SYMBOLS = {
     "spot": "BTCUSDT.A",
@@ -31,9 +31,8 @@ def calcular_rango_temporalidad(temporalidad, velas):
     return desde, ahora
 
 # Función para hacer solicitudes a la API
-def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp):
-    # Incluir la API key en la URL
-    url = f"{BASE_URL}{endpoint}?symbols={symbol}&interval={interval}&from={from_timestamp}&to={to_timestamp}&apikey={API_KEY}"
+def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp):
+    url = f"{BASE_URL}{endpoint}?symbols={symbols}&interval={interval}&from={from_timestamp}&to={to_timestamp}&convert_to_usd=false&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
@@ -65,7 +64,8 @@ def procesar_datos(temporalidad):
 
     # Open Interest
     print(f"Fetching Open Interest in {temporalidad}...")
-    data = fetch_data("open-interest-history", SYMBOLS["perpetuos"], temporalidad, desde, hasta)
+    symbols = ",".join(SYMBOLS.values())
+    data = fetch_data("open-interest-history", symbols, temporalidad, desde, hasta)
     if data and "history" in data[0]:
         df = pd.DataFrame(data[0]["history"])
         df = df.rename(columns={
@@ -79,7 +79,7 @@ def procesar_datos(temporalidad):
 
     # Long/Short Ratio
     print(f"Fetching Long/Short Ratio in {temporalidad}...")
-    data = fetch_data("long-short-ratio-history", SYMBOLS["perpetuos"], temporalidad, desde, hasta)
+    data = fetch_data("long-short-ratio-history", symbols, temporalidad, desde, hasta)
     if data and "history" in data[0]:
         df = pd.DataFrame(data[0]["history"])
         df = df.rename(columns={
@@ -92,7 +92,7 @@ def procesar_datos(temporalidad):
 
     # Liquidation History
     print(f"Fetching Liquidation History in {temporalidad}...")
-    data = fetch_data("liquidation-history", SYMBOLS["perpetuos"], temporalidad, desde, hasta)
+    data = fetch_data("liquidation-history", symbols, temporalidad, desde, hasta)
     if data and "history" in data[0]:
         df = pd.DataFrame(data[0]["history"])
         df = df.rename(columns={
