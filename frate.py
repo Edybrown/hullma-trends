@@ -13,7 +13,7 @@ def calcular_funding_rate(df):
 def procesar_archivos_csv(carpeta="coinalyze_data"):
     """Procesa los archivos CSV en la carpeta especificada."""
     try:
-        archivos_csv = [archivo for archivo in os.listdir(carpeta) if archivo.startswith("datos_unificados_") and archivo.endswith(".csv")]
+        archivos_csv = [archivo for archivo in os.listdir(carpeta) if archivo.startswith("datos_") and archivo.endswith(".csv")]
         if not archivos_csv:
             print(f"No se encontraron archivos CSV en la carpeta '{carpeta}'.")
             return
