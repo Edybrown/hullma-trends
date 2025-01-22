@@ -17,6 +17,7 @@ OUTPUT_FOLDER = "coinalyze_data"  # Carpeta de salida única
 # Crear la carpeta de salida si no existe
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+
 # Fechas para obtener 2000 velas por temporalidad
 VELAS = 2000
 TEMPORALIDAD_SEGUNDOS = {
@@ -75,11 +76,11 @@ def procesar_datos(temporalidad):
         symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
 
-        if data and isinstance(data, list): #Comprobacion de que la respuesta sea una lista
-            for symbol_data in data: #Iterar por cada symbolo devuelto
-                if "history" in symbol_data and isinstance(symbol_data["history"], list) : #comprobacion de que history exista y sea una lista
+        if data and isinstance(data, list):
+            for symbol_data in data:
+                if "history" in symbol_data and isinstance(symbol_data["history"], list):
                     for item in symbol_data["history"]:
-                        row = {"timestamp": item["t"], "data_type": data_type, "temporalidad": temporalidad, "symbol":symbol_data["symbol"]}
+                        row = {"timestamp": item["t"], "data_type": data_type, "temporalidad": temporalidad, "symbol": symbol_data.get("symbol")} #Se usa .get para evitar errores en caso de que symbol no exista
                         for key, new_key in details["renames"].items():
                             if key in item:
                                 row[new_key] = item[key]
@@ -88,12 +89,12 @@ def procesar_datos(temporalidad):
     if all_data:
         final_df = pd.DataFrame(all_data)
         final_df = final_df.sort_values(by="timestamp")
-        final_df.to_csv(os.path.join(OUTPUT_FOLDER, f"datos_unificados.csv"), index=False) # Guardar en la carpeta única
-        print(f"Data saved to {OUTPUT_FOLDER}/datos_unificados.csv")
+        final_df.to_csv(os.path.join(OUTPUT_FOLDER, f"datos{temporalidad}.csv"), index=False)  # Nombre de archivo específico por temporalidad
+        print(f"Data saved to {OUTPUT_FOLDER}/datos{temporalidad}.csv")
         return None
     return None
 
-# Guardar datos (modificado)
+# Guardar datos (CORREGIDO)
 for temporalidad in TEMPORALIDADES:
     print(f"Processing {temporalidad}...")
     procesar_datos(temporalidad)
