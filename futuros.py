@@ -1,4 +1,5 @@
 import requests
+import time
 
 def get_open_interest_history(api_key, symbols, interval, from_timestamp, to_timestamp, convert_to_usd=False):
   """
