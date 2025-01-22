@@ -97,8 +97,8 @@ def procesar_datos(temporalidad):
     if all_data:
         final_df = pd.DataFrame.from_dict(all_data, orient='index')
         final_df = final_df.sort_values(by="fecha_hora")
-        final_df.to_csv(os.path.join(OUTPUT_FOLDER, f"datos_unificados_{temporalidad}.csv"), index=False)
-        print(f"Data saved to {OUTPUT_FOLDER}/datos_unificados_{temporalidad}.csv")
+        final_df.to_csv(os.path.join(OUTPUT_FOLDER, f"datos_{temporalidad}.csv"), index=False)
+        print(f"Data saved to {OUTPUT_FOLDER}/datos_{temporalidad}.csv")
         return None
     return None
 
