@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # Parámetros generales
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Tu clave API
 BASE_URL = "https://api.coinalyze.net/v1/"
 SYMBOLS = {
     "spot": "BTCUSDT.A",
@@ -32,7 +32,8 @@ def calcular_rango_temporalidad(temporalidad, velas):
 
 # Función para hacer solicitudes a la API
 def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp):
-    url = f"{BASE_URL}{endpoint}?apikey={API_KEY}&symbols={symbol}&interval={interval}&from={from_timestamp}&to={to_timestamp}"
+    # Incluir la API key en la URL
+    url = f"{BASE_URL}{endpoint}?symbols={symbol}&interval={interval}&from={from_timestamp}&to={to_timestamp}&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
