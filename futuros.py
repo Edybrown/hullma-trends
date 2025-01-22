@@ -49,27 +49,13 @@ if __name__ == "__main__":
   # Intervalo de ejemplo
   interval = "1hour"
 
-  # Timestamps de ejemplo (ajustar según tu necesidad)
-  from_timestamp = int(time.time()) - (24 * 3600)  # Últimas 24 horas
+ # Timestamps para los últimos 30 días
   to_timestamp = int(time.time())
+  from_timestamp = to_timestamp - (30 * 24 * 3600)  # 30 días atrás
 
-  # Convertir a USD (opcional)
-  convert_to_usd = True
-
-  # Realizar la solicitud
-  data = get_open_interest_history(api_key, symbols, interval, from_timestamp, to_timestamp, convert_to_usd)
+  data = get_open_interest_history(api_key, symbols, interval, convert_to_usd)
 
   if data:
-    print("Historial del interés abierto obtenido:")
-    for item in data:
-      symbol = item["symbol"]
-      history = item["history"]
-      print(f"Símbolo: {symbol}")
-      for entry in history:
-        print(f"\t- Fecha: {entry['t']}")
-        print(f"\t  Open: {entry['o']}")
-        print(f"\t  High: {entry['h']}")
-        print(f"\t  Low: {entry['l']}")
-        print(f"\t  Close: {entry['c']}")
+       print(data)
   else:
-    print("Error al obtener el historial del interés abierto.")
+        print("No se pudieron obtener datos.")
