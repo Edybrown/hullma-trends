@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # Parámetros generales
-API_KEY = "YOUR_API_KEY"  # Reemplaza con tu API Key real
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu API Key real
 BASE_URL = "https://api.coinalyze.net/v1/"
 SYMBOLS = {
     "spot": "BTCUSDT.A",
