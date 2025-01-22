@@ -1,13 +1,24 @@
 import pandas as pd
 import os
+import re
 
 def calcular_funding_rate(df):
     """Calcula el funding rate a partir de los datos OHLCV."""
-    if 'ohlcv_close_BTCUSDT_PERP.A' in df.columns and 'ohlcv_close_BTCUSDT.A' in df.columns:
-        df['funding_rate'] = (df['ohlcv_close_BTCUSDT_PERP.A'] - df['ohlcv_close_BTCUSDT.A']) / df['ohlcv_close_BTCUSDT.A']
-    else:
-        print("Columnas 'ohlcv_close_BTCUSDT_PERP.A' o 'ohlcv_close_BTCUSDT.A' no encontradas. No se puede calcular el funding rate.")
-        df['funding_rate'] = None #Añadir la columna aunque sea vacia para no generar errores
+    try:
+        # Usar expresiones regulares para encontrar las columnas de cierre
+        perp_close_col = next(col for col in df.columns if re.match(r"ohlcv_close_.+_PERP\.A", col))
+        spot_close_col = next(col for col in df.columns if re.match(r"ohlcv_close_.+\.A", col))
+
+        df['funding_rate'] = (df[perp_close_col] - df[spot_close_col]) / df[spot_close_col]
+    except StopIteration:
+        print("No se encontraron las columnas de cierre de futuros o spot. No se puede calcular el funding rate.")
+        df['funding_rate'] = None
+    except ZeroDivisionError:
+        print("Error de división por cero. El precio spot es cero. No se puede calcular el funding rate.")
+        df['funding_rate'] = None
+    except Exception as e:
+        print(f"Error inesperado al calcular el funding rate: {e}")
+        df['funding_rate'] = None
     return df
 
 def procesar_archivos_csv(carpeta="coinalyze_data"):
@@ -24,7 +35,7 @@ def procesar_archivos_csv(carpeta="coinalyze_data"):
             try:
                 df = pd.read_csv(ruta_completa)
                 df = calcular_funding_rate(df)
-                df.to_csv(ruta_completa, index=False) #Sobreescribir el archivo original
+                df.to_csv(ruta_completa, index=False)
                 print(f"Funding rate calculado y guardado en: {ruta_completa}")
             except pd.errors.ParserError as e:
                 print(f"Error al leer el archivo CSV {archivo}: {e}")
