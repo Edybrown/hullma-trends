@@ -42,7 +42,7 @@ def get_open_interest_history(api_key, symbols, interval, from_timestamp, to_tim
 if __name__ == "__main__":
   # Reemplazar con tu API Key
   api_key = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
-
+  convert_to_usd = True
   # Símbolos de ejemplo
   symbols = "BTCUSDT_PERP.A"
 
