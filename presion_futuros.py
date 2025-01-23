@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import math
+import numpy as np
 
 # Directorio donde están los archivos CSV
 data_directory = "coinalyze_data"
@@ -10,42 +11,52 @@ files = [f for f in os.listdir(data_directory) if f.endswith('.csv')]
 
 # Función para calcular el Indicador de Presión Direccional Modificado
 def calcular_indicador(funding_rate, long_short_ratio, oi_total, longs_percentage):
-    # Evitar valores cero en OI
-    oi_total = max(oi_total, 1)  # Prevenir que OI sea 0, establecer en 1 si es muy bajo
+    if funding_rate is None or long_short_ratio is None or oi_total is None or longs_percentage is None:
+        return np.nan  # Devolver NaN si algún valor es None
 
-    # Asegurémonos de que el funding_rate esté bien procesado
+    # Evitar división por cero y valores cero en OI
+    long_short_ratio = max(long_short_ratio, 0.0001)
+    oi_total = max(oi_total, 1)
+
     funding_rate_abs = abs(funding_rate)
 
-    # Evitar valores extremos con un logaritmo de OI más seguro
-    term1 = funding_rate_abs / (long_short_ratio + 0.0001)
+    # Cálculo del indicador (sin la modificación innecesaria con la raiz y el logaritmo)
+    desequilibrio = abs(longs_percentage - 50) / 50
+    indicador = funding_rate_abs * oi_total * desequilibrio
 
-    # Calcular el logaritmo de OI con una pequeña constante si es necesario
-    term2 = math.sqrt(oi_total) / (math.log(oi_total + 1) + 1)
-
-    # Asegurarnos de que los valores de longs_percentage estén entre 0 y 100
-    term3 = 1 + abs(longs_percentage - 50) / 50
-
-    # Indicador de Presión Direccional
-    indicador = term1 * term2 * term3
     return indicador
 
 # Procesar cada archivo CSV
 for file in files:
-    # Leer el archivo CSV
     file_path = os.path.join(data_directory, file)
-    df = pd.read_csv(file_path)
+    try:
+        df = pd.read_csv(file_path)
 
-    # Extraer las columnas necesarias
-    funding_rate = df['funding_rate']
-    long_short_ratio = df['long_short_ratio_long_short_ratio_']
-    oi_total = df['open_interest_oi_open_']  # OI Total
-    longs_percentage = df['long_short_ratio_longs_percentage_']
+        # Extraer las columnas necesarias, manejando posibles KeyError
+        try:
+            funding_rate = df['funding_rate']
+            long_short_ratio = df['long_short_ratio_long_short_ratio_']
+            oi_total = df['open_interest_oi_open_']
+            longs_percentage = df['long_short_ratio_longs_percentage_']
+        except KeyError as e:
+            print(f"Error: No se encontró la columna {e} en el archivo {file}. Saltando este archivo.")
+            continue # Saltar al siguiente archivo si hay un error de columna
 
-    # Calcular el indicador de presión direccional para cada fila
-    df['presion_direccional'] = [
-        calcular_indicador(f, lsr, oi, lp) for f, lsr, oi, lp in zip(funding_rate, long_short_ratio, oi_total, longs_percentage)
-    ]
+        # Calcular el indicador, manejando posibles errores en el cálculo
+        try:
+            df['presion_direccional'] = [
+                calcular_indicador(f, lsr, oi, lp) for f, lsr, oi, lp in zip(funding_rate, long_short_ratio, oi_total, longs_percentage)
+            ]
+        except TypeError as e:
+            print(f"Error de tipo en el calculo del indicador en {file}: {e}")
+            print("Revisar los tipos de datos de las columnas funding_rate, long_short_ratio, oi_total y longs_percentage")
+            continue
 
-    # Sobrescribir el archivo con el nuevo indicador agregado como columna
-    df.to_csv(file_path, index=False)
-    print(f"Archivo actualizado: {file_path}")
+        # Sobrescribir el archivo, eliminando filas con NaN en la nueva columna
+        df = df.dropna(subset=['presion_direccional'])
+        df.to_csv(file_path, index=False)
+        print(f"Archivo actualizado: {file_path}")
+    except pd.errors.ParserError as e:
+        print(f"Error al leer el archivo CSV {file}: {e}")
+    except Exception as e:
+        print(f"Error inesperado al procesar {file}: {e}")
