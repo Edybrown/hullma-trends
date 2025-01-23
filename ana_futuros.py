@@ -53,7 +53,7 @@ for archivo in os.listdir(carpeta_csv):
         if all(col in df.columns for col in columnas_necesarias):
             try:
                 df = df.set_index('fecha_hora')
-                temporalidades = ['1H', '4H', '1D']
+                temporalidades = ['1h', '4h', '1d']
 
                 for temporalidad in temporalidades:
                     df_resampled = df.resample(temporalidad).last()
@@ -64,8 +64,8 @@ for archivo in os.listdir(carpeta_csv):
                     df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
                     df_resampled.dropna(inplace=True)
 
-                    if df_resampled.empty:
-                        print(f"No hay datos suficientes para calcular la HMA en la temporalidad {temporalidad} en el archivo {archivo}")
+                    if len(df_resampled) < 12:
+                        print(f"Después del resampleo a {temporalidad}, no hay suficientes datos (menos de 12) para calcular la HMA en {archivo}. Se necesitan más datos en el archivo original o una temporalidad menor.")
                         continue
 
                     df_resampled['cruce'] = np.where(df_resampled['hma_12'] > df_resampled['hma_12'].shift(1), 1, np.where(df_resampled['hma_12'] < df_resampled['hma_12'].shift(1), -1, 0))
@@ -75,11 +75,14 @@ for archivo in os.listdir(carpeta_csv):
                         desequilibrios_despues = []
                         for i in range(1, len(df_resampled)):
                             if df_resampled['cruce'].iloc[i] == tipo_cruce:
-                                if i > 0 and i < len(df_resampled) - 1:
+                                #CORRECCION IMPORTANTE: Manejo de indices al principio y final
+                                if 0 < i < len(df_resampled) - 1: #Verifica que haya datos ANTES y DESPUES del cruce
                                     desequilibrio_antes = df_resampled['desequilibrio_OI'].iloc[i - 1]
                                     desequilibrio_despues = df_resampled['desequilibrio_OI'].iloc[i + 1]
                                     desequilibrios_antes.append(desequilibrio_antes)
-                                    desequilibrios_despues.append(desequilibrios_despues)
+                                    desequilibrios_despues.append(desequilibrio_despues)
+                                else:
+                                    print(f"Cruce {('Alcista' if tipo_cruce == 1 else 'Bajista')} en el borde del dataset {archivo} en temporalidad {temporalidad}. No se calcularán los desequilibrios antes/después.")
 
                         if desequilibrios_antes:
                             promedio_antes = np.mean(desequilibrios_antes)
@@ -90,7 +93,7 @@ for archivo in os.listdir(carpeta_csv):
                             print(f"Después del cruce: {promedio_despues:.2f}%\n")
                         else:
                             tipo_cruce_str = "Alcista" if tipo_cruce == 1 else "Bajista"
-                            print(f"No hay cruces {tipo_cruce_str} en {archivo} para la temporalidad {temporalidad}\n")
+                            print(f"No hay cruces {tipo_cruce_str} válidos en {archivo} para la temporalidad {temporalidad}\n")
 
             except Exception as e:
                 print(f"Error durante el procesamiento del archivo {archivo}: {e}")
