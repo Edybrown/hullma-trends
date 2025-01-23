@@ -68,11 +68,12 @@ def procesar_datos(temporalidad):
     desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
     all_data = {}
 
-    data_types = { #Definicion de los tipos de datos
+    data_types = {
         "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp","o": "open","h": "high","l": "low","c": "close","v": "volume","bv": "buy_volume"}},
         "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp","o": "oi_open","h": "oi_high","l": "oi_low","c": "oi_close"}},
         "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp","r": "long_short_ratio","l": "longs_percentage","s": "shorts_percentage"}},
         "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp","l": "liquidation_longs","s": "liquidation_shorts"}},
+        "funding_rate": {"endpoint": "funding-rate-history", "renames": {"t": "timestamp","f":"funding_rate"}} #Funding rate directamente de la API
     }
 
     for data_type, details in data_types.items():
@@ -90,9 +91,10 @@ def procesar_datos(temporalidad):
                         formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
                         if timestamp not in all_data:
                             all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+
                         for key, new_key in details["renames"].items():
                             if key in item:
-                                all_data[timestamp][f"{data_type}_{new_key}_{symbol_name if data_type == 'ohlcv' else ''}"] = item[key] # Añadir nombre del simbolo solo a ohlcv
+                                all_data[timestamp][f"{data_type}_{new_key}_{symbol_name if data_type == 'ohlcv' else ''}"] = item[key]
 
     if all_data:
         final_df = pd.DataFrame.from_dict(all_data, orient='index')
