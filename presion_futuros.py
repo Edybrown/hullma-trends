@@ -2,25 +2,20 @@ import pandas as pd
 import numpy as np
 import os
 
-# Función para calcular el nuevo indicador de desequilibrio
-# Basado en el funding rate, el long/short ratio, el open interest y la proporción de longs
-# Este indicador combina las fórmulas discutidas anteriormente
+# Función para calcular el nuevo indicador de desequilibrio (versión corregida)
+def calcular_desequilibrio(funding_rate, longs_percentage):
+    # Calcular el desequilibrio L/S
+    LS_desequilibrio = longs_percentage - (100 - longs_percentage)  # Simplificado: %Largos - %Cortos
+    
+    # Funding Rate anualizado (asumiendo que viene por periodo de 8h)
+    funding_rate_anualizado = (1 + funding_rate)**1095 - 1
 
-def calcular_desequilibrio(funding_rate, long_short_ratio, oi_total, longs_percentage):
-    # Pesos para los componentes del indicador
-    w1, w2, w3 = 0.5, 0.3, 0.2
-
-    # Calcular los componentes del indicador
-    delta_oi_percent = np.log(oi_total + 1)  # Escalamos con logaritmo
-    LS_desequilibrio = (longs_percentage - 50) / 50  # Desequilibrio en L/S ratio, entre -1 y 1
-    funding_rate_contrib = funding_rate  # Funding rate ya anualizado
-
-    # Combinar los componentes usando los pesos
-    indicador = (delta_oi_percent * w1) + (LS_desequilibrio * w2 * 100) + (funding_rate_contrib * w3 * 100)
+    # Calcular el indicador
+    indicador = (LS_desequilibrio + (funding_rate_anualizado*100)) / 2
     return indicador
 
 # Ruta a la carpeta donde están los archivos CSV
-carpeta_csv = 'coinalyze_data'  # Asegúrate de ajustar esta ruta si es necesario
+carpeta_csv = 'coinalyze_data'
 
 # Iteramos sobre todos los archivos CSV en la carpeta
 for archivo in os.listdir(carpeta_csv):
@@ -31,24 +26,15 @@ for archivo in os.listdir(carpeta_csv):
 
         # Asegurarse de que las columnas necesarias existen
         columnas_necesarias = [
-            'funding_rate', 
-            'long_short_ratio_long_short_ratio_', 
-            'open_interest_oi_open_', 
+            'funding_rate',
             'long_short_ratio_longs_percentage_'
         ]
 
         if all(col in df.columns for col in columnas_necesarias):
-
-            # Convertir el Funding Rate en un valor anualizado
-            # Suponiendo que el funding_rate está en formato mensual, multiplicamos por 12 para anualizarlo
-            df['funding_rate_annualizado'] = df['funding_rate'] * 12
-
             # Aplicar la función para calcular el nuevo indicador de desequilibrio
             df['desequilibrio_OI'] = df.apply(
                 lambda row: calcular_desequilibrio(
-                    row['funding_rate_annualizado'], 
-                    row['long_short_ratio_long_short_ratio_'], 
-                    row['open_interest_oi_open_'], 
+                    row['funding_rate'],
                     row['long_short_ratio_longs_percentage_']
                 ), axis=1
             )
