@@ -20,16 +20,20 @@ def calcular_hma(serie, periodo=12):
     return hma_calculada
 
 # Procesar un archivo CSV
-def procesar_archivo(ruta_csv, temporalidades):
+def procesar_archivo(ruta_csv, temporalidades, archivo_resultados):
     try:
         df = pd.read_csv(ruta_csv, parse_dates=['fecha_hora'])
     except Exception as e:
-        print(f"Error al leer el archivo {os.path.basename(ruta_csv)}: {e}")
+        mensaje = f"Error al leer el archivo {os.path.basename(ruta_csv)}: {e}"
+        print(mensaje)
+        archivo_resultados.write(mensaje + "\n")
         return
 
     columnas_necesarias = ['ohlcv_close_BTCUSDT_PERP.A', 'fecha_hora', 'desequilibrio_OI']
     if not all(col in df.columns for col in columnas_necesarias):
-        print(f"El archivo {os.path.basename(ruta_csv)} no contiene las columnas necesarias.")
+        mensaje = f"El archivo {os.path.basename(ruta_csv)} no contiene las columnas necesarias."
+        print(mensaje)
+        archivo_resultados.write(mensaje + "\n")
         return
 
     df.set_index('fecha_hora', inplace=True)
@@ -37,21 +41,25 @@ def procesar_archivo(ruta_csv, temporalidades):
     for temporalidad in temporalidades:
         df_resampled = df.resample(temporalidad).last()
         if df_resampled.empty or len(df_resampled) < 12:
-            print(f"Datos insuficientes para la temporalidad {temporalidad} en el archivo {os.path.basename(ruta_csv)}.")
+            mensaje = f"Datos insuficientes para la temporalidad {temporalidad} en el archivo {os.path.basename(ruta_csv)}."
+            print(mensaje)
+            archivo_resultados.write(mensaje + "\n")
             continue
 
         df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
         df_resampled.dropna(inplace=True)
 
         if df_resampled.empty:
-            print(f"Sin datos válidos después de calcular la HMA para {temporalidad} en {os.path.basename(ruta_csv)}.")
+            mensaje = f"Sin datos válidos después de calcular la HMA para {temporalidad} en {os.path.basename(ruta_csv)}."
+            print(mensaje)
+            archivo_resultados.write(mensaje + "\n")
             continue
 
         df_resampled['cruce'] = np.sign(df_resampled['hma_12'].diff())
-        analizar_cruces(df_resampled, os.path.basename(ruta_csv), temporalidad)
+        analizar_cruces(df_resampled, os.path.basename(ruta_csv), temporalidad, archivo_resultados)
 
 # Analizar los cruces y calcular estadísticas
-def analizar_cruces(df, nombre_archivo, temporalidad):
+def analizar_cruces(df, nombre_archivo, temporalidad, archivo_resultados):
     resultados = {'Alcista': {'positivos': [], 'negativos': []}, 'Bajista': {'positivos': [], 'negativos': []}}
 
     for i in range(1, len(df)):
@@ -68,28 +76,38 @@ def analizar_cruces(df, nombre_archivo, temporalidad):
             elif desequilibrio < 0:
                 resultados['Bajista']['negativos'].append(desequilibrio)
 
-    # Mostrar resultados
+    # Mostrar y guardar resultados
     for tipo_cruce, datos in resultados.items():
-        print(f"{nombre_archivo} ({temporalidad}): Cruce {tipo_cruce}")
+        mensaje = f"{nombre_archivo} ({temporalidad}): Cruce {tipo_cruce}\n"
+        archivo_resultados.write(mensaje)
+        print(mensaje, end="")
         for signo, valores in datos.items():
             if valores:
-                print(f"  {signo.capitalize()}s - Cantidad: {len(valores)}, Promedio: {np.mean(valores):.2f}%")
+                estadisticas = f"  {signo.capitalize()}s - Cantidad: {len(valores)}, Promedio: {np.mean(valores):.2f}%\n"
+                archivo_resultados.write(estadisticas)
+                print(estadisticas, end="")
             else:
-                print(f"  {signo.capitalize()}s - Sin valores registrados.")
+                sin_valores = f"  {signo.capitalize()}s - Sin valores registrados.\n"
+                archivo_resultados.write(sin_valores)
+                print(sin_valores, end="")
+        archivo_resultados.write("\n")
         print()
 
 # Directorio de archivos CSV
 carpeta_csv = 'coinalyze_data'
 os.makedirs(carpeta_csv, exist_ok=True)
 
-# Temporalidades para el resampleo
-temporalidades = ['1h', '4h', '1d']
+# Archivo de resultados
+ruta_resultados = "resultados.txt"
+with open(ruta_resultados, "w") as archivo_resultados:
+    # Temporalidades para el resampleo
+    temporalidades = ['1h', '4h', '1d']
 
-# Procesar cada archivo CSV
-for archivo in os.listdir(carpeta_csv):
-    if archivo.endswith('.csv'):
-        print(f"Procesando archivo: {archivo}")
-        procesar_archivo(os.path.join(carpeta_csv, archivo), temporalidades)
+    # Procesar cada archivo CSV
+    for archivo in os.listdir(carpeta_csv):
+        if archivo.endswith('.csv'):
+            print(f"Procesando archivo: {archivo}")
+            archivo_resultados.write(f"Procesando archivo: {archivo}\n")
+            procesar_archivo(os.path.join(carpeta_csv, archivo), temporalidades, archivo_resultados)
 
-print("Proceso completado.")
-
+    print(f"Los resultados se han guardado en {ruta_resultados}")
