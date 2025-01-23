@@ -8,18 +8,24 @@ data_directory = "coinalyze_data"
 # Lista de archivos CSV en el directorio
 files = [f for f in os.listdir(data_directory) if f.endswith('.csv')]
 
-# Función para calcular el Indicador de Presión Direccional Mejorado
+# Función para calcular el Indicador de Presión Direccional Modificado
 def calcular_indicador(funding_rate, long_short_ratio, oi_total, longs_percentage):
-    # Primer término (Funding Rate y Long/Short Ratio)
-    term1 = abs(funding_rate) / (long_short_ratio + 0.0001)
+    # Evitar valores cero en OI
+    oi_total = max(oi_total, 1)  # Prevenir que OI sea 0, establecer en 1 si es muy bajo
 
-    # Segundo término (Raíz cuadrada de OI y logaritmo)
-    term2 = math.sqrt(oi_total) / (math.log(oi_total) + 1)
+    # Asegurémonos de que el funding_rate esté bien procesado
+    funding_rate_abs = abs(funding_rate)
 
-    # Tercer término (Longs Percentage)
+    # Evitar valores extremos con un logaritmo de OI más seguro
+    term1 = funding_rate_abs / (long_short_ratio + 0.0001)
+
+    # Calcular el logaritmo de OI con una pequeña constante si es necesario
+    term2 = math.sqrt(oi_total) / (math.log(oi_total + 1) + 1)
+
+    # Asegurarnos de que los valores de longs_percentage estén entre 0 y 100
     term3 = 1 + abs(longs_percentage - 50) / 50
 
-    # Indicador de Presión Direccional Mejorado
+    # Indicador de Presión Direccional
     indicador = term1 * term2 * term3
     return indicador
 
