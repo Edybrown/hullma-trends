@@ -3,103 +3,93 @@ import numpy as np
 import os
 import math
 
+# Función para calcular el Weighted Moving Average (WMA)
 def calcular_wma(serie, periodo):
     pesos = np.arange(1, periodo + 1)
-    wma = serie.rolling(periodo).apply(lambda valores: np.dot(valores, pesos) / pesos.sum(), raw=True)
-    return wma
+    return serie.rolling(periodo).apply(lambda valores: np.dot(valores, pesos) / pesos.sum(), raw=True)
 
+# Función para calcular el Hull Moving Average (HMA)
 def calcular_hma(serie, periodo=12):
-    try:
-        wma_n2 = calcular_wma(serie, periodo // 2)
-        wma_n = calcular_wma(serie, periodo)
-        hma_calculada = calcular_wma(2 * wma_n2 - wma_n, int(math.sqrt(periodo)))
-
-        if hma_calculada.isnull().all():
-            print("Datos insuficientes para calcular la HMA.")
-            return pd.Series(index=serie.index, dtype='float64')
-        return hma_calculada
-    except Exception as e:
-        print(f"Error al calcular la HMA: {e}")
+    if len(serie) < periodo:
+        print(f"Datos insuficientes para calcular la HMA con periodo {periodo}.")
         return pd.Series(index=serie.index, dtype='float64')
 
+    wma_n2 = calcular_wma(serie, periodo // 2)
+    wma_n = calcular_wma(serie, periodo)
+    hma_calculada = calcular_wma(2 * wma_n2 - wma_n, int(math.sqrt(periodo)))
+    return hma_calculada
+
+# Procesar un archivo CSV
+def procesar_archivo(ruta_csv, temporalidades):
+    try:
+        df = pd.read_csv(ruta_csv, parse_dates=['fecha_hora'])
+    except Exception as e:
+        print(f"Error al leer el archivo {os.path.basename(ruta_csv)}: {e}")
+        return
+
+    columnas_necesarias = ['ohlcv_close_BTCUSDT_PERP.A', 'fecha_hora', 'desequilibrio_OI']
+    if not all(col in df.columns for col in columnas_necesarias):
+        print(f"El archivo {os.path.basename(ruta_csv)} no contiene las columnas necesarias.")
+        return
+
+    df.set_index('fecha_hora', inplace=True)
+
+    for temporalidad in temporalidades:
+        df_resampled = df.resample(temporalidad).last()
+        if df_resampled.empty or len(df_resampled) < 12:
+            print(f"Datos insuficientes para la temporalidad {temporalidad} en el archivo {os.path.basename(ruta_csv)}.")
+            continue
+
+        df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
+        df_resampled.dropna(inplace=True)
+
+        if df_resampled.empty:
+            print(f"Sin datos válidos después de calcular la HMA para {temporalidad} en {os.path.basename(ruta_csv)}.")
+            continue
+
+        df_resampled['cruce'] = np.sign(df_resampled['hma_12'].diff())
+        analizar_cruces(df_resampled, os.path.basename(ruta_csv), temporalidad)
+
+# Analizar los cruces y calcular estadísticas
+def analizar_cruces(df, nombre_archivo, temporalidad):
+    resultados = {'Alcista': {'positivos': [], 'negativos': []}, 'Bajista': {'positivos': [], 'negativos': []}}
+
+    for i in range(1, len(df)):
+        if df['cruce'].iloc[i] == 1:  # Cruce Alcista
+            desequilibrio = df['desequilibrio_OI'].iloc[i - 1]
+            if desequilibrio > 0:
+                resultados['Alcista']['positivos'].append(desequilibrio)
+            elif desequilibrio < 0:
+                resultados['Alcista']['negativos'].append(desequilibrio)
+        elif df['cruce'].iloc[i] == -1:  # Cruce Bajista
+            desequilibrio = df['desequilibrio_OI'].iloc[i - 1]
+            if desequilibrio > 0:
+                resultados['Bajista']['positivos'].append(desequilibrio)
+            elif desequilibrio < 0:
+                resultados['Bajista']['negativos'].append(desequilibrio)
+
+    # Mostrar resultados
+    for tipo_cruce, datos in resultados.items():
+        print(f"{nombre_archivo} ({temporalidad}): Cruce {tipo_cruce}")
+        for signo, valores in datos.items():
+            if valores:
+                print(f"  {signo.capitalize()}s - Cantidad: {len(valores)}, Promedio: {np.mean(valores):.2f}%")
+            else:
+                print(f"  {signo.capitalize()}s - Sin valores registrados.")
+        print()
+
+# Directorio de archivos CSV
 carpeta_csv = 'coinalyze_data'
+os.makedirs(carpeta_csv, exist_ok=True)
 
-if not os.path.exists(carpeta_csv):
-    os.makedirs(carpeta_csv)
-    print(f"Se ha creado la carpeta: {carpeta_csv}")
+# Temporalidades para el resampleo
+temporalidades = ['1h', '4h', '1d']
 
+# Procesar cada archivo CSV
 for archivo in os.listdir(carpeta_csv):
     if archivo.endswith('.csv'):
-        ruta_csv = os.path.join(carpeta_csv, archivo)
         print(f"Procesando archivo: {archivo}")
-        try:
-            df = pd.read_csv(ruta_csv, parse_dates=['fecha_hora'])
-        except FileNotFoundError:
-            print(f"No se encontró el archivo: {archivo}")
-            continue
-        except pd.errors.ParserError:
-            print(f"Error al parsear el archivo {archivo}. Verifique el formato del archivo.")
-            continue
-        except Exception as e:
-            print(f"Error desconocido al leer el archivo {archivo}: {e}")
-            continue
-
-        columnas_necesarias = [
-            'ohlcv_close_BTCUSDT_PERP.A',
-            'fecha_hora',
-            'desequilibrio_OI'
-        ]
-
-        if all(col in df.columns for col in columnas_necesarias):
-            try:
-                df = df.set_index('fecha_hora')
-                temporalidades = ['1h', '4h', '1d']
-
-                for temporalidad in temporalidades:
-                    df_resampled = df.resample(temporalidad).last()
-                    if df_resampled.empty:
-                        print(f"No hay datos para la temporalidad {temporalidad} en el archivo {archivo}")
-                        continue
-
-                    df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
-                    df_resampled.dropna(inplace=True)
-
-                    if len(df_resampled) < 12:
-                        print(f"Después del resampleo a {temporalidad}, no hay suficientes datos (menos de 12) para calcular la HMA en {archivo}. Se necesitan más datos en el archivo original o una temporalidad menor.")
-                        continue
-
-                    df_resampled['cruce'] = np.where(df_resampled['hma_12'] > df_resampled['hma_12'].shift(1), 1, np.where(df_resampled['hma_12'] < df_resampled['hma_12'].shift(1), -1, 0))
-
-                    for tipo_cruce in [1, -1]:
-                        desequilibrios_antes = []
-                        desequilibrios_despues = []
-                        for i in range(1, len(df_resampled)):
-                            if df_resampled['cruce'].iloc[i] == tipo_cruce:
-                                #CORRECCION IMPORTANTE: Manejo de indices al principio y final
-                                if 0 < i < len(df_resampled) - 1: #Verifica que haya datos ANTES y DESPUES del cruce
-                                    desequilibrio_antes = df_resampled['desequilibrio_OI'].iloc[i - 1]
-                                    desequilibrio_despues = df_resampled['desequilibrio_OI'].iloc[i + 1]
-                                    desequilibrios_antes.append(desequilibrio_antes)
-                                    desequilibrios_despues.append(desequilibrio_despues)
-                                else:
-                                    print(f"Cruce {('Alcista' if tipo_cruce == 1 else 'Bajista')} en el borde del dataset {archivo} en temporalidad {temporalidad}. No se calcularán los desequilibrios antes/después.")
-
-                        if desequilibrios_antes:
-                            promedio_antes = np.mean(desequilibrios_antes)
-                            promedio_despues = np.mean(desequilibrios_despues)
-                            tipo_cruce_str = "Alcista" if tipo_cruce == 1 else "Bajista"
-                            print(f"Promedio del desequilibrio_OI en {archivo} (Temporalidad: {temporalidad}, Cruce {tipo_cruce_str}):")
-                            print(f"Antes del cruce: {promedio_antes:.2f}%")
-                            print(f"Después del cruce: {promedio_despues:.2f}%\n")
-                        else:
-                            tipo_cruce_str = "Alcista" if tipo_cruce == 1 else "Bajista"
-                            print(f"No hay cruces {tipo_cruce_str} válidos en {archivo} para la temporalidad {temporalidad}\n")
-
-            except Exception as e:
-                print(f"Error durante el procesamiento del archivo {archivo}: {e}")
-                continue
-
-        else:
-            print(f"Faltan algunas columnas necesarias en el archivo: {archivo}")
+        procesar_archivo(os.path.join(carpeta_csv, archivo), temporalidades)
 
 print("Proceso completado.")
+
