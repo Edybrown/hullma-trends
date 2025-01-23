@@ -1,39 +1,42 @@
-# Función para calcular el Indicador de Presión Direccional Modificado con Funding Rate anualizado
-def calcular_indicador_anualizado(funding_rate, temporalidad, long_short_ratio, oi_total, longs_percentage):
-    # Definir el número de periodos por año según la temporalidad
-    if temporalidad == '1hour':
-        periods_per_year = 365 * 24  # 24 periodos de 1 hora en un día, 365 días
-    elif temporalidad == '8hours':
-        periods_per_year = 365 * 3  # 3 periodos de 8 horas en un día, 365 días
-    elif temporalidad == '1day':
-        periods_per_year = 365  # 1 periodo por día, 365 días
-    else:
-        periods_per_year = 365  # Valor por defecto si la temporalidad no es reconocida
+import pandas as pd
+import numpy as np
+import os
 
-    # Anualizar el funding rate
-    funding_rate_annualized = funding_rate * periods_per_year
-
-    # Evitar valores cero en OI
-    oi_total = max(oi_total, 1)  # Prevenir que OI sea 0, establecer en 1 si es muy bajo
-
-    # Asegurémonos de que el funding_rate esté bien procesado, usaremos valor absoluto
-    funding_rate_abs = abs(funding_rate_annualized)
-
-    # Evitar valores extremos con un logaritmo de OI más seguro
-    try:
-        log_oi = math.log(oi_total)  # Logaritmo de OI
-    except ValueError:
-        log_oi = 0  # En caso de un valor no válido en OI
-
-    # Termino de la fórmula
-    term1 = (funding_rate_abs * 100) / (long_short_ratio + 0.0001)
-    term2 = log_oi
-    term3 = abs(longs_percentage - 50) / 50
-
-    # Asegurarse de que no tengamos división por 0
-    if term1 == 0 or term2 == 0:
-        return 0
-    
-    # Indicador de Presión Direccional
-    indicador = term1 * term2 * term3
+# Función para calcular el indicador de presión direccional modificado
+def calcular_presion_direccional(funding_rate, long_short_ratio, oi_total, longs_percentage):
+    # Fórmula del indicador con Funding Rate anualizado
+    indicador = (funding_rate / (long_short_ratio + 0.0001)) * np.log(oi_total) * abs((longs_percentage - 50) / 50)
     return indicador
+
+# Ruta a la carpeta donde están los archivos CSV
+carpeta_csv = 'coinalyze_data'  # Asegúrate de ajustar esta ruta si es necesario
+
+# Iteramos sobre todos los archivos CSV en la carpeta
+for archivo in os.listdir(carpeta_csv):
+    if archivo.endswith('.csv'):
+        # Cargar el CSV
+        ruta_csv = os.path.join(carpeta_csv, archivo)
+        df = pd.read_csv(ruta_csv)
+        
+        # Asegurarse de que las columnas necesarias existen
+        if all(col in df.columns for col in ['funding_rate', 'long_short_ratio_long_short_ratio_', 'open_interest_oi_open_', 'long_short_ratio_longs_percentage_']):
+            
+            # Convertir el Funding Rate en un valor anualizado
+            # Suponiendo que el funding_rate está en formato mensual, multiplicamos por 12 para anualizarlo
+            df['funding_rate_annualizado'] = df['funding_rate'] * 12  # Si el funding_rate está en base mensual
+            
+            # Aplicar la función para calcular el indicador de presión direccional modificado
+            df['presion_direccional'] = df.apply(
+                lambda row: calcular_presion_direccional(
+                    row['funding_rate_annualizado'], 
+                    row['long_short_ratio_long_short_ratio_'], 
+                    row['open_interest_oi_open_'], 
+                    row['long_short_ratio_longs_percentage_']
+                ), axis=1
+            )
+            
+            # Guardar el DataFrame con la nueva columna en el mismo archivo CSV
+            df.to_csv(ruta_csv, index=False)
+            print(f"El indicador se ha calculado y agregado correctamente al archivo: {archivo}")
+        else:
+            print(f"Faltan algunas columnas necesarias en el archivo: {archivo}")
