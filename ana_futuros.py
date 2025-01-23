@@ -4,7 +4,7 @@ import os
 
 # Configuración
 carpeta_datos = "coinalyze_data"
-nombre_archivo = "datos_4h.csv"
+nombre_archivo = "datos_4hour.csv"
 apalancamiento = 10  # Apalancamiento promedio (ajustar si es necesario)
 
 # Cargar datos
