@@ -37,6 +37,9 @@ for archivo in os.listdir(carpeta_csv):
                     print(f"No hay datos para la temporalidad {temporalidad} en el archivo {archivo}")
                     continue
 
+                # Import statement for ta library
+                import ta  # Make sure this line is at the beginning
+
                 df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
 
                 df_resampled['cruce'] = np.where(df_resampled['hma_12'] > df_resampled['hma_12'].shift(1), 1, np.where(df_resampled['hma_12'] < df_resampled['hma_12'].shift(1), -1, 0))
@@ -60,7 +63,4 @@ for archivo in os.listdir(carpeta_csv):
                         print(f"Después del cruce: {promedio_despues:.2f}%\n")
                     else:
                         tipo_cruce_str = "Alcista" if tipo_cruce == 1 else "Bajista"
-                        print(f"No hay cruces {tipo_cruce_str} en {archivo} para la temporalidad {temporalidad}\n")
-
-        else:
-            print(f"Faltan algunas columnas necesarias en el archivo: {archivo}")
+                        print(f"No hay cruces {tipo_cruce_str} en {archivo} para
