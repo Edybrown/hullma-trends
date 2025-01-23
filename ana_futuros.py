@@ -1,126 +1,84 @@
 import pandas as pd
 import numpy as np
 import os
-import math
 
-# Función para calcular el Weighted Moving Average (WMA)
-def calcular_wma(serie, periodo):
-    pesos = np.arange(1, periodo + 1)
-    return serie.rolling(periodo).apply(lambda valores: np.dot(valores, pesos) / pesos.sum(), raw=True)
+# Configuración
+carpeta_datos = "coinalyze_data"
+nombre_archivo = "datos_4h.csv"
+apalancamiento = 10  # Apalancamiento promedio (ajustar si es necesario)
 
-# Función para calcular el Hull Moving Average (HMA)
-def calcular_hma(serie, periodo=12):
-    if len(serie) < periodo:
-        print(f"Datos insuficientes para calcular la HMA con periodo {periodo}.")
-        return pd.Series(index=serie.index, dtype='float64')
+# Cargar datos
+ruta_archivo = os.path.join(carpeta_datos, nombre_archivo)
+try:
+    df = pd.read_csv(ruta_archivo)
+except FileNotFoundError:
+    print(f"Error: No se encontró el archivo {nombre_archivo} en la carpeta {carpeta_datos}")
+    exit()
 
-    wma_n2 = calcular_wma(serie, periodo // 2)
-    wma_n = calcular_wma(serie, periodo)
-    hma_calculada = calcular_wma(2 * wma_n2 - wma_n, int(math.sqrt(periodo)))
-    return hma_calculada
+# Seleccionar columnas relevantes y renombrarlas para mayor claridad
+try:
+    df = df[["fecha_hora", "long_short_ratio_longs_percentage_", "long_short_ratio_shorts_percentage_", "funding_rate"]].copy()
+    df.rename(columns={
+        "long_short_ratio_longs_percentage_": "longs_percentage",
+        "long_short_ratio_shorts_percentage_": "shorts_percentage",
+        "funding_rate": "funding_rate_4h"
+    }, inplace=True)
+except KeyError as e:
+    print(f"Error: Falta la columna {e} en el archivo CSV.")
+    exit()
 
-# Procesar un archivo CSV
-def procesar_archivo(ruta_csv, temporalidades, archivo_resultados):
-    try:
-        df = pd.read_csv(ruta_csv, parse_dates=['fecha_hora'])
-    except Exception as e:
-        mensaje = f"Error al leer el archivo {os.path.basename(ruta_csv)}: {e}"
-        print(mensaje)
-        archivo_resultados.write(mensaje + "\n")
-        return
 
-    columnas_necesarias = ['ohlcv_close_BTCUSDT_PERP.A', 'fecha_hora', 'desequilibrio_OI']
-    if not all(col in df.columns for col in columnas_necesarias):
-        mensaje = f"El archivo {os.path.basename(ruta_csv)} no contiene las columnas necesarias."
-        print(mensaje)
-        archivo_resultados.write(mensaje + "\n")
-        return
+# Convertir la columna 'fecha_hora' a datetime
+df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
 
-    df.set_index('fecha_hora', inplace=True)
+# Calcular la diferencia Long/Short
+df["diferencia_long_short"] = df["longs_percentage"] - df["shorts_percentage"]
 
-    for temporalidad in temporalidades:
-        df_resampled = df.resample(temporalidad).last()
-        if df_resampled.empty or len(df_resampled) < 12:
-            mensaje = f"Datos insuficientes para la temporalidad {temporalidad} en el archivo {os.path.basename(ruta_csv)}."
-            print(mensaje)
-            archivo_resultados.write(mensaje + "\n")
-            continue
+# Calcular el Funding Rate mensual y ajustado
+df["funding_rate_mensual"] = df["funding_rate_4h"] * 3 * 30  # 3 cobros al día, 30 días al mes
+df["funding_rate_ajustado"] = df["funding_rate_mensual"] * apalancamiento
 
-        df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
-        df_resampled.dropna(inplace=True)
+#Evitar la division por cero
+df = df[df["funding_rate_ajustado"] != 0].copy()
 
-        if df_resampled.empty:
-            mensaje = f"Sin datos válidos después de calcular la HMA para {temporalidad} en {os.path.basename(ruta_csv)}."
-            print(mensaje)
-            archivo_resultados.write(mensaje + "\n")
-            continue
+# Calcular la proporción
+df["proporcion"] = df["diferencia_long_short"] / df["funding_rate_ajustado"]
 
-        df_resampled['cruce'] = np.sign(df_resampled['hma_12'].diff())
-        analizar_cruces(df_resampled, os.path.basename(ruta_csv), temporalidad, archivo_resultados)
+# Análisis de la Proporción
+print("Análisis de la Proporción:")
+print(f"Promedio de la proporción: {df['proporcion'].mean()}")
+print(f"Rango de la proporción: {df['proporcion'].min()} - {df['proporcion'].max()}")
+print(f"Desviación estándar de la proporción: {df['proporcion'].std()}")
 
-# Analizar los cruces y calcular estadísticas
-def analizar_cruces(df, nombre_archivo, temporalidad, archivo_resultados):
-    resultados = {
-        'Alcista': {'positivos_anterior': [], 'negativos_anterior': [], 'positivos_posterior': [], 'negativos_posterior': []},
-        'Bajista': {'positivos_anterior': [], 'negativos_anterior': [], 'positivos_posterior': [], 'negativos_posterior': []}
-    }
+#Visualizacion de datos
+import matplotlib.pyplot as plt
+plt.figure(figsize=(12, 6))
+plt.plot(df['fecha_hora'], df['proporcion'])
+plt.xlabel('Fecha y Hora')
+plt.ylabel('Proporción (Diferencia L/S / Funding Rate Ajustado)')
+plt.title('Evolución de la Proporción a lo largo del Tiempo')
+plt.grid(True)
+plt.show()
 
-    for i in range(1, len(df) - 1):  # Evitar índices fuera de rango
-        if df['cruce'].iloc[i] == 1:  # Cruce Alcista
-            desequilibrio_anterior = df['desequilibrio_OI'].iloc[i - 1]
-            desequilibrio_posterior = df['desequilibrio_OI'].iloc[i + 1]
-            if desequilibrio_anterior > 0:
-                resultados['Alcista']['positivos_anterior'].append(desequilibrio_anterior)
-            elif desequilibrio_anterior < 0:
-                resultados['Alcista']['negativos_anterior'].append(desequilibrio_anterior)
-            if desequilibrio_posterior > 0:
-                resultados['Alcista']['positivos_posterior'].append(desequilibrio_posterior)
-            elif desequilibrio_posterior < 0:
-                resultados['Alcista']['negativos_posterior'].append(desequilibrio_posterior)
-        elif df['cruce'].iloc[i] == -1:  # Cruce Bajista
-            desequilibrio_anterior = df['desequilibrio_OI'].iloc[i - 1]
-            desequilibrio_posterior = df['desequilibrio_OI'].iloc[i + 1]
-            if desequilibrio_anterior > 0:
-                resultados['Bajista']['positivos_anterior'].append(desequilibrio_anterior)
-            elif desequilibrio_anterior < 0:
-                resultados['Bajista']['negativos_anterior'].append(desequilibrio_anterior)
-            if desequilibrio_posterior > 0:
-                resultados['Bajista']['positivos_posterior'].append(desequilibrio_posterior)
-            elif desequilibrio_posterior < 0:
-                resultados['Bajista']['negativos_posterior'].append(desequilibrio_posterior)
+# Análisis de la relación con el precio (requiere datos de precio)
+# Si tienes datos de precio en otro archivo, puedes cargarlos y unirlos al DataFrame df
+# Ejemplo hipotético (necesitas adaptar esto a tus datos reales):
 
-    # Mostrar y guardar resultados
-    for tipo_cruce, datos in resultados.items():
-        mensaje = f"{nombre_archivo} ({temporalidad}): Cruce {tipo_cruce}\n"
-        archivo_resultados.write(mensaje)
-        print(mensaje, end="")
-        for momento, valores in datos.items():
-            if valores:
-                estadisticas = f"  {momento.capitalize()} - Cantidad: {len(valores)}, Promedio: {np.mean(valores):.2f}%\n"
-                archivo_resultados.write(estadisticas)
-                print(estadisticas, end="")
-            else:
-                sin_valores = f"  {momento.capitalize()} - Sin valores registrados.\n"
-                archivo_resultados.write(sin_valores)
-                print(sin_valores, end="")
-        archivo_resultados.write("\n")
-        print()
+# Supongamos que tienes datos de precio en un DataFrame llamado df_precio con columnas 'fecha_hora' y 'precio'
+# df = pd.merge(df, df_precio, on='fecha_hora', how='left')
+# if 'precio' in df.columns:
+#     plt.figure(figsize=(12, 6))
+#     plt.plot(df['fecha_hora'], df['proporcion'], label='Proporción')
+#     plt.plot(df['fecha_hora'], df['precio'], label='Precio', secondary_y=True) # Eje secundario para el precio
+#     plt.xlabel('Fecha y Hora')
+#     plt.ylabel('Proporción / Precio')
+#     plt.title('Relación entre la Proporción y el Precio')
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
+# else:
+#     print("No se encontraron datos de precio para analizar la correlación.")
 
-# Directorio de archivos CSV
-carpeta_csv = 'coinalyze_data'
-os.makedirs(carpeta_csv, exist_ok=True)
-
-# Archivo de resultados
-ruta_resultados = "resultados.txt"
-with open(ruta_resultados, "w") as archivo_resultados:
-    # Temporalidades para el resampleo
-    temporalidades = ['1h', '4h', '1d']
-
-    # Procesar cada archivo CSV
-    for archivo in os.listdir(carpeta_csv):
-        if archivo.endswith('.csv'):
-            print(f"Procesando archivo: {archivo}")
-            archivo_resultados.write(f"Procesando archivo: {archivo}\n")
-            procesar_archivo(os.path.join(carpeta_csv, archivo), temporalidades, archivo_resultados)
-
-    print(f"Los resultados se han guardado en {ruta_resultados}")
+# Mostrar las primeras filas del DataFrame con los cálculos
+print("\nPrimeras filas del DataFrame con los cálculos:")
+print(df.head())
