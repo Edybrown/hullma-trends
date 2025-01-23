@@ -82,19 +82,16 @@ def procesar_datos(temporalidad):
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
 
         if data and isinstance(data, list):
-            for symbol_data in data:
-                symbol_name = symbol_data.get("symbol")
-                if "history" in symbol_data and isinstance(symbol_data["history"], list):
-                    for item in symbol_data["history"]:
-                        timestamp = item["t"]
-                        dt_object = datetime.fromtimestamp(timestamp)
-                        formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
-                        if timestamp not in all_data:
-                            all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+            for item in data: #Se quita la iteracion del history
+                timestamp = item["t"]
+                dt_object = datetime.fromtimestamp(timestamp)
+                formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+                if timestamp not in all_data:
+                    all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
 
-                        for key, new_key in details["renames"].items():
-                            if key in item:
-                                all_data[timestamp][f"{data_type}_{new_key}_{symbol_name if data_type == 'ohlcv' else ''}"] = item[key]
+                for key, new_key in details["renames"].items():
+                    if key in item:
+                        all_data[timestamp][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key] # Se agrega el nombre del simbolo a funding rate y se simplifica para ohlcv
 
     if all_data:
         final_df = pd.DataFrame.from_dict(all_data, orient='index')
@@ -103,7 +100,7 @@ def procesar_datos(temporalidad):
         print(f"Data saved to {OUTPUT_FOLDER}/datos_{temporalidad}.csv")
         return None
     return None
-
+    
 # Guardar datos
 for temporalidad in TEMPORALIDADES:
     print(f"Processing {temporalidad}...")
