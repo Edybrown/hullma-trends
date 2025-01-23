@@ -1,62 +1,39 @@
-import pandas as pd
-import os
-import math
-import numpy as np
+# Función para calcular el Indicador de Presión Direccional Modificado con Funding Rate anualizado
+def calcular_indicador_anualizado(funding_rate, temporalidad, long_short_ratio, oi_total, longs_percentage):
+    # Definir el número de periodos por año según la temporalidad
+    if temporalidad == '1hour':
+        periods_per_year = 365 * 24  # 24 periodos de 1 hora en un día, 365 días
+    elif temporalidad == '8hours':
+        periods_per_year = 365 * 3  # 3 periodos de 8 horas en un día, 365 días
+    elif temporalidad == '1day':
+        periods_per_year = 365  # 1 periodo por día, 365 días
+    else:
+        periods_per_year = 365  # Valor por defecto si la temporalidad no es reconocida
 
-# Directorio donde están los archivos CSV
-data_directory = "coinalyze_data"
+    # Anualizar el funding rate
+    funding_rate_annualized = funding_rate * periods_per_year
 
-# Lista de archivos CSV en el directorio
-files = [f for f in os.listdir(data_directory) if f.endswith('.csv')]
+    # Evitar valores cero en OI
+    oi_total = max(oi_total, 1)  # Prevenir que OI sea 0, establecer en 1 si es muy bajo
 
-# Función para calcular el Indicador de Presión Direccional Modificado
-def calcular_indicador(funding_rate, long_short_ratio, oi_total, longs_percentage):
-    if funding_rate is None or long_short_ratio is None or oi_total is None or longs_percentage is None:
-        return np.nan  # Devolver NaN si algún valor es None
+    # Asegurémonos de que el funding_rate esté bien procesado, usaremos valor absoluto
+    funding_rate_abs = abs(funding_rate_annualized)
 
-    # Evitar división por cero y valores cero en OI
-    long_short_ratio = max(long_short_ratio, 0.0001)
-    oi_total = max(oi_total, 1)
-
-    funding_rate_abs = abs(funding_rate)
-
-    # Cálculo del indicador (sin la modificación innecesaria con la raiz y el logaritmo)
-    desequilibrio = abs(longs_percentage - 50) / 50
-    indicador = funding_rate_abs * oi_total * desequilibrio
-
-    return indicador
-
-# Procesar cada archivo CSV
-for file in files:
-    file_path = os.path.join(data_directory, file)
+    # Evitar valores extremos con un logaritmo de OI más seguro
     try:
-        df = pd.read_csv(file_path)
+        log_oi = math.log(oi_total)  # Logaritmo de OI
+    except ValueError:
+        log_oi = 0  # En caso de un valor no válido en OI
 
-        # Extraer las columnas necesarias, manejando posibles KeyError
-        try:
-            funding_rate = df['funding_rate']
-            long_short_ratio = df['long_short_ratio_long_short_ratio_']
-            oi_total = df['open_interest_oi_open_']
-            longs_percentage = df['long_short_ratio_longs_percentage_']
-        except KeyError as e:
-            print(f"Error: No se encontró la columna {e} en el archivo {file}. Saltando este archivo.")
-            continue # Saltar al siguiente archivo si hay un error de columna
+    # Termino de la fórmula
+    term1 = (funding_rate_abs * 100) / (long_short_ratio + 0.0001)
+    term2 = log_oi
+    term3 = abs(longs_percentage - 50) / 50
 
-        # Calcular el indicador, manejando posibles errores en el cálculo
-        try:
-            df['presion_direccional'] = [
-                calcular_indicador(f, lsr, oi, lp) for f, lsr, oi, lp in zip(funding_rate, long_short_ratio, oi_total, longs_percentage)
-            ]
-        except TypeError as e:
-            print(f"Error de tipo en el calculo del indicador en {file}: {e}")
-            print("Revisar los tipos de datos de las columnas funding_rate, long_short_ratio, oi_total y longs_percentage")
-            continue
-
-        # Sobrescribir el archivo, eliminando filas con NaN en la nueva columna
-        df = df.dropna(subset=['presion_direccional'])
-        df.to_csv(file_path, index=False)
-        print(f"Archivo actualizado: {file_path}")
-    except pd.errors.ParserError as e:
-        print(f"Error al leer el archivo CSV {file}: {e}")
-    except Exception as e:
-        print(f"Error inesperado al procesar {file}: {e}")
+    # Asegurarse de que no tengamos división por 0
+    if term1 == 0 or term2 == 0:
+        return 0
+    
+    # Indicador de Presión Direccional
+    indicador = term1 * term2 * term3
+    return indicador
