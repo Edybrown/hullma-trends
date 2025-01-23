@@ -1,14 +1,26 @@
 import pandas as pd
 import numpy as np
 import os
-import ta
+import math
+
+def calcular_wma(serie, periodo):
+    pesos = np.arange(1, periodo + 1)
+    wma = serie.rolling(periodo).apply(lambda valores: np.dot(valores, pesos) / pesos.sum(), raw=True)
+    return wma
 
 def calcular_hma(serie, periodo=12):
     try:
-        return ta.trend.hma(close=serie, window=periodo)
+        wma_n2 = calcular_wma(serie, periodo // 2)
+        wma_n = calcular_wma(serie, periodo)
+        hma_calculada = calcular_wma(2 * wma_n2 - wma_n, int(math.sqrt(periodo)))
+
+        if hma_calculada.isnull().all():
+            print("Datos insuficientes para calcular la HMA.")
+            return pd.Series(index=serie.index, dtype='float64')
+        return hma_calculada
     except Exception as e:
         print(f"Error al calcular la HMA: {e}")
-        return pd.Series(index=serie.index, dtype='float64') #Retorna una serie vacia en caso de error
+        return pd.Series(index=serie.index, dtype='float64')
 
 carpeta_csv = 'coinalyze_data'
 
@@ -19,14 +31,14 @@ if not os.path.exists(carpeta_csv):
 for archivo in os.listdir(carpeta_csv):
     if archivo.endswith('.csv'):
         ruta_csv = os.path.join(carpeta_csv, archivo)
-        print(f"Procesando archivo: {archivo}") #mensaje para saber que archivo se esta procesando
+        print(f"Procesando archivo: {archivo}")
         try:
             df = pd.read_csv(ruta_csv, parse_dates=['fecha_hora'])
         except FileNotFoundError:
             print(f"No se encontró el archivo: {archivo}")
             continue
         except pd.errors.ParserError:
-            print(f"Error al parsear el archivo {archivo}. Verifique el formato.")
+            print(f"Error al parsear el archivo {archivo}. Verifique el formato del archivo.")
             continue
         except Exception as e:
             print(f"Error desconocido al leer el archivo {archivo}: {e}")
@@ -50,11 +62,9 @@ for archivo in os.listdir(carpeta_csv):
                         continue
 
                     df_resampled['hma_12'] = calcular_hma(df_resampled['ohlcv_close_BTCUSDT_PERP.A'])
-
-                    # Eliminar filas con NaN después del cálculo de la HMA
                     df_resampled.dropna(inplace=True)
 
-                    if df_resampled.empty: #Comprobar si despues de eliminar los NaN quedo vacio el dataframe
+                    if df_resampled.empty:
                         print(f"No hay datos suficientes para calcular la HMA en la temporalidad {temporalidad} en el archivo {archivo}")
                         continue
 
@@ -65,11 +75,11 @@ for archivo in os.listdir(carpeta_csv):
                         desequilibrios_despues = []
                         for i in range(1, len(df_resampled)):
                             if df_resampled['cruce'].iloc[i] == tipo_cruce:
-                                if i > 0 and i < len(df_resampled) -1: #Comprobar que no se salga del rango del dataframe
+                                if i > 0 and i < len(df_resampled) - 1:
                                     desequilibrio_antes = df_resampled['desequilibrio_OI'].iloc[i - 1]
-                                    desequilibrio_despues = df_resampled['desequilibrio_OI'].iloc[i + 1] #Toma el valor DESPUES del cruce
+                                    desequilibrio_despues = df_resampled['desequilibrio_OI'].iloc[i + 1]
                                     desequilibrios_antes.append(desequilibrio_antes)
-                                    desequilibrios_despues.append(desequilibrio_despues)
+                                    desequilibrios_despues.append(desequilibrios_despues)
 
                         if desequilibrios_antes:
                             promedio_antes = np.mean(desequilibrios_antes)
