@@ -45,8 +45,10 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
+            data = response.json()
             print(f"Successful response for {endpoint} on attempt {attempt + 1}")
-            return response.json()
+            print(f"Data received: {json.dumps(data, indent=2)[:500]}...")  # Print first 500 characters of the response
+            return data
         except requests.exceptions.RequestException as e:
             print(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
             if attempt < max_retries - 1:
@@ -84,6 +86,8 @@ def process_data(timeframe):
                             all_data[timestamp][new_key] = item[key]
                 except KeyError as e:
                     print(f"Error accessing timestamp in item: {item}. Error: {e}")
+        else:
+            print(f"No valid data received for {data_type} in {timeframe}")
 
     if all_data:
         df = pd.DataFrame.from_dict(all_data, orient='index')
@@ -91,6 +95,7 @@ def process_data(timeframe):
         
         print(f"Processed data for {timeframe}:")
         print(df.head())
+        print(f"Shape of DataFrame: {df.shape}")
 
         if not df.empty:
             csv_filename = os.path.join(OUTPUT_FOLDER, f"datos_{timeframe}.csv")
