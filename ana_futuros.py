@@ -1,84 +1,85 @@
-import pandas as pd
-import numpy as np
+import requests
 import os
+import pandas as pd
+from datetime import datetime
+import json
+import time
 
-# Configuración
-carpeta_datos = "coinalyze_data"
-nombre_archivo = "datos_4hour.csv"
-apalancamiento = 10  # Apalancamiento promedio (ajustar si es necesario)
+# Parámetros generales (sin cambios)
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu API Key real
+BASE_URL = "https://api.coinalyze.net/v1/"
+SYMBOLS = {
+    "perpetuos": "BTCUSDT_PERP.A"
+}
+TEMPORALIDADES = ["1hour", "4hour", "daily"]
+OUTPUT_FOLDER = "coinalyze_data"
+VELAS = 2000
+TEMPORALIDAD_SEGUNDOS = {
+    "1hour": 3600,
+    "4hour": 14400,
+    "daily": 86400
+}
 
-# Cargar datos
-ruta_archivo = os.path.join(carpeta_datos, nombre_archivo)
-try:
-    df = pd.read_csv(ruta_archivo)
-except FileNotFoundError:
-    print(f"Error: No se encontró el archivo {nombre_archivo} en la carpeta {carpeta_datos}")
-    exit()
+# ... (Función fetch_data anterior, sin cambios)
 
-# Seleccionar columnas relevantes y renombrarlas para mayor claridad
-try:
-    df = df[["fecha_hora", "long_short_ratio_longs_percentage_", "long_short_ratio_shorts_percentage_", "funding_rate"]].copy()
-    df.rename(columns={
-        "long_short_ratio_longs_percentage_": "longs_percentage",
-        "long_short_ratio_shorts_percentage_": "shorts_percentage",
-        "funding_rate": "funding_rate_4h"
-    }, inplace=True)
-except KeyError as e:
-    print(f"Error: Falta la columna {e} en el archivo CSV.")
-    exit()
+def calcular_rango_temporalidad(temporalidad, velas):
+    ahora = int(time.time()) # Usar time.time() para consistencia
+    desde = ahora - (velas * TEMPORALIDAD_SEGUNDOS[temporalidad])
+    return desde, ahora
 
+def obtener_funding_rate(temporalidad, desde, hasta):
+    endpoint = "funding-rate-history"
+    symbol = SYMBOLS["perpetuos"]
+    params = {
+        "api_key": API_KEY,
+        "symbols": symbol,
+        "interval": temporalidad,
+        "from": desde,
+        "to": hasta
+    }
+    url = f"{BASE_URL}{endpoint}"
+    print(f"URL Funding Rate: {url}?{requests.compat.urlencode(params)}")
+    data = fetch_data(endpoint, symbol, temporalidad, desde, hasta)
+    return data
 
-# Convertir la columna 'fecha_hora' a datetime
-df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+def agregar_funding_rate_a_csv(temporalidad, desde, hasta):
+    nombre_archivo = f"datos_{temporalidad}.csv"
+    ruta_archivo = os.path.join(OUTPUT_FOLDER, nombre_archivo)
 
-# Calcular la diferencia Long/Short
-df["diferencia_long_short"] = df["longs_percentage"] - df["shorts_percentage"]
+    try:
+        df = pd.read_csv(ruta_archivo)
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo {nombre_archivo}")
+        return
 
-# Calcular el Funding Rate mensual y ajustado
-df["funding_rate_mensual"] = df["funding_rate_4h"] * 3 * 30  # 3 cobros al día, 30 días al mes
-df["funding_rate_ajustado"] = df["funding_rate_mensual"] * apalancamiento
+    funding_rate_data = obtener_funding_rate(temporalidad, desde, hasta)
 
-#Evitar la division por cero
-df = df[df["funding_rate_ajustado"] != 0].copy()
+    if funding_rate_data:
+        for symbol_data in funding_rate_data: #Iteramos por symbolos
+            history = symbol_data.get("history") #Obtenemos el history si existe
+            if history:
+                funding_rate_data= history #asignamos history si existe
+            else:
+                funding_rate_data = [symbol_data] #creamos una lista con el objeto actual, para que funcione el resto del codigo
+            funding_rate_df = pd.DataFrame(funding_rate_data)
+            if not funding_rate_df.empty: # Verificamos si el dataframe tiene datos
+                funding_rate_df = funding_rate_df.rename(columns={"t": "timestamp", "o": "fr_open", "h": "fr_high", "l": "fr_low", "c": "fr_close", "f":"funding_rate"})
+                funding_rate_df['timestamp'] = pd.to_datetime(funding_rate_df['timestamp'], unit='s')
+                funding_rate_df = funding_rate_df.rename(columns={"timestamp": "fecha_hora"})
+                df = pd.merge(df, funding_rate_df[['fecha_hora', 'fr_open', 'fr_high', 'fr_low', 'fr_close','funding_rate']], on='fecha_hora', how='left')
+                df.to_csv(ruta_archivo, index=False)
+                print(f"Funding rate agregado a {nombre_archivo}")
+            else:
+                print(f"No hay datos de funding rate para {temporalidad} en el rango especificado")
 
-# Calcular la proporción
-df["proporcion"] = df["diferencia_long_short"] / df["funding_rate_ajustado"]
+    else:
+        print(f"Error al obtener funding rate para {temporalidad}")
 
-# Análisis de la Proporción
-print("Análisis de la Proporción:")
-print(f"Promedio de la proporción: {df['proporcion'].mean()}")
-print(f"Rango de la proporción: {df['proporcion'].min()} - {df['proporcion'].max()}")
-print(f"Desviación estándar de la proporción: {df['proporcion'].std()}")
+# Procesar cada temporalidad (sin cambios)
+for temporalidad in TEMPORALIDADES:
+    print(f"Procesando {temporalidad}...")
+    desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
+    agregar_funding_rate_a_csv(temporalidad, desde, hasta)
 
-#Visualizacion de datos
-import matplotlib.pyplot as plt
-plt.figure(figsize=(12, 6))
-plt.plot(df['fecha_hora'], df['proporcion'])
-plt.xlabel('Fecha y Hora')
-plt.ylabel('Proporción (Diferencia L/S / Funding Rate Ajustado)')
-plt.title('Evolución de la Proporción a lo largo del Tiempo')
-plt.grid(True)
-plt.show()
-
-# Análisis de la relación con el precio (requiere datos de precio)
-# Si tienes datos de precio en otro archivo, puedes cargarlos y unirlos al DataFrame df
-# Ejemplo hipotético (necesitas adaptar esto a tus datos reales):
-
-# Supongamos que tienes datos de precio en un DataFrame llamado df_precio con columnas 'fecha_hora' y 'precio'
-# df = pd.merge(df, df_precio, on='fecha_hora', how='left')
-# if 'precio' in df.columns:
-#     plt.figure(figsize=(12, 6))
-#     plt.plot(df['fecha_hora'], df['proporcion'], label='Proporción')
-#     plt.plot(df['fecha_hora'], df['precio'], label='Precio', secondary_y=True) # Eje secundario para el precio
-#     plt.xlabel('Fecha y Hora')
-#     plt.ylabel('Proporción / Precio')
-#     plt.title('Relación entre la Proporción y el Precio')
-#     plt.legend()
-#     plt.grid(True)
-#     plt.show()
-# else:
-#     print("No se encontraron datos de precio para analizar la correlación.")
-
-# Mostrar las primeras filas del DataFrame con los cálculos
-print("\nPrimeras filas del DataFrame con los cálculos:")
-print(df.head())
+print("Proceso completado.")
