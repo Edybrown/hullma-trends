@@ -67,38 +67,15 @@ def agregar_funding_rate_a_csv(temporalidad, desde, hasta):
 
     funding_rate_data = obtener_funding_rate(temporalidad, desde, hasta)
 
-    if funding_rate_data and isinstance(funding_rate_data, list): # Verificar si funding_rate_data es una lista
-        all_funding_data = []
-        for symbol_data in funding_rate_data:
-            history = symbol_data.get("history")
-            if history:
-                for item in history:
-                    item["symbol"] = symbol_data.get("symbol") #agregamos el simbolo a cada item
-                    all_funding_data.append(item)
-            else:
-                symbol_data["symbol"] = symbol_data.get("symbol") #agregamos el simbolo al item
-                all_funding_data.append(symbol_data)
-
-        funding_rate_df = pd.DataFrame(all_funding_data)
-        if not funding_rate_df.empty:
-            funding_rate_df = funding_rate_df.rename(columns={"t": "timestamp", "o": "fr_open", "h": "fr_high", "l": "fr_low", "c": "fr_close", "f":"funding_rate"})
-            funding_rate_df['timestamp'] = pd.to_datetime(funding_rate_df['timestamp'], unit='s')
-            funding_rate_df = funding_rate_df.rename(columns={"timestamp": "fecha_hora"})
-            df = pd.merge(df, funding_rate_df[['fecha_hora', 'fr_open', 'fr_high', 'fr_low', 'fr_close','funding_rate','symbol']], on='fecha_hora', how='left')
-            df.to_csv(ruta_archivo, index=False)
-            print(f"Funding rate agregado a {nombre_archivo}")
+    if funding_rate_data:
+        # Check if 'funding_rate' column exists in funding_rate_df
+        if 'funding_rate' in funding_rate_df.columns:
+            df = pd.merge(df, funding_rate_df[['fecha_hora', 'fr_open', 'fr_high', 'fr_low', 'fr_close', 'funding_rate']], on='fecha_hora', how='left')
         else:
-            print(f"No hay datos de funding rate para {temporalidad} en el rango especificado")
-    elif funding_rate_data is None:
-        print(f"Error al obtener funding rate para {temporalidad}. Respuesta None")
+            # Handle case where 'funding_rate' might be missing (optional)
+            print("Warning: 'funding_rate' column not found in funding_rate_df. Skipping merge.")
+
+        df.to_csv(ruta_archivo, index=False)
+        print(f"Funding rate agregado a {nombre_archivo}")
     else:
-        print(f"Error al obtener funding rate para {temporalidad}. Tipo de dato inesperado: {type(funding_rate_data)}")
-
-
-# Procesar cada temporalidad
-for temporalidad in TEMPORALIDADES:
-    print(f"Procesando {temporalidad}...")
-    desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
-    agregar_funding_rate_a_csv(temporalidad, desde, hasta)
-
-print("Proceso completado.")
+        print(f"Error al obtener funding rate para {temporalidad}")
