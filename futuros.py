@@ -1,118 +1,118 @@
 import requests
-import time
-from datetime import datetime, timedelta
+import os
 import pandas as pd
+from datetime import datetime
+import json
+import time
 
-# Configuración
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
-BASE_URL = f"https://api.coinalyze.net/v1/"
-SYMBOLS = "BTCUSDT_PERP.A" # Puedes añadir más símbolos aquí
-TEMPORALIDADES = ["1hour", "4hour", "daily"]  # Temporalidades a procesar
-MAX_VELAS = 2000  # Máximo de velas por solicitud
+# Parámetros generales
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu API Key real
+BASE_URL = "https://api.coinalyze.net/v1/"
+SYMBOLS = {
+    "spot": "BTCUSDT.A",
+    "perpetuos": "BTCUSDT_PERP.A"
+}
+TEMPORALIDADES = ["1hour", "4hour", "daily"]
+OUTPUT_FOLDER = "datos_futuros"
 
-def log_mensaje(mensaje, nivel="INFO"):
-    """Imprime un mensaje en consola con formato."""
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [{nivel}] {mensaje}")
+# Crear la carpeta de salida
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, max_retries=3):
-    """Solicita datos de Coinalyze y maneja errores."""
-    url = f"{BASE_URL}{endpoint}?api_key={API_KEY}&symbols={symbol}&interval={interval}&from={from_timestamp}&to={to_timestamp}"
+# Fechas para obtener 2000 velas por temporalidad
+VELAS = 2000
+TEMPORALIDAD_SEGUNDOS = {
+    "1hour": 3600,
+    "4hour": 14400,
+    "daily": 86400
+}
 
-    for intento in range(max_retries):
+# Función para calcular el rango de timestamps
+def calcular_rango_temporalidad(temporalidad, velas):
+    ahora = int(time.time()) # Usar time.time() para consistencia
+    desde = ahora - (velas * TEMPORALIDAD_SEGUNDOS[temporalidad])
+    return desde, ahora
+
+# Función para hacer solicitudes a la API con manejo de errores mejorado y reintentos
+def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, convert_to_usd="false", max_retries=3):
+    params = {
+        "api_key": API_KEY,
+        "symbols": symbols,
+        "interval": interval,
+        "from": from_timestamp,
+        "to": to_timestamp,
+        "convert_to_usd": convert_to_usd
+    }
+    url = f"{BASE_URL}{endpoint}"
+    print(f"URL: {url}?{requests.compat.urlencode(params)}")
+    for attempt in range(max_retries):
         try:
-            log_mensaje(f"Realizando solicitud a la API: {url}")
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()  # Lanza un error si el código HTTP no es 200
-            data = response.json()
-            if not data or len(data) == 0:
-                log_mensaje(f"No se encontraron datos para {symbol} en {interval}.", nivel="WARNING")
-                return None
-            log_mensaje(f"Datos recibidos correctamente para {symbol} ({interval}).")
-            return data
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()  # Lanza una excepción para códigos de estado HTTP erróneos (4xx o 5xx)
+            return response.json()
         except requests.exceptions.RequestException as e:
-            log_mensaje(f"Error en la solicitud: {e}. Reintentando... ({intento + 1}/{max_retries})", nivel="ERROR")
-            time.sleep(5)  # Esperar antes de reintentar
-        except Exception as e:
-            log_mensaje(f"Error inesperado: {e}", nivel="CRITICAL")
-            break
-    log_mensaje(f"Fallo después de {max_retries} intentos para {symbol} ({interval}).", nivel="ERROR")
+            print(f"Intento {attempt + 1}/{max_retries} fallido: {e}")
+            try:
+                print(f"Respuesta del servidor: {response.text}")
+            except AttributeError: #Manejo por si response no existe
+                pass
+            if attempt < max_retries - 1:
+                time.sleep(5)  # Esperar 5 segundos antes de reintentar
+        except json.JSONDecodeError as e:
+            print(f"Error al decodificar JSON: {e}. Respuesta: {response.text}")
+            return None
+    print(f"Fallo después de {max_retries} reintentos para {url}.")
     return None
 
+# Procesar cada tipo de dato (con manejo de múltiples símbolos)
 def procesar_datos(temporalidad):
-    """Procesa los datos para una temporalidad específica."""
-    log_mensaje(f"Procesando temporalidad: {temporalidad}...")
+    desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
+    all_data = {}
 
-    ahora = datetime.utcnow()
-    desde = int((ahora - timedelta(days=1)).timestamp() * 1000)  # Rango de 1 día en milisegundos
-    hasta = int(ahora.timestamp() * 1000)  # Ahora en milisegundos
+    data_types = {
+        "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp","o": "open","h": "high","l": "low","c": "close","v": "volume","bv": "buy_volume"}},
+        "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp","o": "oi_open","h": "oi_high","l": "oi_low","c": "oi_close"}},
+        "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp","r": "long_short_ratio","l": "longs_percentage","s": "shorts_percentage"}},
+        "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp","l": "liquidation_longs","s": "liquidation_shorts"}},
+        "funding_rate": {"endpoint": "funding-rate-history", "renames": { "t": "timestamp", "o":"fr_open", "h":"fr_high", "l":"fr_low", "c":"fr_close" }} #Funding rate directamente de la API
+    }
 
-    datos_totales = []
-
-    for symbol in SYMBOLS:
-        log_mensaje(f"Obteniendo datos para {symbol} en temporalidad {temporalidad}...")
-
-        # Realizamos la solicitud de velas (ohlcv) hasta alcanzar el máximo permitido
-        ohlcv = []
-        while len(ohlcv) < MAX_VELAS:
-            datos_ohlcv = fetch_data("ohlcv-history", symbol, temporalidad, desde, hasta)
-            if datos_ohlcv:
-                ohlcv.extend(datos_ohlcv)
-                # Actualizamos la fecha de "desde" para el próximo intervalo
-                desde = ohlcv[-1]["t"] + 1  # El timestamp siguiente al último recibido
-            else:
-                break
-
-        # Solicitar otros datos desde diferentes endpoints
-        open_interest = fetch_data("open-interest-history", symbol, temporalidad, desde, hasta)
-        long_short_ratio = fetch_data("long-short-ratio-history", symbol, temporalidad, desde, hasta)
-        liquidation = fetch_data("liquidation-history", symbol, temporalidad, desde, hasta)
-        funding_rate = fetch_data("funding-rate-history", symbol, temporalidad, desde, hasta)
-
-        # Validar que se hayan obtenido todos los datos
-        if not ohlcv or not open_interest or not long_short_ratio or not liquidation or not funding_rate:
-            log_mensaje(f"Faltan datos para {symbol} ({temporalidad}). Omitiendo.", nivel="WARNING")
-            continue
-
-        # Procesar datos y convertirlos a DataFrame
-        log_mensaje(f"Procesando datos recibidos para {symbol} ({temporalidad})...")
-        try:
-            df_ohlcv = pd.DataFrame(ohlcv)
-            df_open_interest = pd.DataFrame(open_interest)
-            df_long_short = pd.DataFrame(long_short_ratio)
-            df_liquidation = pd.DataFrame(liquidation)
-            df_funding = pd.DataFrame(funding_rate)
-
-            # Unir los datos en un único DataFrame
-            final_df = (
-                df_ohlcv
-                .merge(df_open_interest, on="timestamp", how="left")
-                .merge(df_long_short, on="timestamp", how="left")
-                .merge(df_liquidation, on="timestamp", how="left")
-                .merge(df_funding, on="timestamp", how="left")
-            )
-            final_df["fecha_hora"] = pd.to_datetime(final_df["timestamp"], unit="s")
-            final_df = final_df.sort_values(by="fecha_hora")
-            datos_totales.append(final_df)
-            log_mensaje(f"Datos procesados correctamente para {symbol} ({temporalidad}).")
-        except Exception as e:
-            log_mensaje(f"Error al procesar datos para {symbol} ({temporalidad}): {e}", nivel="ERROR")
+    # Solo necesitamos los datos de OHLCV para alinear las fechas
+    ohlcv_data = fetch_data(data_types["ohlcv"]["endpoint"], SYMBOLS["perpetuos"], temporalidad, desde, hasta)
     
-    if datos_totales:
-        # Concatenar todos los datos procesados
-        todos_datos_df = pd.concat(datos_totales, ignore_index=True)
-        log_mensaje(f"Datos finalizados para temporalidad {temporalidad}.")
-        return todos_datos_df
-    else:
-        log_mensaje(f"No se encontraron datos útiles para la temporalidad {temporalidad}.", nivel="WARNING")
-        return None
+    if ohlcv_data and isinstance(ohlcv_data, list):
+        for item in ohlcv_data:
+            timestamp = item["t"]
+            formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
 
-if __name__ == "__main__":
-    for temporalidad in TEMPORALIDADES:
-        try:
-            datos = procesar_datos(temporalidad)
-            if datos is not None:
-                archivo = f"datos_{temporalidad}.csv"
-                datos.to_csv(archivo, index=False)
-                log_mensaje(f"Datos guardados en el archivo: {archivo}")
-        except Exception as e:
-            log_mensaje(f"Error general en el procesamiento de {temporalidad}: {e}", nivel="CRITICAL")
+    # Procesar los otros datos con el mismo timestamp
+    for data_type, details in data_types.items():
+        if data_type == "ohlcv":  # Ya lo hemos procesado
+            continue
+        
+        print(f"Fetching {data_type} in {temporalidad}...")
+        symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
+        data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
+
+        if data and isinstance(data, list):
+            for item in data:
+                timestamp = item["t"]
+                if timestamp in all_data:  # Solo añadir si ya tenemos el timestamp en los datos de ohlcv
+                    for key, new_key in details["renames"].items():
+                        if key in item:
+                            all_data[timestamp][new_key] = item[key]
+
+    # Crear el DataFrame con los datos recopilados
+    if all_data:
+        final_df = pd.DataFrame.from_dict(all_data, orient='index')
+        final_df = final_df.sort_values(by="fecha_hora")
+        
+        # Guardar en archivo CSV con nombre adecuado
+        csv_filename = os.path.join(OUTPUT_FOLDER, f"datos_{temporalidad}.csv")
+        final_df.to_csv(csv_filename, index=False)
+        print(f"Data saved to {csv_filename}")
+    
+# Guardar datos para cada temporalidad
+for temporalidad in TEMPORALIDADES:
+    print(f"Processing {temporalidad}...")
+    procesar_datos(temporalidad)
