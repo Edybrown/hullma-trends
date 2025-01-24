@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import time
+import pytz
 
 # Parámetros generales
 API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu API Key real
@@ -81,21 +82,22 @@ def procesar_datos(temporalidad, velas_atras): # Añadimos velas_atras como argu
         symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
 
-        if data and isinstance(data, dict) and "history" in data: # Comprobamos si es un diccionario y si tiene la clave history
-            history = data["history"] # Accedemos a la lista history
+        if data and isinstance(data, dict) and "history" in data:
+            history = data["history"]
             if isinstance(history, list):
                 for item in history:
                     try:
                         timestamp = item["t"]
-                        dt_object = datetime.fromtimestamp(timestamp)
-                        formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+                        dt_utc = datetime.fromtimestamp(timestamp, tz=pytz.utc)
+                        dt_local = dt_utc.astimezone(pytz.timezone('America/New_York'))
+                        formatted_time = dt_local.strftime("%Y-%m-%d %H:%M:%S")
 
-                        if timestamp not in all_data:
-                            all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+                        if formatted_time not in all_data: # Usar la fecha formateada directamente como clave
+                            all_data[formatted_time] = {}
 
                         for key, new_key in details["renames"].items():
                             if key in item:
-                                all_data[timestamp][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key]
+                                all_data[formatted_time][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key]
 
                     except KeyError as e:
                         print(f"WARNING: Key {e} not found in data for {data_type} in {temporalidad}")
@@ -103,38 +105,28 @@ def procesar_datos(temporalidad, velas_atras): # Añadimos velas_atras como argu
                 print(f"WARNING: 'history' is not a list for {data_type} in {temporalidad}")
         elif data:
             print(f"WARNING: Data for {data_type} in {temporalidad} is not a dictionary or does not contain 'history'")
-            print(data) # Imprime la estructura de datos para debug
+            print(data)
         else:
             print(f"WARNING: No data received for {data_type} in {temporalidad}")
-            
+
     if all_data:
         df = pd.DataFrame.from_dict(all_data, orient='index')
-        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-
-        # Alineación y formato de fechas:
-        df['fecha_hora_alineada'] = df['fecha_hora'] + relativedelta(hours=velas_atras if temporalidad == "1hour" else 0, days=velas_atras if temporalidad == "1day" else 0)
-        df['fecha_hora_alineada'] = df['fecha_hora_alineada'].dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Pivotar la tabla:
-        df = df.set_index('fecha_hora_alineada') # Establece la fecha alineada como índice
-        df = df.drop(columns=['fecha_hora', 'temporalidad']) # Elimina columnas innecesarias
-        
-        # Obtener todas las fechas únicas alineadas:
-        all_aligned_dates = sorted(df.index.unique())
-
-        # Reindexar el DataFrame para completar las fechas faltantes
-        df = df.reindex(all_aligned_dates)
+        df.index.name = "fecha_hora" # Nombrar el índice
+        df = df.sort_index()
 
         output_folder = os.path.join(OUTPUT_FOLDER, temporalidad)
         os.makedirs(output_folder, exist_ok=True)
-        df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv")) # Guarda el DataFrame pivotado
-        print(f"Data saved to {output_folder}/datos_{temporalidad}.csv")
-        return None
+
+        try:
+            df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv"))
+            print(f"Data saved to {output_folder}/datos_{temporalidad}.csv")
+        except Exception as e: # Capturar cualquier excepción al guardar el archivo
+            print(f"ERROR saving CSV: {e}")
+            print(f"Directorio de trabajo: {os.getcwd()}") # Imprimir el directorio de trabajo actual para debug
 
     return None
 
-# Guardar datos
-VELAS_ATRAS = 5 # Ejemplo: alinear 5 velas atrás
+# Guardar datos (sin velas_atras)
 for temporalidad in TEMPORALIDADES:
     print(f"Processing {temporalidad}...")
-    procesar_datos(temporalidad, VELAS_ATRAS) # Pasamos las velas atras a la funcion
+    procesar_datos(temporalidad)
