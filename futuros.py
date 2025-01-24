@@ -8,7 +8,7 @@ API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 BASE_URL = f"https://api.coinalyze.net/v1/"
 SYMBOLS = ["BTCUSDT_PERP.A"]  # Puedes añadir más símbolos aquí
 TEMPORALIDADES = ["1hour", "4hour", "daily"]  # Temporalidades a procesar
-RANGO_DIAS = 30  # Rango de días hacia atrás
+MAX_VELAS = 2000  # Máximo de velas por solicitud
 
 def log_mensaje(mensaje, nivel="INFO"):
     """Imprime un mensaje en consola con formato."""
@@ -17,7 +17,7 @@ def log_mensaje(mensaje, nivel="INFO"):
 def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, max_retries=3):
     """Solicita datos de Coinalyze y maneja errores."""
     url = f"{BASE_URL}{endpoint}?api_key={API_KEY}&symbols={symbol}&interval={interval}&from={from_timestamp}&to={to_timestamp}"
-    
+
     for intento in range(max_retries):
         try:
             log_mensaje(f"Realizando solicitud a la API: {url}")
@@ -43,16 +43,26 @@ def procesar_datos(temporalidad):
     log_mensaje(f"Procesando temporalidad: {temporalidad}...")
 
     ahora = datetime.utcnow()
-    desde = int((ahora - timedelta(days=RANGO_DIAS)).timestamp())
-    hasta = int(ahora.timestamp())
+    desde = int((ahora - timedelta(days=1)).timestamp() * 1000)  # Rango de 1 día en milisegundos
+    hasta = int(ahora.timestamp() * 1000)  # Ahora en milisegundos
 
     datos_totales = []
 
     for symbol in SYMBOLS:
         log_mensaje(f"Obteniendo datos para {symbol} en temporalidad {temporalidad}...")
 
-        # Solicitar datos desde diferentes endpoints
-        ohlcv = fetch_data("ohlcv-history", symbol, temporalidad, desde, hasta)
+        # Realizamos la solicitud de velas (ohlcv) hasta alcanzar el máximo permitido
+        ohlcv = []
+        while len(ohlcv) < MAX_VELAS:
+            datos_ohlcv = fetch_data("ohlcv-history", symbol, temporalidad, desde, hasta)
+            if datos_ohlcv:
+                ohlcv.extend(datos_ohlcv)
+                # Actualizamos la fecha de "desde" para el próximo intervalo
+                desde = ohlcv[-1]["t"] + 1  # El timestamp siguiente al último recibido
+            else:
+                break
+
+        # Solicitar otros datos desde diferentes endpoints
         open_interest = fetch_data("open-interest-history", symbol, temporalidad, desde, hasta)
         long_short_ratio = fetch_data("long-short-ratio-history", symbol, temporalidad, desde, hasta)
         liquidation = fetch_data("liquidation-history", symbol, temporalidad, desde, hasta)
