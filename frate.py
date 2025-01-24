@@ -1,34 +1,37 @@
 import pandas as pd
 
-# Suponiendo que el archivo CSV ya está cargado como df
-# Paso 1: Renombrar columnas para hacerlas más cortas
-df.rename(columns={
-    'funding_rate_fr_close_BTCUSDT_PERP.A': 'funding_rate',
-    'long_short_ratio_longs_percentage_BTCUSDT_PERP.A': 'longs_percentage',
-    'long_short_ratio_shorts_percentage_BTCUSDT_PERP.A': 'shorts_percentage',
-    'long_short_ratio_timestamp_BTCUSDT_PERP.A': 'timestamp'
-}, inplace=True)
+# Cargar los datos desde el archivo CSV
+file_path = "coinalyze_data/datos_4hour.csv"
+df = pd.read_csv(file_path)
 
-# Paso 2: Calcular el funding rate mensual (multiplicar por 90)
-df['funding_rate_monthly'] = df['funding_rate'] * 90
+# Verificar si las columnas necesarias existen
+required_columns = [
+    'funding_rate_fr_close_BTCUSDT_PERP.A',
+    'long_short_ratio_longs_percentage_BTCUSDT_PERP.A',
+    'long_short_ratio_shorts_percentage_BTCUSDT_PERP.A'
+]
 
-# Paso 3: Calcular el desequilibrio
-df['desequilibrio'] = df['longs_percentage'] - df['shorts_percentage']
+if all(col in df.columns for col in required_columns):
+    # Calcular el funding rate mensual
+    df['funding_rate_monthly'] = df['funding_rate_fr_close_BTCUSDT_PERP.A'] * 90
+    
+    # Calcular el desequilibrio
+    df['desequilibrio'] = df['long_short_ratio_longs_percentage_BTCUSDT_PERP.A'] - df['long_short_ratio_shorts_percentage_BTCUSDT_PERP.A']
+    
+    # Calcular estadísticas descriptivas
+    estadisticas = df[['funding_rate_monthly', 'desequilibrio']].describe()
+    
+    # Calcular la correlación
+    correlacion = df['funding_rate_monthly'].corr(df['desequilibrio'])
+    estadisticas.loc['correlacion'] = [correlacion, "N/A"]
 
-# Paso 4: Calcular estadísticas descriptivas
-stats = df[['funding_rate_monthly', 'desequilibrio']].describe()
+    # Exportar a Excel
+    output_path = "funding_analysis.xlsx"
+    with pd.ExcelWriter(output_path) as writer:
+        df.to_excel(writer, sheet_name="Datos Procesados", index=False)
+        estadisticas.to_excel(writer, sheet_name="Estadísticas")
 
-# Paso 5: Calcular correlación entre funding rate mensual y desequilibrio
-correlacion = df['funding_rate_monthly'].corr(df['desequilibrio'])
-
-# Agregar correlación como fila adicional en las estadísticas
-stats.loc['correlation'] = [correlacion, '']
-
-# Paso 6: Exportar los datos y las estadísticas a Excel
-output_file = 'funding_analysis.xlsx'
-
-with pd.ExcelWriter(output_file) as writer:
-    df.to_excel(writer, sheet_name='Datos Procesados', index=False)
-    stats.to_excel(writer, sheet_name='Estadísticas')
-
-print(f"Análisis exportado a {output_file}")
+    print(f"Análisis completado. Datos guardados en {output_path}")
+else:
+    print("Faltan columnas necesarias en el archivo CSV.")
+    print("Columnas disponibles:", df.columns)
