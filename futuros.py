@@ -92,8 +92,7 @@ def procesar_datos(temporalidad): # Añadimos velas_atras como argumento
                         dt_local = dt_utc.astimezone(pytz.timezone('America/New_York'))
                         formatted_time = dt_local.strftime("%Y-%m-%d %H:%M:%S")
 
-                        if formatted_time not in all_data: # Usar la fecha formateada directamente como clave
-                            all_data[formatted_time] = {}
+                        all_data.setdefault(formatted_time, {}) # Crea el diccionario si no existe
 
                         for key, new_key in details["renames"].items():
                             if key in item:
@@ -109,9 +108,9 @@ def procesar_datos(temporalidad): # Añadimos velas_atras como argumento
         else:
             print(f"WARNING: No data received for {data_type} in {temporalidad}")
 
-    if all_data:
+    if all_data: # Solo si hay datos se crea el DataFrame y se guarda el CSV
         df = pd.DataFrame.from_dict(all_data, orient='index')
-        df.index.name = "fecha_hora" # Nombrar el índice
+        df.index.name = "fecha_hora"
         df = df.sort_index()
 
         output_folder = os.path.join(OUTPUT_FOLDER, temporalidad)
@@ -120,13 +119,14 @@ def procesar_datos(temporalidad): # Añadimos velas_atras como argumento
         try:
             df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv"))
             print(f"Data saved to {output_folder}/datos_{temporalidad}.csv")
-        except Exception as e: # Capturar cualquier excepción al guardar el archivo
+        except Exception as e:
             print(f"ERROR saving CSV: {e}")
-            print(f"Directorio de trabajo: {os.getcwd()}") # Imprimir el directorio de trabajo actual para debug
-
+            print(f"Directorio de trabajo: {os.getcwd()}")
+    else: # Mensaje si no hay datos para guardar
+        print(f"No data to save for {temporalidad}")
     return None
 
-# Guardar datos (sin velas_atras)
+# Guardar datos
 for temporalidad in TEMPORALIDADES:
     print(f"Processing {temporalidad}...")
     procesar_datos(temporalidad)
