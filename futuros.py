@@ -113,10 +113,19 @@ def procesar_datos(temporalidad):
         final_df = pd.DataFrame.from_dict(all_data, orient='index')
         final_df = final_df.sort_values(by="fecha_hora")
         
-        # Guardar en archivo CSV con nombre adecuado
-        csv_filename = os.path.join(OUTPUT_FOLDER, f"datos_{temporalidad}.csv")
-        final_df.to_csv(csv_filename, index=False)
-        print(f"Data saved to {csv_filename}")
+        # Verificación de datos antes de guardar
+        print(f"Datos procesados para {temporalidad}:")
+        print(final_df.head())  # Mostrar las primeras filas para verificar
+
+        if not final_df.empty:
+            # Guardar en archivo CSV con nombre adecuado
+            csv_filename = os.path.join(OUTPUT_FOLDER, f"datos_{temporalidad}.csv")
+            final_df.to_csv(csv_filename, index=False)
+            print(f"Data saved to {csv_filename}")
+        else:
+            print(f"No hay datos para guardar en {temporalidad}.")
+    else:
+        print(f"No se procesaron datos para {temporalidad}.")
     
 # Guardar datos para cada temporalidad
 for temporalidad in TEMPORALIDADES:
