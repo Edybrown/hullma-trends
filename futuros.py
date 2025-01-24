@@ -76,7 +76,7 @@ def procesar_datos(temporalidad, velas_atras): # Añadimos velas_atras como argu
         "funding_rate": {"endpoint": "funding-rate-history", "renames": { "t": "timestamp", "o":"fr_open", "h":"fr_high", "l":"fr_low", "c":"fr_close" }} #Funding rate directamente de la API
     }
 
-     for data_type, details in data_types.items():
+    for data_type, details in data_types.items():
         print(f"Fetching {data_type} in {temporalidad}...")
         symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
