@@ -33,6 +33,7 @@ def calcular_rango_temporalidad(temporalidad, velas):
     return desde, ahora
 
 # Función para hacer solicitudes a la API con manejo de errores mejorado y reintentos
+# Función para hacer solicitudes a la API con manejo de errores mejorado y reintentos
 def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, convert_to_usd="false", max_retries=3):
     params = {
         "api_key": API_KEY,
@@ -48,11 +49,12 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()  # Lanza una excepción para códigos de estado HTTP erróneos (4xx o 5xx)
+            print(f"Respuesta exitosa para {endpoint} en el intento {attempt + 1}: {response.text}")  # Agregar log de respuesta exitosa
             return response.json()
         except requests.exceptions.RequestException as e:
             print(f"Intento {attempt + 1}/{max_retries} fallido: {e}")
             try:
-                print(f"Respuesta del servidor: {response.text}")
+                print(f"Respuesta del servidor (si existe): {response.text}")  # Mostrar respuesta incluso si hay error
             except AttributeError:  # Manejo por si response no existe
                 pass
             if attempt < max_retries - 1:
@@ -60,8 +62,9 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
         except json.JSONDecodeError as e:
             print(f"Error al decodificar JSON: {e}. Respuesta: {response.text}")
             return None
-    print(f"Fallo después de {max_reintentos} reintentos para {url}.")
+    print(f"Fallo después de {max_retries} reintentos para {url}.")
     return None
+
 
 # Procesar cada tipo de dato (con manejo de múltiples símbolos)
 def procesar_datos(temporalidad):
