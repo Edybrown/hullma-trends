@@ -1,65 +1,47 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-import os
 
-# Cargar el archivo CSV (asegúrate de reemplazar 'tu_archivo.csv' con la ruta de tu archivo)
-carpeta = 'coinalyze_data'
-archivo = 'datos_4hour.csv'
-ruta_archivo = os.path.join(carpeta, archivo)
+# Cargar los datos desde el archivo CSV
+file_path = "coinalyze_data/datos_4hour.csv"
+df = pd.read_csv(file_path)
 
-# Cargar el archivo CSV
-df = pd.read_csv(ruta_archivo)
+# Renombrar columnas para simplificar
+df.rename(columns={
+    'funding_rate_fr_close_BTCUSDT_PERP.A': 'funding_rate',
+    'long_short_ratio_longs_percentage_BTCUSDT_PERP.A': 'longs_pct',
+    'long_short_ratio_shorts_percentage_BTCUSDT_PERP.A': 'shorts_pct',
+    'long_short_ratio_timestamp_BTCUSDT_PERP.A': 'timestamp'
+}, inplace=True)
 
-# Verificar si las columnas necesarias existen
-required_columns = [
-    'funding_rate_fr_close_BTCUSDT_PERP.A',
-    'long_short_ratio_longs_percentage_BTCUSDT_PERP.A',
-    'long_short_ratio_shorts_percentage_BTCUSDT_PERP.A',
-    'long_short_ratio_timestamp_BTCUSDT_PERP.A'
-]
+# Convertir el timestamp a formato datetime y establecerlo como índice
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+df.set_index('timestamp', inplace=True)
 
-if all(col in df.columns for col in required_columns):
-    # Calcular el desequilibrio (diferencia entre largos y cortos)
-    df['desequilibrio'] = df['long_short_ratio_longs_percentage_BTCUSDT_PERP.A'] - df['long_short_ratio_shorts_percentage_BTCUSDT_PERP.A']
-    
-    # Relación del desequilibrio con el funding rate (porcentaje relativo)
-    df['relacion_funding_desequilibrio'] = (df['desequilibrio'] / df['funding_rate_fr_close_BTCUSDT_PERP.A']).fillna(0)
-    
-    # Imprimir resultados iniciales
-    print("Análisis de funding rate y desequilibrio completado:")
-    print(df[['funding_rate_fr_close_BTCUSDT_PERP.A', 'desequilibrio', 'relacion_funding_desequilibrio']].head())
-    
-    # Graficar los datos
-    plt.figure(figsize=(12, 6))
-    
-    # Funding rate
-    plt.subplot(2, 1, 1)
-    plt.plot(df['funding_rate_fr_close_BTCUSDT_PERP.A'], label='Funding Rate (Cierre)', color='blue')
-    plt.title('Funding Rate (Cierre)')
-    plt.legend()
-    plt.grid()
+# Calcular el desequilibrio (diferencia entre largos y cortos)
+df['desequilibrio'] = df['longs_pct'] - df['shorts_pct']
 
-    # Desequilibrio
-    plt.subplot(2, 1, 2)
-    plt.plot(df['desequilibrio'], label='Desequilibrio (Largos - Cortos)', color='green')
-    plt.title('Desequilibrio: Largos vs Cortos')
-    plt.legend()
-    plt.grid()
+# Calcular el funding rate mensual acumulado
+df['monthly_funding_rate'] = df['funding_rate'] * 90
 
-    plt.tight_layout()
-    plt.show()
-    
-    # Calcular correlación
-    correlacion = df['funding_rate_fr_close_BTCUSDT_PERP.A'].corr(df['desequilibrio'])
-    print(f"Correlación entre el funding rate y el desequilibrio: {correlacion}")
+# Agrupar por mes y calcular estadísticas
+monthly_stats = df.resample('M').agg({
+    'monthly_funding_rate': ['mean', 'std', 'min', 'max', 'sum'],
+    'desequilibrio': ['mean', 'std', 'min', 'max'],
+    'funding_rate': ['mean', 'std'],
+})
 
-    # Procesar fechas y agrupar por mes
-    df['fecha'] = pd.to_datetime(df['long_short_ratio_timestamp_BTCUSDT_PERP.A'])
-    df.set_index('fecha', inplace=True)
+# Aplanar columnas para facilitar el análisis
+monthly_stats.columns = ['_'.join(col).strip() for col in monthly_stats.columns]
 
-    # Agrupar por mes y mostrar el resumen
-    resumen_mensual = df.resample('M').mean()
-    print(resumen_mensual[['funding_rate_fr_close_BTCUSDT_PERP.A', 'desequilibrio']])
-else:
-    print("Una o más columnas necesarias no están presentes en el DataFrame.")
-    print("Columnas disponibles:", df.columns)
+# Calcular correlaciones mensuales
+correlation = df.resample('M').apply(
+    lambda x: x['funding_rate'].corr(x['desequilibrio'])
+)
+monthly_stats['correlation_funding_desequilibrio'] = correlation
+
+# Guardar los datos procesados en un archivo Excel
+output_file = "monthly_funding_analysis.xlsx"
+with pd.ExcelWriter(output_file) as writer:
+    df.to_excel(writer, sheet_name="Raw_Data")  # Datos originales procesados
+    monthly_stats.to_excel(writer, sheet_name="Monthly_Stats")  # Estadísticas mensuales
+
+print(f"Análisis completo guardado en {output_file}.")
