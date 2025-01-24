@@ -65,7 +65,7 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
     return None
 
 # Procesar cada tipo de dato (con manejo de múltiples símbolos)
-def procesar_datos(temporalidad, velas_atras): # Añadimos velas_atras como argumento
+def procesar_datos(temporalidad): # Añadimos velas_atras como argumento
     desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
     all_data = {}
 
