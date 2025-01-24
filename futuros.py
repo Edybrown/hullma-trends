@@ -31,10 +31,10 @@ def calcular_rango_temporalidad(temporalidad, velas):
     desde = ahora - (velas * TEMPORALIDAD_SEGUNDOS[temporalidad])
     return desde, ahora
 
-def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert_to_usd="false"): #symbol en singular
-    params = {
+def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert_to_usd="false"):
+    params = { # sin cambios
         "api_key": API_KEY,
-        "symbols": symbol, #symbol en singular
+        "symbols": symbol,
         "interval": interval,
         "from": from_timestamp,
         "to": to_timestamp,
@@ -47,19 +47,26 @@ def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert
         try:
             response = requests.get(url, params=params, timeout=TIMEOUT)
             response.raise_for_status()
-            return response.json()
+
+            try: # INTENTO DE DECODIFICAR JSON Y VERIFICAR ESTRUCTURA
+                data = response.json()
+                if not isinstance(data, dict) or "history" not in data or not isinstance(data["history"], list):
+                    print(f"WARNING: Estructura JSON inesperada: {data}") # Imprime la estructura para debug
+                    return None # Retorna None si la estructura NO es correcta
+                return data # Retorna los datos SOLO si la estructura es correcta
+            except json.JSONDecodeError as e:
+                print(f"Error al decodificar JSON: {e}. Texto de respuesta: {response.text}")
+                return None
+
         except requests.exceptions.RequestException as e:
             print(f"Intento {attempt + 1}/{MAX_RETRIES} fallido: {e}")
-            try:
-                print(f"Respuesta del servidor: {response.text}")
-            except AttributeError:
-                pass
+            if response is not None:
+                print(f"Código de estado: {response.status_code}") # Imprime el código de estado HTTP
+                print(f"Texto de respuesta: {response.text}") # Imprime el contenido de la respuesta para debug
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
-        except json.JSONDecodeError as e:
-            print(f"Error al decodificar JSON: {e}. Respuesta: {response.text}")
-            return None
-    print(f"Fallo después de {MAX_RETRIES} reintentos para {url}.")
+
+    print(f"Fallo después de {MAX_RETRIES} intentos para {url}")
     return None
 
 def procesar_datos(temporalidad, data_types):
