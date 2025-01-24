@@ -64,7 +64,7 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
     return None
 
 # Procesar cada tipo de dato (con manejo de múltiples símbolos)
-def procesar_datos(temporalidad):
+def procesar_datos(temporalidad, velas_atras): # Añadimos velas_atras como argumento
     desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
     all_data = {}
 
@@ -76,32 +76,55 @@ def procesar_datos(temporalidad):
         "funding_rate": {"endpoint": "funding-rate-history", "renames": { "t": "timestamp", "o":"fr_open", "h":"fr_high", "l":"fr_low", "c":"fr_close" }} #Funding rate directamente de la API
     }
 
-    for data_type, details in data_types.items():
+     for data_type, details in data_types.items():
         print(f"Fetching {data_type} in {temporalidad}...")
         symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
 
-        if data and isinstance(data, list):
-            for item in data: #Se quita la iteracion del history
-                timestamp = item["t"]
-                dt_object = datetime.fromtimestamp(timestamp)
-                formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
-                if timestamp not in all_data:
-                    all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+        if data and isinstance(data, dict) and "history" in data: # Comprobamos si es un diccionario y si tiene la clave history
+            history = data["history"] # Accedemos a la lista history
+            if isinstance(history, list):
+                for item in history:
+                    try:
+                        timestamp = item["t"]
+                        dt_object = datetime.fromtimestamp(timestamp)
+                        formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
-                for key, new_key in details["renames"].items():
-                    if key in item:
-                        all_data[timestamp][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key] # Se agrega el nombre del simbolo a funding rate y se simplifica para ohlcv
+                        if timestamp not in all_data:
+                            all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
 
+                        for key, new_key in details["renames"].items():
+                            if key in item:
+                                all_data[timestamp][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key]
+
+                    except KeyError as e:
+                        print(f"WARNING: Key {e} not found in data for {data_type} in {temporalidad}")
+            else:
+                print(f"WARNING: 'history' is not a list for {data_type} in {temporalidad}")
+        elif data:
+            print(f"WARNING: Data for {data_type} in {temporalidad} is not a dictionary or does not contain 'history'")
+            print(data) # Imprime la estructura de datos para debug
+        else:
+            print(f"WARNING: No data received for {data_type} in {temporalidad}")
+            
     if all_data:
         final_df = pd.DataFrame.from_dict(all_data, orient='index')
         final_df = final_df.sort_values(by="fecha_hora")
-        final_df.to_csv(os.path.join(OUTPUT_FOLDER, f"datos_{temporalidad}.csv"), index=False)
-        print(f"Data saved to {OUTPUT_FOLDER}/datos_{temporalidad}.csv")
+
+        # Alineación por velas atrás:
+        final_df['fecha_hora_alineada'] = final_df['fecha_hora'].shift(velas_atras) #Alinea la fecha segun las velas atras
+        final_df = final_df.dropna(subset=['fecha_hora_alineada']) # Elimina las filas con NaN en la columna fecha_hora_alineada
+
+        # Creación de carpetas y guardado de CSV:
+        output_folder = os.path.join(OUTPUT_FOLDER, temporalidad) # Crea una carpeta por temporalidad
+        os.makedirs(output_folder, exist_ok=True) # Crea la carpeta si no existe
+        final_df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv"), index=False)
+        print(f"Data saved to {output_folder}/datos_{temporalidad}.csv")
         return None
     return None
-    
+
 # Guardar datos
+VELAS_ATRAS = 5 # Ejemplo: alinear 5 velas atrás
 for temporalidad in TEMPORALIDADES:
     print(f"Processing {temporalidad}...")
-    procesar_datos(temporalidad)
+    procesar_datos(temporalidad, VELAS_ATRAS) # Pasamos las velas atras a la funcion
