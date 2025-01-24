@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 # Configuración
-API_KEY = "TU_API_KEY_AQUI"
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 BASE_URL = f"https://api.coinalyze.net/v1/"
 SYMBOLS = ["BTCUSDT.A"]  # Puedes añadir más símbolos aquí
 TEMPORALIDADES = ["1hour", "4hour", "daily"]  # Temporalidades a procesar
