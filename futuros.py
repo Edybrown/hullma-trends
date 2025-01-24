@@ -108,19 +108,29 @@ def procesar_datos(temporalidad, velas_atras): # Añadimos velas_atras como argu
             print(f"WARNING: No data received for {data_type} in {temporalidad}")
             
     if all_data:
-        final_df = pd.DataFrame.from_dict(all_data, orient='index')
-        final_df = final_df.sort_values(by="fecha_hora")
+        df = pd.DataFrame.from_dict(all_data, orient='index')
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
 
-        # Alineación por velas atrás:
-        final_df['fecha_hora_alineada'] = final_df['fecha_hora'].shift(velas_atras) #Alinea la fecha segun las velas atras
-        final_df = final_df.dropna(subset=['fecha_hora_alineada']) # Elimina las filas con NaN en la columna fecha_hora_alineada
+        # Alineación y formato de fechas:
+        df['fecha_hora_alineada'] = df['fecha_hora'] + relativedelta(hours=velas_atras if temporalidad == "1hour" else 0, days=velas_atras if temporalidad == "1day" else 0)
+        df['fecha_hora_alineada'] = df['fecha_hora_alineada'].dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Creación de carpetas y guardado de CSV:
-        output_folder = os.path.join(OUTPUT_FOLDER, temporalidad) # Crea una carpeta por temporalidad
-        os.makedirs(output_folder, exist_ok=True) # Crea la carpeta si no existe
-        final_df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv"), index=False)
+        # Pivotar la tabla:
+        df = df.set_index('fecha_hora_alineada') # Establece la fecha alineada como índice
+        df = df.drop(columns=['fecha_hora', 'temporalidad']) # Elimina columnas innecesarias
+        
+        # Obtener todas las fechas únicas alineadas:
+        all_aligned_dates = sorted(df.index.unique())
+
+        # Reindexar el DataFrame para completar las fechas faltantes
+        df = df.reindex(all_aligned_dates)
+
+        output_folder = os.path.join(OUTPUT_FOLDER, temporalidad)
+        os.makedirs(output_folder, exist_ok=True)
+        df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv")) # Guarda el DataFrame pivotado
         print(f"Data saved to {output_folder}/datos_{temporalidad}.csv")
         return None
+
     return None
 
 # Guardar datos
