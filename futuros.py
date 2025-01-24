@@ -65,68 +65,63 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
     return None
 
 # Procesar cada tipo de dato (con manejo de múltiples símbolos)
-def procesar_datos(temporalidad): # Añadimos velas_atras como argumento
+def procesar_datos(temporalidad):
     desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
-    all_data = {}
-
-    data_types = {
-        "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp","o": "open","h": "high","l": "low","c": "close","v": "volume","bv": "buy_volume"}},
-        "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp","o": "oi_open","h": "oi_high","l": "oi_low","c": "oi_close"}},
-        "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp","r": "long_short_ratio","l": "longs_percentage","s": "shorts_percentage"}},
-        "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp","l": "liquidation_longs","s": "liquidation_shorts"}},
-        "funding_rate": {"endpoint": "funding-rate-history", "renames": { "t": "timestamp", "o":"fr_open", "h":"fr_high", "l":"fr_low", "c":"fr_close" }} #Funding rate directamente de la API
-    }
+    output_folder = os.path.join(OUTPUT_FOLDER, temporalidad)
+    os.makedirs(output_folder, exist_ok=True)
 
     for data_type, details in data_types.items():
         print(f"Fetching {data_type} in {temporalidad}...")
         symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
 
-        if data and isinstance(data, dict) and "history" in data:
-            history = data["history"]
-            if isinstance(history, list):
-                for item in history:
-                    try:
-                        timestamp = item["t"]
-                        dt_utc = datetime.fromtimestamp(timestamp, tz=pytz.utc)
-                        dt_local = dt_utc.astimezone(pytz.timezone('America/New_York'))
-                        formatted_time = dt_local.strftime("%Y-%m-%d %H:%M:%S")
+        if not data or not isinstance(data, dict) or "history" not in data or not isinstance(data["history"], list):
+            print(f"WARNING: Invalid data received for {data_type} in {temporalidad}. Skipping.")
+            continue # Salta a la siguiente iteración si los datos no son válidos
 
-                        all_data.setdefault(formatted_time, {}) # Crea el diccionario si no existe
+        history = data["history"]
+        all_data = {} # Se mueve la inicialización de all_data DENTRO del bucle de data_types
 
-                        for key, new_key in details["renames"].items():
-                            if key in item:
-                                all_data[formatted_time][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key]
+        for item in history:
+            try:
+                timestamp = item["t"]
+                dt_utc = datetime.fromtimestamp(timestamp, tz=pytz.utc)
+                dt_local = dt_utc.astimezone(pytz.timezone('America/New_York'))
+                formatted_time = dt_local.strftime("%Y-%m-%d %H:%M:%S")
 
-                    except KeyError as e:
-                        print(f"WARNING: Key {e} not found in data for {data_type} in {temporalidad}")
-            else:
-                print(f"WARNING: 'history' is not a list for {data_type} in {temporalidad}")
-        elif data:
-            print(f"WARNING: Data for {data_type} in {temporalidad} is not a dictionary or does not contain 'history'")
-            print(data)
+                all_data.setdefault(formatted_time, {})
+
+                for key, new_key in details["renames"].items():
+                    if key in item:
+                        all_data[formatted_time][f"{data_type}_{new_key}_{SYMBOLS['perpetuos'] if data_type == 'funding_rate' else (SYMBOLS['perpetuos'] if data_type == 'ohlcv' else '')}"] = item[key]
+
+            except KeyError as e:
+                print(f"WARNING: Key {e} not found in data for {data_type} in {temporalidad}")
+
+        if all_data: # Se guarda el CSV INMEDIATAMENTE después de procesar cada data_type
+            df = pd.DataFrame.from_dict(all_data, orient='index')
+            df.index.name = "fecha_hora"
+            df = df.sort_index()
+
+            try:
+                df.to_csv(os.path.join(output_folder, f"{data_type}_{temporalidad}.csv")) # Nombre del archivo incluye el tipo de dato
+                print(f"Data for {data_type} saved to {output_folder}/{data_type}_{temporalidad}.csv")
+            except Exception as e:
+                print(f"ERROR saving CSV for {data_type}: {e}")
+                print(f"Directorio de trabajo: {os.getcwd()}")
         else:
-            print(f"WARNING: No data received for {data_type} in {temporalidad}")
+            print(f"No data to save for {data_type} in {temporalidad}")
 
-    if all_data: # Solo si hay datos se crea el DataFrame y se guarda el CSV
-        df = pd.DataFrame.from_dict(all_data, orient='index')
-        df.index.name = "fecha_hora"
-        df = df.sort_index()
-
-        output_folder = os.path.join(OUTPUT_FOLDER, temporalidad)
-        os.makedirs(output_folder, exist_ok=True)
-
-        try:
-            df.to_csv(os.path.join(output_folder, f"datos_{temporalidad}.csv"))
-            print(f"Data saved to {output_folder}/datos_{temporalidad}.csv")
-        except Exception as e:
-            print(f"ERROR saving CSV: {e}")
-            print(f"Directorio de trabajo: {os.getcwd()}")
-    else: # Mensaje si no hay datos para guardar
-        print(f"No data to save for {temporalidad}")
     return None
 
 # Guardar datos
+data_types = { # Se define data_types globalmente para que este disponible en procesar_datos
+    "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp","o": "open","h": "high","l": "low","c": "close","v": "volume","bv": "buy_volume"}},
+    "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp","o": "oi_open","h": "oi_high","l": "oi_low","c": "oi_close"}},
+    "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp","r": "long_short_ratio","l": "longs_percentage","s": "shorts_percentage"}},
+    "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp","l": "liquidation_longs","s": "liquidation_shorts"}},
+    "funding_rate": {"endpoint": "funding-rate-history", "renames": { "t": "timestamp", "o":"fr_open", "h":"fr_high", "l":"fr_low", "c":"fr_close" }} #Funding rate directamente de la API
+}
 for temporalidad in TEMPORALIDADES:
     print(f"Processing {temporalidad}...")
     procesar_datos(temporalidad)
