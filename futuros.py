@@ -28,7 +28,7 @@ TEMPORALIDAD_SEGUNDOS = {
 
 # Función para calcular el rango de timestamps
 def calcular_rango_temporalidad(temporalidad, velas):
-    ahora = int(time.time()) # Usar time.time() para consistencia
+    ahora = int(time.time())  # Usar time.time() para consistencia
     desde = ahora - (velas * TEMPORALIDAD_SEGUNDOS[temporalidad])
     return desde, ahora
 
@@ -53,7 +53,7 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
             print(f"Intento {attempt + 1}/{max_retries} fallido: {e}")
             try:
                 print(f"Respuesta del servidor: {response.text}")
-            except AttributeError: #Manejo por si response no existe
+            except AttributeError:  # Manejo por si response no existe
                 pass
             if attempt < max_retries - 1:
                 time.sleep(5)  # Esperar 5 segundos antes de reintentar
@@ -69,21 +69,24 @@ def procesar_datos(temporalidad):
     all_data = {}
 
     data_types = {
-        "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp","o": "open","h": "high","l": "low","c": "close","v": "volume","bv": "buy_volume"}},
-        "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp","o": "oi_open","h": "oi_high","l": "oi_low","c": "oi_close"}},
-        "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp","r": "long_short_ratio","l": "longs_percentage","s": "shorts_percentage"}},
-        "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp","l": "liquidation_longs","s": "liquidation_shorts"}},
-        "funding_rate": {"endpoint": "funding-rate-history", "renames": { "t": "timestamp", "o":"fr_open", "h":"fr_high", "l":"fr_low", "c":"fr_close" }} #Funding rate directamente de la API
+        "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "bv": "buy_volume"}},
+        "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp", "o": "oi_open", "h": "oi_high", "l": "oi_low", "c": "oi_close"}},
+        "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp", "r": "long_short_ratio", "l": "longs_percentage", "s": "shorts_percentage"}},
+        "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp", "l": "liquidation_longs", "s": "liquidation_shorts"}},
+        "funding_rate": {"endpoint": "funding-rate-history", "renames": {"t": "timestamp", "o": "fr_open", "h": "fr_high", "l": "fr_low", "c": "fr_close"}}  # Funding rate directamente de la API
     }
 
     # Solo necesitamos los datos de OHLCV para alinear las fechas
     ohlcv_data = fetch_data(data_types["ohlcv"]["endpoint"], SYMBOLS["perpetuos"], temporalidad, desde, hasta)
     
-    if ohlcv_data and isinstance(ohlcv_data, list):
-        for item in ohlcv_data:
-            timestamp = item["t"]
-            formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
-            all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+    if ohlcv_data and isinstance(ohlcv_data, dict) and "history" in ohlcv_data:
+        for item in ohlcv_data["history"]:
+            try:
+                timestamp = item["t"]
+                formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+            except KeyError as e:
+                print(f"Error al acceder al timestamp en item: {item}. Error: {e}")
 
     # Procesar los otros datos con el mismo timestamp
     for data_type, details in data_types.items():
@@ -94,13 +97,16 @@ def procesar_datos(temporalidad):
         symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
         data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
 
-        if data and isinstance(data, list):
-            for item in data:
-                timestamp = item["t"]
-                if timestamp in all_data:  # Solo añadir si ya tenemos el timestamp en los datos de ohlcv
-                    for key, new_key in details["renames"].items():
-                        if key in item:
-                            all_data[timestamp][new_key] = item[key]
+        if data and isinstance(data, dict) and "history" in data:
+            for item in data["history"]:
+                try:
+                    timestamp = item["t"]
+                    if timestamp in all_data:  # Solo añadir si ya tenemos el timestamp en los datos de ohlcv
+                        for key, new_key in details["renames"].items():
+                            if key in item:
+                                all_data[timestamp][new_key] = item[key]
+                except KeyError as e:
+                    print(f"Error al acceder al timestamp en item: {item}. Error: {e}")
 
     # Crear el DataFrame con los datos recopilados
     if all_data:
