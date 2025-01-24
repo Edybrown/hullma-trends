@@ -1,48 +1,52 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+# Verificar si las columnas necesarias existen
+required_columns = [
+    'funding_rate_fr_close_BTCUSDT_PERP.A',
+    'long_short_ratio_longs_percentage_BTCUSDT_PERP.A',
+    'long_short_ratio_shorts_percentage_BTCUSDT_PERP.A'
+]
 
-# Cargar datos
-df = pd.read_csv("coinalyze_data/datos_4hour.csv")
+if all(col in df.columns for col in required_columns):
+    # Calcular el desequilibrio (diferencia entre largos y cortos)
+    df['desequilibrio'] = df['long_short_ratio_longs_percentage_BTCUSDT_PERP.A'] - df['long_short_ratio_shorts_percentage_BTCUSDT_PERP.A']
+    
+    # Relación del desequilibrio con el funding rate (porcentaje relativo)
+    df['relacion_funding_desequilibrio'] = (df['desequilibrio'] / df['funding_rate_fr_close_BTCUSDT_PERP.A']).fillna(0)
+    
+    # Imprimir resultados iniciales
+    print("Análisis de funding rate y desequilibrio completado:")
+    print(df[['funding_rate_fr_close_BTCUSDT_PERP.A', 'desequilibrio', 'relacion_funding_desequilibrio']].head())
+    
+    # Opcional: Graficar los datos
+    import matplotlib.pyplot as plt
 
-# Convertir timestamp a datetime
-df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+    plt.figure(figsize=(12, 6))
+    
+    # Funding rate
+    plt.subplot(2, 1, 1)
+    plt.plot(df['funding_rate_fr_close_BTCUSDT_PERP.A'], label='Funding Rate (Cierre)', color='blue')
+    plt.title('Funding Rate (Cierre)')
+    plt.legend()
+    plt.grid()
 
-# Calcular el desequilibrio porcentual (longs - shorts)
-df['desequilibrio'] = df['long_short_ratio_long_percentage_BTCUSDT_PERP.A'] - df['long_short_ratio_short_percentage_BTCUSDT_PERP.A']
+    # Desequilibrio
+    plt.subplot(2, 1, 2)
+    plt.plot(df['desequilibrio'], label='Desequilibrio (Largos - Cortos)', color='green')
+    plt.title('Desequilibrio: Largos vs Cortos')
+    plt.legend()
+    plt.grid()
 
-# Funding rate mensualizado
-# Número de períodos mensuales, considerando un funding rate cada 8 horas
-periodos_mensuales = 24 * 30 / 8
-df['funding_rate_mensual'] = df['funding_rate_fr_close_BTCUSDT_PERP.A'] * periodos_mensuales
+    plt.tight_layout()
+    plt.show()
+else:
+    print("Una o más columnas necesarias no están presentes en el DataFrame.")
+    print("Columnas disponibles:", df.columns)
 
-# Comparar el desequilibrio porcentual con el funding rate mensualizado
-df['diferencia_porcentual'] = (df['desequilibrio'] - df['funding_rate_mensual']) / df['funding_rate_mensual'] * 100
+correlacion = df['funding_rate_fr_close_BTCUSDT_PERP.A'].corr(df['desequilibrio'])
+print(f"Correlación entre el funding rate y el desequilibrio: {correlacion}")
 
-# Visualización: Desequilibrio vs Funding Rate
-plt.figure(figsize=(12, 6))
-plt.plot(df['fecha_hora'], df['desequilibrio'], label="Desequilibrio (%)")
-plt.plot(df['fecha_hora'], df['funding_rate_mensual'], label="Funding Rate Mensualizado (%)")
-plt.legend()
-plt.title("Comparación entre Desequilibrio y Funding Rate Mensualizado")
-plt.xlabel("Fecha")
-plt.ylabel("Porcentaje")
-plt.grid()
-plt.show()
+df['fecha'] = pd.to_datetime(df['long_short_ratio_timestamp_BTCUSDT_PERP.A'])
+df.set_index('fecha', inplace=True)
 
-# Visualización: Diferencia porcentual
-plt.figure(figsize=(12, 6))
-plt.plot(df['fecha_hora'], df['diferencia_porcentual'], label="Diferencia Porcentual (%)", color="red")
-plt.legend()
-plt.title("Diferencia Porcentual entre Desequilibrio y Funding Rate")
-plt.xlabel("Fecha")
-plt.ylabel("Diferencia Porcentual (%)")
-plt.grid()
-plt.show()
-
-
-plt.savefig("grafico_desequilibrio_vs_funding_rate.png")
-
-# Correlación entre desequilibrio y funding rate mensualizado
-correlation = df[['desequilibrio', 'funding_rate_mensual']].corr()
-print("Correlación entre Desequilibrio y Funding Rate Mensualizado:")
-print(correlation)
+# Agrupar por mes
+resumen_mensual = df.resample('M').mean()
+print(resumen_mensual[['funding_rate_fr_close_BTCUSDT_PERP.A', 'desequilibrio']])
