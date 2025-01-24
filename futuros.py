@@ -70,53 +70,62 @@ def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert
     return None
 
 
-def procesar_datos(temporalidad, data_types):
-    desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
-    output_folder = os.path.join(OUTPUT_FOLDER, temporalidad)
-    os.makedirs(output_folder, exist_ok=True)
+def procesar_datos(data_types):
+    output_folder = OUTPUT_FOLDER
+    os.makedirs(output_folder, exist_ok=True)  # Creamos la carpeta principal de salida
 
-    for data_type, details in data_types.items():
-        data = fetch_data(details["endpoint"], SYMBOL_PERPETUOS, temporalidad, desde, hasta)
+    for temporalidad in TEMPORALIDADES:
+        print(f"Procesando datos para la temporalidad {temporalidad}...")
 
-        if not data:
-            print(f"WARNING: No data received for {data_type} in {temporalidad}. Skipping.")
-            continue
+        for data_type, details in data_types.items():
+            desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
+            print(f"  - Obteniendo datos para {data_type}...")
 
-        try:
-            # Verifica que los datos recibidos contienen la clave "history" y que no está vacía
-            if "history" not in data or not data["history"]:
-                print(f"WARNING: No 'history' data found for {data_type} in {temporalidad}. Skipping.")
+            # Obtener los datos de la API
+            data = fetch_data(details["endpoint"], SYMBOL_PERPETUOS, temporalidad, desde, hasta)
+
+            if not data:
+                print(f"    WARNING: No se recibieron datos para {data_type} en {temporalidad}. Saltando.")
                 continue
 
-            # Crear el DataFrame a partir de la respuesta
-            df = pd.DataFrame(data["history"])
+            try:
+                # Verificar que los datos recibidos contienen la clave "history" y que no está vacía
+                if "history" not in data or not data["history"]:
+                    print(f"    WARNING: No se encontraron datos en 'history' para {data_type} en {temporalidad}. Saltando.")
+                    continue
 
-            # Verificar que la columna 't' existe antes de convertirla
-            if "t" not in df.columns:
-                print(f"ERROR: La columna 't' no está presente en los datos de {data_type} en {temporalidad}.")
-                continue
+                # Crear el DataFrame a partir de la respuesta
+                df = pd.DataFrame(data["history"])
 
-            # Convertir el timestamp y establecer como índice
-            df["timestamp"] = pd.to_datetime(df["t"], unit="s", utc=True).dt.tz_convert('America/New_York')
-            df.set_index("timestamp", inplace=True)
+                # Verificar que la columna 't' existe antes de convertirla
+                if "t" not in df.columns:
+                    print(f"    ERROR: La columna 't' no está presente en los datos de {data_type} en {temporalidad}.")
+                    continue
 
-            # Renombrar las columnas según la configuración proporcionada
-            df.rename(columns=details["renames"], inplace=True)
+                # Convertir el timestamp y establecer como índice
+                df["timestamp"] = pd.to_datetime(df["t"], unit="s", utc=True).dt.tz_convert('America/New_York')
+                df.set_index("timestamp", inplace=True)
 
-            # Guardar el DataFrame como archivo CSV
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # Para dar nombres únicos
-            file_name = f"{data_type}_{temporalidad}_{timestamp_str}.csv"
-            file_path = os.path.join(output_folder, file_name)
-            df.to_csv(file_path)
+                # Renombrar las columnas según la configuración proporcionada
+                df.rename(columns=details["renames"], inplace=True)
 
-            print(f"Datos guardados para {data_type} en {temporalidad}. Archivo: {file_name}")
-        
-        except (KeyError, ValueError, pd.errors.EmptyDataError) as e:
-            print(f"Error al procesar/guardar datos para {data_type} en {temporalidad}: {e}")
-            if data and "history" in data:
-                print(f"Ejemplo de datos recibidos: {data['history'][:5]}")  # Imprime los primeros 5 elementos
-            elif data:
-                print(f"Datos recibidos: {data}")
+                # Crear el nombre de archivo corto
+                file_name = f"datos_{temporalidad}.csv"
+                file_path = os.path.join(output_folder, file_name)
 
-        except Exception as e:
-            print(f"Error inesperado al procesar/guardar datos para {data_type} en {temporalidad}: {e}")
+                # Guardar el DataFrame como archivo CSV
+                df.to_csv(file_path)
+
+                print(f"    Datos guardados exitosamente para {data_type} en {temporalidad}. Archivo: {file_name}")
+
+            except (KeyError, ValueError, pd.errors.EmptyDataError) as e:
+                print(f"    ERROR al procesar/guardar datos para {data_type} en {temporalidad}: {e}")
+                if data and "history" in data:
+                    print(f"    Ejemplo de datos recibidos: {data['history'][:5]}")  # Imprime los primeros 5 elementos
+                elif data:
+                    print(f"    Datos recibidos: {data}")
+
+            except Exception as e:
+                print(f"    ERROR inesperado al procesar/guardar datos para {data_type} en {temporalidad}: {e}")
+
+    print("Proceso completado.")
