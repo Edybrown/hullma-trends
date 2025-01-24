@@ -39,6 +39,9 @@ plt.ylabel("Diferencia Porcentual (%)")
 plt.grid()
 plt.show()
 
+
+plt.savefig("grafico_desequilibrio_vs_funding_rate.png")
+
 # Correlación entre desequilibrio y funding rate mensualizado
 correlation = df[['desequilibrio', 'funding_rate_mensual']].corr()
 print("Correlación entre Desequilibrio y Funding Rate Mensualizado:")
