@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Cargar datos
-df = pd.read_csv("coinalyze_data/datos_combined.csv")
+df = pd.read_csv("coinalyze_data/datos_4hour.csv")
 
 # Convertir timestamp a datetime
 df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
