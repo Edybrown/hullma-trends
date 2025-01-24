@@ -26,13 +26,13 @@ TEMPORALIDAD_SEGUNDOS = {
     "daily": 86400
 }
 
-
+# Función para calcular los rangos de tiempo
 def calcular_rango_temporalidad(temporalidad, velas):
     ahora = int(time.time())
     desde = ahora - (velas * TEMPORALIDAD_SEGUNDOS[temporalidad])
     return desde, ahora
 
-
+# Función para obtener datos de la API
 def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert_to_usd="false"):
     params = {
         "api_key": API_KEY,
@@ -43,11 +43,13 @@ def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert
         "convert_to_usd": convert_to_usd
     }
     url = f"{BASE_URL}{endpoint}"
+    print(f"Obteniendo datos de {url}...")  # Mensaje de depuración
 
     for attempt in range(MAX_RETRIES):
         try:
             response = requests.get(url, params=params, timeout=TIMEOUT)
             response.raise_for_status()
+            print(f"    Respuesta recibida de la API con código {response.status_code}")  # Depuración de estado
 
             try:
                 data = response.json()
@@ -69,10 +71,10 @@ def fetch_data(endpoint, symbol, interval, from_timestamp, to_timestamp, convert
     print(f"Fallo después de {MAX_RETRIES} intentos para {endpoint} ({interval})")
     return None
 
-
+# Función para procesar y guardar los datos
 def procesar_datos(data_types):
     output_folder = OUTPUT_FOLDER
-    os.makedirs(output_folder, exist_ok=True)  # Creamos la carpeta principal de salida
+    os.makedirs(output_folder, exist_ok=True)  # Crear la carpeta de salida
 
     for temporalidad in TEMPORALIDADES:
         print(f"Procesando datos para la temporalidad {temporalidad}...")
@@ -115,7 +117,6 @@ def procesar_datos(data_types):
 
                 # Guardar el DataFrame como archivo CSV
                 df.to_csv(file_path)
-
                 print(f"    Datos guardados exitosamente para {data_type} en {temporalidad}. Archivo: {file_name}")
 
             except (KeyError, ValueError, pd.errors.EmptyDataError) as e:
@@ -129,3 +130,30 @@ def procesar_datos(data_types):
                 print(f"    ERROR inesperado al procesar/guardar datos para {data_type} en {temporalidad}: {e}")
 
     print("Proceso completado.")
+
+# Diccionario con los tipos de datos a obtener y los detalles
+data_types = {
+    "ohlcv": {
+        "endpoint": "ohlcv",
+        "renames": {
+            "t": "timestamp",
+            "o": "open",
+            "h": "high",
+            "l": "low",
+            "c": "close",
+            "v": "volume"
+        }
+    },
+    "open_interest": {
+        "endpoint": "open_interest",
+        "renames": {
+            "t": "timestamp",
+            "oi": "open_interest"
+        }
+    }
+}
+
+# Ejecutar el proceso
+if __name__ == "__main__":
+    print("Iniciando el proceso...")
+    procesar_datos(data_types)
