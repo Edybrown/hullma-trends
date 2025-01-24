@@ -19,7 +19,7 @@ OUTPUT_FOLDER = "datos_futuros"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # Fechas para obtener 2000 velas por temporalidad
-VELAS = 1000
+VELAS = 2000
 TEMPORALIDAD_SEGUNDOS = {
     "1hour": 3600,
     "4hour": 14400,
@@ -60,7 +60,7 @@ def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, conver
         except json.JSONDecodeError as e:
             print(f"Error al decodificar JSON: {e}. Respuesta: {response.text}")
             return None
-    print(f"Fallo después de {max_retries} reintentos para {url}.")
+    print(f"Fallo después de {max_reintentos} reintentos para {url}.")
     return None
 
 # Procesar cada tipo de dato (con manejo de múltiples símbolos)
