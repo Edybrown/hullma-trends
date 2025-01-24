@@ -19,7 +19,7 @@ OUTPUT_FOLDER = "datos_futuros"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # Fechas para obtener 2000 velas por temporalidad
-VELAS = 1500
+VELAS = 1000
 TEMPORALIDAD_SEGUNDOS = {
     "1hour": 3600,
     "4hour": 14400,
