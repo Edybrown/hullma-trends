@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 
 # Cargar el archivo CSV (asegúrate de reemplazar 'tu_archivo.csv' con la ruta de tu archivo)
 carpeta = 'coinalyze_data'
