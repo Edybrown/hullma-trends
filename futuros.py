@@ -20,7 +20,7 @@ OUTPUT_FOLDER = "coinalyze_data"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # Fechas para obtener 2000 velas por temporalidad
-VELAS = 2000
+VELAS = 1500
 TEMPORALIDAD_SEGUNDOS = {
     "1hour": 3600,
     "4hour": 14400,
