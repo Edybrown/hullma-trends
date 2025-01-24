@@ -72,8 +72,9 @@ def process_data(timeframe):
         print(f"Fetching {data_type} for {timeframe}...")
         data = fetch_data(details["endpoint"], SYMBOLS["perpetuos"], timeframe, from_timestamp, to_timestamp)
 
-        if data and isinstance(data, dict) and "history" in data:
-            for item in data["history"]:
+        if data and isinstance(data, list) and len(data) > 0 and "history" in data[0]:
+            history = data[0]["history"]
+            for item in history:
                 try:
                     timestamp = item["t"]
                     if timestamp not in all_data:
@@ -85,7 +86,7 @@ def process_data(timeframe):
                         if key in item:
                             all_data[timestamp][new_key] = item[key]
                 except KeyError as e:
-                    print(f"Error accessing timestamp in item: {item}. Error: {e}")
+                    print(f"Error accessing data in item: {item}. Error: {e}")
         else:
             print(f"No valid data received for {data_type} in {timeframe}")
 
