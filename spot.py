@@ -2,22 +2,31 @@ import requests
 import time
 import json
 
-API_KEY = "TU_API_KEY"  # Reemplaza con tu clave API real
-SYMBOLS = "BTCUSDT.A"  # Símbolo correcto para perpetuos
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
+SYMBOLS = "BTCUSDT_PERP.A"
 INTERVAL = "1hour"
 LIMIT = 1
 
-# Calcula los timestamps 'from' y 'to' (ejemplo: última hora)
 to_timestamp = int(time.time())
-from_timestamp = to_timestamp - 3600  # Una hora atrás
+from_timestamp = to_timestamp - 3600
 
 ENDPOINT = "ohlcv-history"
 BASE_URL = "https://api.coinalyze.net/v1/"
 
-url = f"{BASE_URL}{ENDPOINT}?api_key={API_KEY}&symbols={SYMBOLS}&interval={INTERVAL}&from={from_timestamp}&to={to_timestamp}&limit={LIMIT}"
+# Construcción de la URL CON la clave API
+url = f"{BASE_URL}{ENDPOINT}?api_key={API_KEY}"
+
+# Construcción de los otros parámetros en un diccionario
+params = {
+    "symbols": SYMBOLS,
+    "interval": INTERVAL,
+    "from": from_timestamp,
+    "to": to_timestamp,
+    "limit": LIMIT
+}
 
 try:
-    response = requests.get(url)
+    response = requests.get(url, params=params)  # params para los demás parámetros
     response.raise_for_status()
 
     print(f"Conexión exitosa. Código de estado: {response.status_code}")
@@ -32,7 +41,6 @@ try:
         print(json.dumps(data, indent=4))
     else:
         print("La respuesta no contiene datos history o no es un diccionario.")
-
 
 except requests.exceptions.RequestException as e:
     print(f"Error en la solicitud: {e}")
