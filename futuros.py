@@ -1,113 +1,70 @@
 import requests
-import os
 import pandas as pd
-from datetime import datetime
-import json
 import time
 
-# Parámetros generales
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu API Key real
-BASE_URL = "https://api.coinalyze.net/v1/"
-SYMBOLS = {
-    "spot": "BTCUSDT.A",
-    "perpetuos": "BTCUSDT_PERP.A"
-}
-TEMPORALIDADES = ["1hour", "4hour", "daily"]
-OUTPUT_FOLDER = "coinalyze_data"
+# Definir la API Key y el endpoint base
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
+BASE_URL = "https://api.coinalyze.net/v1/ohlcv-history"
 
-# Configuración del retraso entre solicitudes
-DELAY_BETWEEN_REQUESTS = 2  # Retraso en segundos entre cada petición
+# Función para realizar la solicitud a la API
+def fetch_data(symbol, interval, start, end):
+    url = f"{BASE_URL}?symbols={symbol}&interval={interval}&from={start}&to={end}&apikey={API_KEY}"
+    response = requests.get(url)
+    response.raise_for_status()  # Lanza un error si hay problemas con la solicitud
+    return response.json()
 
-# Crear la carpeta de salida si no existe
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+# Función para procesar las temporalidades
+def process_intervals():
+    symbol = "BTCUSDT.A"
+    intervals = ["1hour", "4hour", "daily"]  # Temporalidades deseadas
+    max_candles = 2000  # Número máximo de velas
+    current_time = int(time.time())  # Tiempo actual en segundos
+    
+    # Crear un archivo Excel para guardar los datos
+    writer = pd.ExcelWriter("BTCUSDT_OHLCV.xlsx", engine="xlsxwriter")
 
-# Fechas para obtener 2000 velas por temporalidad
-VELAS = 2000
-TEMPORALIDAD_SEGUNDOS = {
-    "1hour": 3600,
-    "4hour": 14400,
-    "daily": 86400
-}
+    for interval in intervals:
+        # Determinar el tiempo inicial basado en la cantidad máxima de velas
+        if interval == "1hour":
+            start_time = current_time - (3600 * max_candles)
+        elif interval == "4hour":
+            start_time = current_time - (3600 * 4 * max_candles)
+        elif interval == "daily":
+            start_time = current_time - (86400 * max_candles)
 
-# Función para calcular el rango de timestamps
-def calcular_rango_temporalidad(temporalidad, velas):
-    ahora = int(time.time())  # Usar time.time() para consistencia
-    desde = ahora - (velas * TEMPORALIDAD_SEGUNDOS[temporalidad])
-    return desde, ahora
-
-# Función para hacer solicitudes a la API con manejo de errores mejorado y reintentos
-def fetch_data(endpoint, symbols, interval, from_timestamp, to_timestamp, convert_to_usd="false", max_retries=3):
-    params = {
-        "api_key": API_KEY,
-        "symbols": symbols,
-        "interval": interval,
-        "from": from_timestamp,
-        "to": to_timestamp,
-        "convert_to_usd": convert_to_usd
-    }
-    url = f"{BASE_URL}{endpoint}"
-    for attempt in range(max_retries):
+        # Llamar a la API para obtener los datos
         try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()  # Lanza una excepción para códigos de estado HTTP erróneos (4xx o 5xx)
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Intento {attempt + 1}/{max_retries} fallido: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(5)  # Esperar 5 segundos antes de reintentar
-    print(f"Fallo después de {max_retries} reintentos para {url}.")
-    return None
+            data = fetch_data(symbol, interval, start_time, current_time)
+            history = data[0]["history"]
 
-# Procesar cada tipo de dato (con manejo de múltiples símbolos)
-def procesar_datos(temporalidad):
-    desde, hasta = calcular_rango_temporalidad(temporalidad, VELAS)
-    all_data = {}
+            # Convertir los datos en un DataFrame
+            df = pd.DataFrame(history)
+            df["t"] = pd.to_datetime(df["t"], unit="s")  # Convertir timestamp a fecha
+            df.rename(
+                columns={
+                    "t": "Timestamp",
+                    "o": "Open",
+                    "h": "High",
+                    "l": "Low",
+                    "c": "Close",
+                    "v": "Total Volume",
+                    "bv": "Buy Volume",
+                    "tx": "Total Trades",
+                    "btx": "Buy Trades",
+                },
+                inplace=True,
+            )
 
-    data_types = {
-        "ohlcv": {"endpoint": "ohlcv-history", "renames": {"t": "timestamp", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "bv": "buy_volume"}},
-        "open_interest": {"endpoint": "open-interest-history", "renames": {"t": "timestamp", "o": "oi_open", "h": "oi_high", "l": "oi_low", "c": "oi_close"}},
-        "long_short_ratio": {"endpoint": "long-short-ratio-history", "renames": {"t": "timestamp", "r": "long_short_ratio", "l": "longs_percentage", "s": "shorts_percentage"}},
-        "liquidation": {"endpoint": "liquidation-history", "renames": {"t": "timestamp", "l": "liquidation_longs", "s": "liquidation_shorts"}},
-        "funding_rate": {"endpoint": "funding-rate-history", "renames": {"t": "timestamp", "o": "fr_open", "h": "fr_high", "l": "fr_low", "c": "fr_close"}}  # Funding rate directamente de la API
-    }
+            # Guardar los datos en una hoja de Excel
+            df.to_excel(writer, sheet_name=interval, index=False)
 
-    for data_type, details in data_types.items():
-        print(f"Fetching {data_type} in {temporalidad}...")
-        symbols_to_fetch = ",".join(SYMBOLS.values()) if data_type != "ohlcv" else SYMBOLS["perpetuos"]
-        data = fetch_data(details["endpoint"], symbols_to_fetch, temporalidad, desde, hasta)
+        except Exception as e:
+            print(f"Error al procesar el intervalo {interval}: {e}")
 
-        if data and isinstance(data, list):
-            for item in data:
-                symbol = item.get("symbol", "unknown")  # Para identificar el símbolo en los datos
-                history = item.get("history", [])  # Obtener el historial
-                for record in history:
-                    timestamp = record.get("t")
-                    if timestamp is not None:
-                        dt_object = datetime.fromtimestamp(timestamp)
-                        formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
-                        if timestamp not in all_data:
-                            all_data[timestamp] = {"fecha_hora": formatted_time, "temporalidad": temporalidad}
+    # Guardar el archivo Excel
+    writer.close()
+    print("Archivo BTCUSDT_OHLCV.xlsx creado con éxito.")
 
-                        for key, new_key in details["renames"].items():
-                            if key in record:
-                                all_data[timestamp][f"{data_type}_{new_key}_{symbol}"] = record[key]
-
-        # Añadir retraso entre peticiones
-        time.sleep(DELAY_BETWEEN_REQUESTS)
-
-    # Guardar los datos en un archivo CSV específico de la temporalidad
-    if all_data:
-        final_df = pd.DataFrame.from_dict(all_data, orient='index')
-        final_df = final_df.sort_values(by="fecha_hora")
-
-        # Nombre del archivo basado en la temporalidad
-        file_name = os.path.join(OUTPUT_FOLDER, f"datos_{temporalidad}.csv")
-        final_df.to_csv(file_name, index=False)
-        print(f"Data for {temporalidad} saved to {file_name}")
-    else:
-        print(f"No data fetched for {temporalidad}.")
-
-# Guardar datos por temporalidad
-for temporalidad in TEMPORALIDADES:
-    print(f"Processing {temporalidad}...")
-    procesar_datos(temporalidad)
+# Ejecutar la función principal
+if __name__ == "__main__":
+    process_intervals()
