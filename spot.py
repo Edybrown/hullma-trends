@@ -1,75 +1,72 @@
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
+import time
 
-# Configuración de la API
+# Definir la API Key y el endpoint base
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu API Key
 BASE_URL = "https://api.coinalyze.net/v1/ohlcv-history"
-SYMBOL = "BTCUSDT.A"  # Par para spot en Coinalyze
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Reemplaza con tu clave API si es necesario
 
-# Función para obtener datos de OHLCV
-def get_ohlcv(symbol, interval, num_candles):
-    # Calcular timestamps (retrocedemos el tiempo necesario para obtener 2000 velas)
-    end_time = int(datetime.now().timestamp())  # Ahora
-    start_time = end_time - num_candles * interval_to_seconds(interval)  # Inicio
+# Función para realizar la solicitud a la API
+def fetch_data(symbol, interval, start, end):
+    url = f"{BASE_URL}?symbols={symbol}&interval={interval}&from={start}&to={end}&apikey={API_KEY}"
+    response = requests.get(url)
+    response.raise_for_status()  # Lanza un error si hay problemas con la solicitud
+    return response.json()
 
-    # Parámetros para la API
-    params = {
-        "symbols": symbol,
-        "interval": interval,
-        "from": start_time,
-        "to": end_time
-    }
-
-    # Solicitar datos a la API
-    response = requests.get(BASE_URL, params=params)
-    if response.status_code == 200:
-        data = response.json()
-        ohlcv_data = data[0]["history"]  # Datos OHLCV
-        return pd.DataFrame(ohlcv_data)
-    else:
-        print(f"Error {response.status_code}: {response.text}")
-        return None
-
-# Función para convertir intervalos a segundos
-def interval_to_seconds(interval):
-    intervals = {
-        "1hour": 3600,
-        "4hour": 14400,
-        "daily": 86400
-    }
-    return intervals.get(interval, 0)
-
-# Procesar datos para cada temporalidad
+# Función para procesar las temporalidades
 def process_intervals():
-    intervals = ["1hour", "4hour", "daily"]
-    writer = pd.ExcelWriter("BTCUSDT_OHLCV.xlsx", engine="xlsxwriter")  # Crear archivo Excel
+    symbol = "BTCUSDT.A"  # Símbolo para la solicitud
+    intervals = ["1hour", "4hour", "daily"]  # Temporalidades deseadas
+    max_candles = 2000  # Número máximo de velas
+    current_time = int(time.time())  # Tiempo actual en segundos
+    
+    # Crear un archivo Excel para guardar los datos
+    writer = pd.ExcelWriter("BTCUSDT_OHLCV.xlsx", engine="xlsxwriter")
 
     for interval in intervals:
-        print(f"Obteniendo datos para {interval}...")
-        df = get_ohlcv(SYMBOL, interval, 2000)  # Obtener 2000 velas
-        if df is not None:
-            # Convertir timestamp y renombrar columnas
-            df["t"] = pd.to_datetime(df["t"], unit="s")
-            df.rename(columns={
-                "t": "Time",
-                "o": "Open",
-                "h": "High",
-                "l": "Low",
-                "c": "Close",
-                "v": "Volume",
-                "bv": "Buy Volume",
-                "tx": "Total Trades",
-                "btx": "Buy Trades"
-            }, inplace=True)
+        # Determinar el tiempo inicial basado en la cantidad máxima de velas
+        if interval == "1hour":
+            start_time = current_time - (3600 * max_candles)
+        elif interval == "4hour":
+            start_time = current_time - (3600 * 4 * max_candles)
+        elif interval == "daily":
+            start_time = current_time - (86400 * max_candles)
 
-            # Guardar en una hoja del Excel
+        # Llamar a la API para obtener los datos
+        try:
+            print(f"Solicitando datos para {interval}...")
+            data = fetch_data(symbol, interval, start_time, current_time)
+            history = data[0]["history"]
+
+            # Convertir los datos en un DataFrame
+            df = pd.DataFrame(history)
+            df["t"] = pd.to_datetime(df["t"], unit="s")  # Convertir timestamp a fecha
+            df.rename(
+                columns={
+                    "t": "Timestamp",
+                    "o": "Open",
+                    "h": "High",
+                    "l": "Low",
+                    "c": "Close",
+                    "v": "Total Volume",
+                    "bv": "Buy Volume",
+                    "tx": "Total Trades",
+                    "btx": "Buy Trades",
+                },
+                inplace=True,
+            )
+
+            # Guardar los datos en una hoja de Excel
             df.to_excel(writer, sheet_name=interval, index=False)
-            print(f"Datos de {interval} guardados.")
+            print(f"Datos para {interval} guardados con éxito.")
 
-    writer.save()
-    print("Archivo Excel creado: BTCUSDT_OHLCV.xlsx")
+        except Exception as e:
+            print(f"Error al procesar el intervalo {interval}: {e}")
+
+    # Guardar el archivo Excel
+    writer.close()
+    print("Archivo BTCUSDT_OHLCV.xlsx creado con éxito.")
 
 # Ejecutar la función principal
-process_intervals()
- 
+if __name__ == "__main__":
+    process_intervals()
