@@ -40,7 +40,13 @@ def get_date_range(interval, num_candles=2000):
         days = num_candles / 24  # Convertimos en días (suponiendo que sean velas de 1 hora)
 
     from_date = now - timedelta(days=days)
-    return int(from_date.timestamp()), int(now.timestamp())
+    
+    # Convertimos las fechas a marcas de tiempo UNIX (en segundos)
+    from_timestamp = int(from_date.timestamp())  # Convierte a int64
+    to_timestamp = int(now.timestamp())  # Convierte a int64
+    
+    return from_timestamp, to_timestamp
+
 
 def get_ohlcv_data(symbol, interval):
     logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval})")
