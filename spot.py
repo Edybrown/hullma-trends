@@ -5,20 +5,13 @@ import openpyxl
 import logging
 
 # Configuración del logging
-logging.basicConfig(
-    level=logging.INFO,  # Cambiar a DEBUG para más detalles
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("coinalyze_data.log"),
-        logging.StreamHandler()  # Agrega salida a la consola
-    ]
-)
+logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡Reemplaza esto con tu clave válida!
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
 SYMBOL = "BTCUSDT_PERP.A"
 INTERVALS = ["4hour", "1hour", "daily"]
 LIMIT = 2000
-
 
 def get_ohlcv_data(symbol, interval, limit):
     logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval}) con límite {limit}")
@@ -43,18 +36,29 @@ def get_ohlcv_data(symbol, interval, limit):
     try:
         response = requests.get(base_url, params=params)
         response.raise_for_status()
+        print(f"Conexión exitosa: {response.status_code}")  # Confirmación de conexión en consola
+        logging.info(f"Conexión exitosa para {symbol} ({interval})")
+        
         data = response.json()
-        if isinstance(data, list) and len(data) > 0:
-            logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval})")
-            return data
+
+        # Verifica que "history" está presente dentro de la respuesta
+        if "history" in data:
+            history = data["history"]
+            if isinstance(history, list):
+                logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval})")
+                return history
+            else:
+                logging.warning(f"Estructura de 'history' inesperada: {history}")
+                return None
         else:
-            logging.warning(f"Respuesta vacía o inesperada para {symbol} ({interval}): {data}")
+            logging.warning(f"Respuesta sin 'history' para {symbol} ({interval}): {data}")
             return None
+
+    except json.JSONDecodeError as e:
+        logging.error(f"Error al decodificar JSON para {symbol} ({interval}): {e}")
+        return None
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud para {symbol} ({interval}): {e}")
-        return None
-    except json.JSONDecodeError as e:
-        logging.error(f"Error al decodificar JSON: {e}")
         return None
 
 
@@ -70,15 +74,15 @@ def save_to_excel(data, filename):
     if data:
         for item in data:
             row = [
-                item.get("t"),  # Asegúrate de que la clave sea correcta según la API
-                item.get("o"),
-                item.get("h"),
-                item.get("l"),
-                item.get("c"),
-                item.get("v"),
-                item.get("bv"),
-                item.get("tx"),
-                item.get("btx"),
+                item.get("t"),  # Timestamp
+                item.get("o"),  # Open
+                item.get("h"),  # High
+                item.get("l"),  # Low
+                item.get("c"),  # Close
+                item.get("v"),  # Volume
+                item.get("bv"), # Base Volume
+                item.get("tx"), # Transactions
+                item.get("btx") # Base Transactions
             ]
             sheet.append(row)
     else:
@@ -90,22 +94,19 @@ def save_to_excel(data, filename):
     except Exception as e:
         logging.error(f"Error al guardar el archivo Excel: {e}")
 
-
 # Ejecución principal
-if __name__ == "__main__":
-    all_data = {}
-    for interval in INTERVALS:
-        ohlcv_data = get_ohlcv_data(SYMBOL, interval, LIMIT)
-        if ohlcv_data:
-            all_data[interval] = ohlcv_data
-            # Mostrar los primeros 5 datos en consola como ejemplo
-            print(f"Primeros 5 datos para {interval}: {ohlcv_data[:5]}")
+all_data = {}
+for interval in INTERVALS:
+    ohlcv_data = get_ohlcv_data(SYMBOL, interval, LIMIT)
+    if ohlcv_data:
+        all_data[interval] = ohlcv_data
 
-    if all_data:
-        for interval, data in all_data.items():
-            filename = f"{SYMBOL}_{interval}_ohlcv.xlsx"
-            save_to_excel(data, filename)
-    else:
-        logging.warning("No se pudieron recuperar datos OHLCV para ningún intervalo.")
+if all_data:
+    for interval, data in all_data.items():
+        filename = f"{SYMBOL}_{interval}_ohlcv.xlsx"
+        save_to_excel(data, filename)
+else:
+    logging.warning("No se pudieron recuperar datos OHLCV para ningún intervalo.")
 
-    logging.info("Proceso completado.")
+logging.info("Proceso completado.")
+print("Proceso completado. Los datos se han guardado en archivos Excel.")
