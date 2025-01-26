@@ -18,7 +18,7 @@ console.setLevel(logging.DEBUG)
 logging.getLogger('').addHandler(console)
 
 API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Asegúrate de que esta sea tu API key correcta
-SYMBOL = "BTCUSDT.A"
+SYMBOL = "BTCUSDT.A"  # Corregido según la documentación
 INTERVALS = ["4hour", "1hour", "daily"]
 
 def get_date_range(interval):
@@ -52,17 +52,21 @@ def get_ohlcv_data(symbol, interval):
         logging.debug(f"Enviando solicitud a {base_url} con parámetros: {params}")
         response = requests.get(base_url, params=params)
         logging.debug(f"Código de estado de la respuesta: {response.status_code}")
+        logging.debug(f"Encabezados de la respuesta: {response.headers}")
         response.raise_for_status()
         
         data = response.json()
         logging.debug(f"Estructura de datos recibidos: {json.dumps(data, indent=2)}")
         
-        if isinstance(data, list) and len(data) > 0 and 'history' in data[0]:
-            logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval}). Total de registros: {len(data[0]['history'])}")
-            return data[0]['history']
+        if isinstance(data, list) and len(data) > 0:
+            if 'history' in data[0]:
+                logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval}). Total de registros: {len(data[0]['history'])}")
+                return data[0]['history']
+            else:
+                logging.warning(f"La respuesta no contiene el campo 'history' para {symbol} ({interval}): {data}")
         else:
             logging.warning(f"Estructura de respuesta inesperada para {symbol} ({interval}): {data}")
-            return None
+        return None
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud para {symbol} ({interval}): {e}")
