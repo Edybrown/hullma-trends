@@ -18,7 +18,7 @@ console.setLevel(logging.DEBUG)
 logging.getLogger('').addHandler(console)
 
 API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Asegúrate de que esta sea tu API key correcta
-SYMBOL = "BTCUSDT.A"  # Corregido según la documentación
+SYMBOL = "BTCUSD.A"  # Corregido según la documentación
 INTERVALS = ["4hour", "1hour", "daily"]
 
 def get_date_range(interval, num_candles=2000):
