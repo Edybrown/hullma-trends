@@ -2,7 +2,8 @@ import requests
 import time
 import openpyxl
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
 
 # Configuración del logging
 logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO,
@@ -24,7 +25,9 @@ def get_ohlcv_data(symbol, interval):
 
     # Calcula los timestamps para el rango solicitado
     now = datetime.now(timezone.utc)
-    from_date = now - datetime.timedelta(seconds=2000 * interval_seconds)
+    from_date = now - timedelta(seconds=2000 * interval_seconds)
+
+
     to_date = now
 
     logging.info(f"Solicitando datos desde: {from_date.isoformat()} hasta: {to_date.isoformat()}")
