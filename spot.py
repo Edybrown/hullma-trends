@@ -68,23 +68,22 @@ def save_to_excel(data, filename):
     sheet = workbook.active
 
     # Encabezados
-    header = ["Timestamp (UNIX)", "Open", "High", "Low", "Close", "Volume", "Base Volume", "Transactions", "Base Transactions"]
-    sheet.append(header)
+    headers = ["Timestamp (UNIX)", "Open", "High", "Low", "Close", "Volume", "Base Volume", "Transactions", "Base Transactions"]
+    for col_num, header in enumerate(headers, start=1):
+        sheet.cell(row=1, column=col_num, value=header)
 
+    # Escribe los datos en celdas específicas
     if data:
-        for item in data:
-            row = [
-                item.get("t"),  # Timestamp
-                item.get("o"),  # Open
-                item.get("h"),  # High
-                item.get("l"),  # Low
-                item.get("c"),  # Close
-                item.get("v"),  # Volume
-                item.get("bv"), # Base Volume
-                item.get("tx"), # Transactions
-                item.get("btx") # Base Transactions
-            ]
-            sheet.append(row)
+        for row_num, item in enumerate(data, start=2):
+            sheet.cell(row=row_num, column=1, value=item.get("t"))  # Timestamp
+            sheet.cell(row=row_num, column=2, value=item.get("o"))  # Open
+            sheet.cell(row=row_num, column=3, value=item.get("h"))  # High
+            sheet.cell(row=row_num, column=4, value=item.get("l"))  # Low
+            sheet.cell(row=row_num, column=5, value=item.get("c"))  # Close
+            sheet.cell(row=row_num, column=6, value=item.get("v"))  # Volume
+            sheet.cell(row=row_num, column=7, value=item.get("bv")) # Base Volume
+            sheet.cell(row=row_num, column=8, value=item.get("tx")) # Transactions
+            sheet.cell(row=row_num, column=9, value=item.get("btx"))# Base Transactions
     else:
         logging.warning("No hay datos para guardar en Excel.")
 
