@@ -9,20 +9,23 @@ logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
-SYMBOL = "BTCUSDT_PERP.A"
+SYMBOL = "BTCUSDT.A"
 INTERVALS = ["4hour", "1hour", "daily"]
-LIMIT = 2000
+SESSIONS = 2000  # Número de sesiones deseadas
 
-def get_ohlcv_data(symbol, interval, limit):
-    logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval}) con límite {limit}")
+def get_ohlcv_data(symbol, interval, sessions):
+    logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval}) con {sessions} sesiones")
     base_url = "https://api.coinalyze.net/v1/ohlcv-history"
+
+    # Calcular timestamps basados en las sesiones deseadas
     current_timestamp = int(time.time())
     interval_seconds = {
-        "4hour": 14400,
-        "1hour": 3600,
-        "daily": 86400,
+        "4hour": 14400,  # 4 horas en segundos
+        "1hour": 3600,   # 1 hora en segundos
+        "daily": 86400,  # 1 día en segundos
     }[interval]
-    from_timestamp = current_timestamp - (limit - 1) * interval_seconds
+
+    from_timestamp = current_timestamp - (sessions * interval_seconds)
 
     params = {
         "api_key": API_KEY,
@@ -30,7 +33,6 @@ def get_ohlcv_data(symbol, interval, limit):
         "interval": interval,
         "from": from_timestamp,
         "to": current_timestamp,
-        "limit": limit,
     }
 
     try:
@@ -96,7 +98,7 @@ def save_to_excel(data, filename):
 # Ejecución principal
 all_data = {}
 for interval in INTERVALS:
-    ohlcv_data = get_ohlcv_data(SYMBOL, interval, LIMIT)
+    ohlcv_data = get_ohlcv_data(SYMBOL, interval, SESSIONS)
     if ohlcv_data:
         all_data[interval] = ohlcv_data
 
