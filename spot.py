@@ -2,7 +2,7 @@ import requests
 import json
 import openpyxl
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from openpyxl.utils import get_column_letter
 
 # Configuración del logging
@@ -25,13 +25,16 @@ def get_ohlcv_data(symbol, interval):
     logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval})")
     base_url = "https://api.coinalyze.net/v1/ohlcv-history"
     
-    now = int(datetime.now(timezone.utc).timestamp())
+    now = datetime.now(timezone.utc)
+    to_date = int(now.timestamp())
+    from_date = int((now - timedelta(days=30)).timestamp())  # Datos de los últimos 30 días
 
     params = {
         "api_key": API_KEY,
         "symbols": symbol,
         "interval": interval,
-        "to": now
+        "from": from_date,
+        "to": to_date
     }
 
     try:
@@ -41,11 +44,11 @@ def get_ohlcv_data(symbol, interval):
         response.raise_for_status()
         
         data = response.json()
-        logging.debug(f"Primeros 5 elementos de datos recibidos: {data[:5]}")
+        logging.debug(f"Estructura de datos recibidos: {json.dumps(data, indent=2)}")
         
-        if isinstance(data, list) and len(data) > 0:
-            logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval}). Total de registros: {len(data)}")
-            return data
+        if isinstance(data, list) and len(data) > 0 and 'history' in data[0]:
+            logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval}). Total de registros: {len(data[0]['history'])}")
+            return data[0]['history']
         else:
             logging.warning(f"Estructura de respuesta inesperada para {symbol} ({interval}): {data}")
             return None
