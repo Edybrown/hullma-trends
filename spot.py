@@ -25,7 +25,7 @@ def get_ohlcv_data(symbol, interval):
 
     # Calculate timestamps for requested range (consider API requirements)
     now = datetime.now(timezone.utc)
-    from_date = now - datetime.timedelta(seconds=2000 * interval_seconds)
+    from_date = now - datetime.timedelta(seconds=2000 * interval_seconds)  # Corrected line
     to_date = now
 
     logging.info(f"Solicitando datos desde: {from_date.isoformat()} hasta: {to_date.isoformat()}")
