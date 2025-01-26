@@ -9,7 +9,7 @@ logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 API_KEY = "YOUR_API_KEY"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
-SYMBOL = "BTCUSDT_PERP.A"
+SYMBOL = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"
 INTERVALS = ["4hour", "1hour", "daily"]
 LIMIT = 2000
 
