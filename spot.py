@@ -1,16 +1,14 @@
 import requests
-import time
 import json
 import openpyxl
 import logging
-import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from openpyxl.utils import get_column_letter
 
 # Configuración del logging
 logging.basicConfig(
-    filename='coinalyze_data.log',
-    level=logging.DEBUG,  # Cambiado a DEBUG para obtener más información
+    filename='btcspot',
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
@@ -19,31 +17,21 @@ console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
 logging.getLogger('').addHandler(console)
 
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Asegúrate de que esta sea tu API key correcta
 SYMBOL = "BTCUSDT.A"
 INTERVALS = ["4hour", "1hour", "daily"]
 
 def get_ohlcv_data(symbol, interval):
     logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval})")
     base_url = "https://api.coinalyze.net/v1/ohlcv-history"
-    interval_seconds = {
-        "4hour": 14400,
-        "1hour": 3600,
-        "daily": 86400,
-    }[interval]
-
-    now = datetime.now(timezone.utc)
-    from_date = now - timedelta(seconds=2000 * interval_seconds)
-    to_date = now
-
-    logging.info(f"Solicitando datos desde: {from_date.isoformat()} hasta: {to_date.isoformat()}")
+    
+    now = int(datetime.now(timezone.utc).timestamp())
 
     params = {
         "api_key": API_KEY,
         "symbols": symbol,
         "interval": interval,
-        "from": int(from_date.timestamp()),
-        "to": int(to_date.timestamp()),
+        "to": now
     }
 
     try:
@@ -53,7 +41,7 @@ def get_ohlcv_data(symbol, interval):
         response.raise_for_status()
         
         data = response.json()
-        logging.debug(f"Datos recibidos: {data[:5]}...")  # Mostrar los primeros 5 elementos
+        logging.debug(f"Primeros 5 elementos de datos recibidos: {data[:5]}")
         
         if isinstance(data, list) and len(data) > 0:
             logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval}). Total de registros: {len(data)}")
