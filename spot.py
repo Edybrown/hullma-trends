@@ -5,10 +5,10 @@ import openpyxl
 import logging
 
 # Configuración del logging
-logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO, 
+logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
+API_KEY = "YOUR_API_KEY"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
 SYMBOL = "BTCUSDT_PERP.A"
 INTERVALS = ["4hour", "1hour", "daily"]
 LIMIT = 2000
@@ -45,21 +45,25 @@ def get_ohlcv_data(symbol, interval, limit):
             data = response.json()
             logging.debug(f"Datos JSON recibidos: {data}")
 
-            if isinstance(data, list) and len(data) > 0 and "history" in data[0]:
+            # Manejo CORRECTO de la respuesta (adaptado a la estructura REAL)
+            if isinstance(data, list):
                 logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval})")
-                return data[0]["history"]
+                return data # Retorna la lista directamente
             else:
                 logging.warning(f"Estructura de respuesta inesperada para {symbol} ({interval}): {data}")
                 return None
+
         except json.JSONDecodeError as e:
-            logging.error(f"Error al decodificar JSON para {symbol} ({interval}): {e}. Texto de la respuesta: {response.text}")
+            logging.error(f"Error al decodificar JSON para {symbol} ({interval}): {e}. Texto de la respuesta: {response.text if 'response' in locals() else 'No response text'}")
             return None
+
     except requests.exceptions.RequestException as e:
         logging.error(f"Error en la solicitud para {symbol} ({interval}): {e}")
         if 'response' in locals() and response is not None:
             logging.error(f"Código de estado recibido: {response.status_code}")
             logging.error(f"Texto de la respuesta: {response.text}")
         return None
+
 
 
 
