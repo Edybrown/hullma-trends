@@ -1,100 +1,101 @@
 import requests
 import time
-import pandas as pd
 import json
+import openpyxl
+import logging
 
-# Constantes
-API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Sustituye con tu clave real
-SYMBOL = "BTCUSDT.A"
-BASE_URL = "https://api.coinalyze.net/v1/"
-ENDPOINT = "ohlcv-history"
-INTERVALS = {
-    "1hour": 3600,
-    "4hour": 14400,
-    "daily": 86400
-}
-MAX_LIMIT = 2000  # Máximo permitido por la API
-OUTPUT_FILE = "BTCUSDT_OHLCV.xlsx"
+# Configuración del logging
+logging.basicConfig(filename='coinalyze_data.log', level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
-def fetch_data(symbol, interval, limit, api_key):
-    """Solicita datos de OHLCV a la API de Coinalyze."""
+API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
+SYMBOL = "BTCUSDT_PERP.A"
+INTERVALS = ["4hour", "1hour", "daily"]
+LIMIT = 2000
+
+def get_ohlcv_data(symbol, interval, limit):
+    logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval}) con límite {limit}")
+    base_url = "https://api.coinalyze.net/v1/ohlcv-history"
+    current_timestamp = int(time.time())
+    interval_seconds = {
+        "4hour": 14400,
+        "1hour": 3600,
+        "daily": 86400,
+    }[interval]
+    from_timestamp = current_timestamp - (limit - 1) * interval_seconds
+
+    params = {
+        "api_key": API_KEY,
+        "symbols": symbol,
+        "interval": interval,
+        "from": from_timestamp,
+        "to": current_timestamp,
+        "limit": limit,
+    }
+
+    logging.debug(f"URL de la solicitud: {base_url}")
+    logging.debug(f"Parámetros de la solicitud: {params}")
+
     try:
-        # Calcular timestamps dinámicos
-        to_timestamp = int(time.time())
-        from_timestamp = to_timestamp - (limit * INTERVALS[interval])
-        
-        # Construcción de URL y parámetros
-        url = f"{BASE_URL}{ENDPOINT}?api_key={api_key}"
-        params = {
-            "symbols": symbol,
-            "interval": interval,
-            "from": from_timestamp,
-            "to": to_timestamp
-        }
-        
-        # Realizar la solicitud
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # Lanza excepción si la respuesta tiene error
-        return response.json()
-    
-    except requests.exceptions.RequestException as e:
-        print(f"Error en la solicitud para {interval}: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"Error al decodificar JSON para {interval}: {e}")
-        return None
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
+        logging.debug(f"Código de estado de la respuesta: {response.status_code}")
 
-def process_data(data):
-    """Convierte la respuesta de la API en un DataFrame."""
-    rows = []
-    if data and isinstance(data, dict) and "history" in data:
-        for record in data["history"]:
-            rows.append({
-                "Timestamp": record["t"],
-                "Open": record["o"],
-                "High": record["h"],
-                "Low": record["l"],
-                "Close": record["c"],
-                "Volume": record["v"],
-                "Buy Volume": record.get("bv", 0),
-                "Trades": record.get("tx", 0),
-                "Buy Trades": record.get("btx", 0)
-            })
-    return pd.DataFrame(rows)
+        try:
+            data = response.json()
+            logging.debug(f"Datos JSON recibidos: {data}")
 
-def save_to_excel(dataframes):
-    """Guarda múltiples DataFrames en un archivo Excel."""
-    with pd.ExcelWriter(OUTPUT_FILE, engine="xlsxwriter") as writer:
-        for interval, df in dataframes.items():
-            if not df.empty:
-                df["Fecha"] = pd.to_datetime(df["Timestamp"], unit="s")
-                df.drop(columns=["Timestamp"], inplace=True)
-                df.to_excel(writer, sheet_name=interval, index=False)
-
-def main():
-    """Función principal para ejecutar el flujo completo."""
-    dataframes = {}
-    
-    for interval in INTERVALS:
-        print(f"Solicitando datos para {interval}...")
-        data = fetch_data(SYMBOL, interval, MAX_LIMIT, API_KEY)
-        if data:
-            df = process_data(data)
-            if not df.empty:
-                dataframes[interval] = df
-                print(f"Datos procesados para {interval}, total de filas: {len(df)}")
+            if isinstance(data, list) and len(data) > 0 and "history" in data[0]:
+                logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval})")
+                return data[0]["history"]
             else:
-                print(f"No se encontraron datos para {interval}.")
-        else:
-            print(f"Error al obtener datos para {interval}.")
-    
-    if dataframes:
-        print(f"Guardando datos en el archivo {OUTPUT_FILE}...")
-        save_to_excel(dataframes)
-        print("Archivo Excel creado con éxito.")
-    else:
-        print("No se generó ningún archivo, no se obtuvieron datos.")
+                logging.warning(f"Estructura de respuesta inesperada para {symbol} ({interval}): {data}")
+                return None
+        except json.JSONDecodeError as e:
+            logging.error(f"Error al decodificar JSON para {symbol} ({interval}): {e}. Texto de la respuesta: {response.text}")
+            return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error en la solicitud para {symbol} ({interval}): {e}")
+        if 'response' in locals() and response is not None:
+            logging.error(f"Código de estado recibido: {response.status_code}")
+            logging.error(f"Texto de la respuesta: {response.text}")
+        return None
 
-# Ejecutar la función principal
-if __name__ == "__main__":
-    main()
+
+
+def save_to_excel(data, filename):
+    logging.info(f"Guardando datos en Excel: {filename}")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+
+    header = ["Timestamp (UNIX)", "Open", "High", "Low", "Close", "Volume", "Base Volume", "Transactions", "Base Transactions"]
+    sheet.append(header)
+
+    if data:
+        for item in data:
+            row = [item.get("t"), item.get("o"), item.get("h"), item.get("l"), item.get("c"), item.get("v"), item.get("bv"), item.get("tx"), item.get("btx")]
+            sheet.append(row)
+    else:
+        logging.warning("No hay datos para guardar en Excel.")
+
+    try:
+        workbook.save(filename)
+        logging.info(f"Datos OHLCV guardados en '{filename}'.")
+    except Exception as e:
+        logging.error(f"Error al guardar el archivo Excel: {e}")
+
+# Main execution
+all_data = {}
+for interval in INTERVALS:
+    ohlcv_data = get_ohlcv_data(SYMBOL, interval, LIMIT)
+    if ohlcv_data:
+        all_data[interval] = ohlcv_data
+
+if all_data:
+    for interval, data in all_data.items():
+        filename = f"{SYMBOL}_{interval}_ohlcv.xlsx"
+        save_to_excel(data, filename)
+else:
+    logging.warning("No se pudieron recuperar datos OHLCV para ningún intervalo.")
+
+logging.info("Proceso completado.")
