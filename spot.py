@@ -21,17 +21,25 @@ API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Asegúrate de que esta sea t
 SYMBOL = "BTCUSDT.A"  # Corregido según la documentación
 INTERVALS = ["4hour", "1hour", "daily"]
 
-def get_date_range(interval):
+def get_date_range(interval, num_candles=2000):
+    # Calcular el rango de fechas basado en el intervalo
     now = datetime.now(timezone.utc)
+    
     if interval == "4hour":
-        from_date = now - timedelta(days=30)  # Últimos 30 días para 4 horas
+        # Para 4 horas, calculamos cuántos días deben transcurrir para obtener 2000 velas
+        days = (num_candles * 4) / 24  # 24 horas en un día
     elif interval == "1hour":
-        from_date = now - timedelta(days=7)   # Últimos 7 días para 1 hora
+        # Para 1 hora, simplemente calculamos las horas necesarias
+        hours = num_candles
+        days = hours / 24  # Convertimos horas a días
     elif interval == "daily":
-        from_date = now - timedelta(days=365) # Último año para diario
+        # Para un día, simplemente tomamos 2000 días
+        days = num_candles
     else:
-        from_date = now - timedelta(days=30)  # Por defecto, 30 días
+        # Por defecto, para cualquier otro intervalo usamos 30 días (esto puede modificarse)
+        days = num_candles / 24  # Convertimos en días (suponiendo que sean velas de 1 hora)
 
+    from_date = now - timedelta(days=days)
     return int(from_date.timestamp()), int(now.timestamp())
 
 def get_ohlcv_data(symbol, interval):
