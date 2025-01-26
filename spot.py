@@ -7,7 +7,7 @@ from openpyxl.utils import get_column_letter
 
 # Configuración del logging
 logging.basicConfig(
-    filename='btcspot',
+    filename='BTCspot',
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
@@ -21,13 +21,24 @@ API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # Asegúrate de que esta sea t
 SYMBOL = "BTCUSDT.A"
 INTERVALS = ["4hour", "1hour", "daily"]
 
+def get_date_range(interval):
+    now = datetime.now(timezone.utc)
+    if interval == "4hour":
+        from_date = now - timedelta(days=30)  # Últimos 30 días para 4 horas
+    elif interval == "1hour":
+        from_date = now - timedelta(days=7)   # Últimos 7 días para 1 hora
+    elif interval == "daily":
+        from_date = now - timedelta(days=365) # Último año para diario
+    else:
+        from_date = now - timedelta(days=30)  # Por defecto, 30 días
+
+    return int(from_date.timestamp()), int(now.timestamp())
+
 def get_ohlcv_data(symbol, interval):
     logging.info(f"Obteniendo datos OHLCV para {symbol} ({interval})")
     base_url = "https://api.coinalyze.net/v1/ohlcv-history"
     
-    now = datetime.now(timezone.utc)
-    to_date = int(now.timestamp())
-    from_date = int((now - timedelta(days=30)).timestamp())  # Datos de los últimos 30 días
+    from_date, to_date = get_date_range(interval)
 
     params = {
         "api_key": API_KEY,
