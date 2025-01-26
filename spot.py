@@ -3,15 +3,21 @@ import time
 import json
 import openpyxl
 import logging
+import sys
 from datetime import datetime, timezone, timedelta
 from openpyxl.utils import get_column_letter
 
 # Configuración del logging
 logging.basicConfig(
     filename='coinalyze_data.log',
-    level=logging.INFO,
+    level=logging.DEBUG,  # Cambiado a DEBUG para obtener más información
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+# Añadir logging a la consola
+console = logging.StreamHandler()
+console.setLevel(logging.DEBUG)
+logging.getLogger('').addHandler(console)
 
 API_KEY = "6ecb2327-4d0c-49c8-9e96-2f5028891e1d"  # ¡REEMPLAZA ESTO CON TU CLAVE REAL!
 SYMBOL = "BTCUSDT.A"
@@ -26,7 +32,6 @@ def get_ohlcv_data(symbol, interval):
         "daily": 86400,
     }[interval]
 
-    # Calcula los timestamps para el rango solicitado
     now = datetime.now(timezone.utc)
     from_date = now - timedelta(seconds=2000 * interval_seconds)
     to_date = now
@@ -42,12 +47,16 @@ def get_ohlcv_data(symbol, interval):
     }
 
     try:
+        logging.debug(f"Enviando solicitud a {base_url} con parámetros: {params}")
         response = requests.get(base_url, params=params)
+        logging.debug(f"Código de estado de la respuesta: {response.status_code}")
         response.raise_for_status()
+        
         data = response.json()
+        logging.debug(f"Datos recibidos: {data[:5]}...")  # Mostrar los primeros 5 elementos
         
         if isinstance(data, list) and len(data) > 0:
-            logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval})")
+            logging.info(f"Datos OHLCV recibidos correctamente para {symbol} ({interval}). Total de registros: {len(data)}")
             return data
         else:
             logging.warning(f"Estructura de respuesta inesperada para {symbol} ({interval}): {data}")
@@ -61,6 +70,10 @@ def get_ohlcv_data(symbol, interval):
         return None
     except json.JSONDecodeError as e:
         logging.error(f"Error al decodificar JSON para {symbol} ({interval}): {e}")
+        logging.error(f"Texto de la respuesta: {response.text}")
+        return None
+    except Exception as e:
+        logging.error(f"Error inesperado al obtener datos para {symbol} ({interval}): {e}")
         return None
 
 def save_to_excel(data, filename):
@@ -68,7 +81,6 @@ def save_to_excel(data, filename):
     workbook = openpyxl.Workbook()
     sheet = workbook.active
 
-    # Encabezados
     headers = ["Timestamp (UNIX)", "Open", "High", "Low", "Close", "Volume", "Base Volume", "Transactions", "Base Transactions"]
     for col, header in enumerate(headers, start=1):
         sheet.cell(row=1, column=col, value=header)
@@ -85,7 +97,6 @@ def save_to_excel(data, filename):
             sheet.cell(row=row, column=8, value=item.get("tx"))
             sheet.cell(row=row, column=9, value=item.get("btx"))
         
-        # Ajustar el ancho de las columnas
         for column in sheet.columns:
             max_length = 0
             column_letter = get_column_letter(column[0].column)
@@ -108,14 +119,21 @@ def save_to_excel(data, filename):
     except Exception as e:
         logging.error(f"Error al guardar el archivo Excel {filename}: {e}")
 
-# Ejecutar
 if __name__ == "__main__":
-    for interval in INTERVALS:
-        ohlcv_data = get_ohlcv_data(SYMBOL, interval)
-        if ohlcv_data:
-            filename = f"{SYMBOL}_{interval}_ohlcv.xlsx"
-            save_to_excel(ohlcv_data, filename)
-        else:
-            logging.warning(f"No se obtuvieron datos para {SYMBOL} en el intervalo {interval}")
-
-    logging.info("Proceso completado.")
+    logging.info("Iniciando el proceso de obtención y guardado de datos")
+    try:
+        for interval in INTERVALS:
+            logging.info(f"Procesando intervalo: {interval}")
+            ohlcv_data = get_ohlcv_data(SYMBOL, interval)
+            if ohlcv_data:
+                filename = f"{SYMBOL}_{interval}_ohlcv.xlsx"
+                save_to_excel(ohlcv_data, filename)
+            else:
+                logging.warning(f"No se obtuvieron datos para {SYMBOL} en el intervalo {interval}")
+        
+        logging.info("Proceso completado con éxito")
+    except Exception as e:
+        logging.error(f"Error inesperado durante la ejecución del script: {e}")
+        logging.exception("Detalles del error:")
+    
+    logging.info("Fin del script")
